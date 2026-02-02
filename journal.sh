@@ -7,7 +7,7 @@ set -euo pipefail
 SERVICE_NAME="${ZOOMING_APPNAME:-zooming-kittens}.service"
 
 # Try to get PID of running service
-PID=$(systemctl --user show --property=MainPID --value "$UNIT_NAME" 2>/dev/null || echo "")
+PID=$(systemctl --user show --property=MainPID --value "$SERVICE_NAME" 2>/dev/null || echo "")
 
 if [ -n "$PID" ]; then
     echo "Following logs for $SERVICE_NAME (PID: $PID)..."
