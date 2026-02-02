@@ -14,8 +14,8 @@ if [ ! -f "$PROJECT_DIR/target/release/kitty-focus-tracker" ]; then
     cargo build --release
 fi
 
-# Get service name from ZOOMING_APPNAME env var (defaults to zooming-kittens)
-SERVICE_NAME="${ZOOMING_APPNAME:-zooming-kittens}"
+# Get service name from ZOOMING_APPNAME env var (defaults to kitty)
+SERVICE_NAME="${ZOOMING_APPNAME:-kitty}"
 
 # Start via systemd-run
 # Using --unit makes unit name predictable

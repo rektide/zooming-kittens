@@ -102,7 +102,7 @@ async fn main() -> std::io::Result<()> {
     let app_id = if args.app_id.is_empty() {
         match std::env::var("ZOOMING_APPNAME") {
             Ok(val) => val,
-            Err(_) => String::from("zooming-kittens"),
+            Err(_) => String::from("kitty"),
         }
     } else {
         args.app_id.as_str().to_string()
