@@ -1,5 +1,5 @@
 use kitty_rc::commands::SetFontSizeCommand;
-use kitty_rc::KittyClient;
+use kitty_rc::Kitty;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::fs;
@@ -32,7 +32,7 @@ pub enum ZoomingResult {
 }
 
 struct ManagedConnection {
-    client: Arc<Mutex<KittyClient>>,
+    client: Arc<Mutex<Kitty>>,
     last_used: Instant,
 }
 
@@ -221,7 +221,7 @@ impl KittyRegistry {
         Ok(ZoomingResult::ConnectionFailed)
     }
 
-    async fn get_or_create_connection(&self, pid: i32, socket_path: &PathBuf, _password: &str) -> Result<Arc<Mutex<KittyClient>>, String> {
+    async fn get_or_create_connection(&self, pid: i32, socket_path: &PathBuf, password: &str) -> Result<Arc<Mutex<Kitty>>, String> {
         {
             let mut connections = self.connections.lock().await;
 
@@ -248,7 +248,13 @@ impl KittyRegistry {
             }
         }
 
-        let client = match KittyClient::connect_with_timeout(socket_path, self.config.socket_timeout).await {
+        let client = match Kitty::builder()
+            .socket_path(socket_path)
+            .timeout(self.config.socket_timeout)
+            .password(password)
+            .connect()
+            .await
+        {
             Ok(c) => c,
             Err(e) => {
                 self.set_status(pid, KittyConnectionStatus::Failed).await;
