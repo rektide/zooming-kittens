@@ -5,7 +5,7 @@ set -euo pipefail
 
 # Script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_DIR="$SCRIPT_DIR"
 
 # Build project if not already built
 if [ ! -f "$PROJECT_DIR/target/release/kitty-focus-tracker" ]; then

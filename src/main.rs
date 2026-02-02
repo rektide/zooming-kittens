@@ -3,10 +3,11 @@ use niri_ipc::socket::Socket;
 use niri_ipc::{Request, Response};
 use registry::{FocusTracker, KittyRegistry, RegistryConfig};
 use serde::Serialize;
+use std::io::Write;
 
 mod registry;
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Debug)]
 enum CliSubcommand {
     #[command(name = "generate-systemd")]
     GenerateSystemd {
@@ -35,10 +36,6 @@ enum FocusEvent {
 struct Args {
     #[arg(short, long)]
     app_id: String,
-    
-    #[command(subcommand)]
-    command: Option<CliSubcommand>,
-}
 
     #[arg(short, long)]
     verbose: bool,
@@ -57,6 +54,9 @@ struct Args {
 
     #[arg(long, default_value = "300")]
     reap_interval: u64,
+
+    #[command(subcommand)]
+    command: Option<CliSubcommand>,
 }
 
 struct KittyWindow {
@@ -68,12 +68,12 @@ fn is_kitty_window(app_id: &str, target_app_id: &str) -> bool {
     app_id == target_app_id
 }
 
-fn print_systemd_service(output: bool) {
+fn print_systemd_service(output: bool) -> std::io::Result<()> {
     let service_name = std::env::var("ZOOMING_APPNAME").ok().unwrap_or_else(|| "zooming-kittens".to_string());
     let _description = format!("{} Focus Tracker", service_name);
     let binary_path = std::env::current_exe()?;
-    let binary_path = binary_path.to_str().ok_or("kitty-focus-tracker");
-    
+    let binary_path = binary_path.to_str().ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "kitty-focus-tracker"))?;
+
     if output {
         std::io::stdout().write_all(b"[Unit]\n").unwrap();
         std::io::stdout().write_all(format!("Description={}\n", _description).as_bytes()).unwrap();
@@ -91,7 +91,7 @@ fn print_systemd_service(output: bool) {
         std::io::stdout().write_all(b"[Install]\n").unwrap();
         std::io::stdout().write_all(b"WantedBy=default.target\n").unwrap();
     }
-}
+    Ok(())
 }
 
 #[tokio::main]
@@ -109,16 +109,10 @@ async fn main() -> std::io::Result<()> {
     };
     // Handle subcommands
     if let Some(CliSubcommand::GenerateSystemd { output }) = args.command {
-        print_systemd_service(output);
+        print_systemd_service(output)?;
         return Ok(());
     }
-    
-    // Handle subcommands
-    if let Some(CliSubcommand::GenerateSystemd { output }) = args.command {
-        print_systemd_service(output);
-        return Ok(());
-    }
-    
+
     if args.verbose {
         eprintln!("Starting event stream for window focus changes...");
     }
