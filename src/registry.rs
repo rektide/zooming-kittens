@@ -226,6 +226,10 @@ impl KittyRegistry {
                     .increment_op(increment_op)
                     .build()?;
 
+                if self.config.verbose {
+                    eprintln!("Sending command to PID {}: {:?}", pid, cmd);
+                }
+
                 let mut client = client.lock().await;
                 let result = client.execute(&cmd).await;
                 if self.config.verbose {

@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 clap = { version = "4.5.56", features = ["derive"] }
 dirs = "6.0.0"
-kitty-rc = "0.4.1"
+kitty-rc = { path = "../kitty-rc" }
 niri-ipc = "25.11.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
