@@ -103,70 +103,91 @@ User-configurable options:
 
 ## Event Flow
 
+### Initialization Flow
+
+```mermaid
+flowchart TD
+    KittyWindowOpens[Kitty Window Opens]
+    CheckSocket[Check Socket Exists]
+    SocketExists{Socket exists?}
+    TryConnect[Try Connect with 2s Timeout]
+    ConnectSuccess{Connected?}
+    VerifyWorks[Send Test Command]
+    VerifySuccess{Command works?}
+    StoreReady[Store Status: Ready]
+    StoreFailed[Store Status: Failed]
+
+    KittyWindowOpens --> CheckSocket
+    CheckSocket --> SocketExists
+    SocketExists -->|Yes| TryConnect
+    SocketExists -->|No| StoreFailed
+    TryConnect --> ConnectSuccess
+    ConnectSuccess -->|Yes| VerifyWorks
+    ConnectSuccess -->|No| StoreFailed
+    VerifyWorks --> VerifySuccess
+    VerifySuccess -->|Yes| StoreReady
+    VerifySuccess -->|No| StoreFailed
 ```
-┌─────────────────┐
-│ Kitty Opens    │
-└────────┬────────┘
-         │
-         v
-┌─────────────────┐
-│ Check Socket    │ ← Does kitty-{pid}.sock exist?
-└────────┬────────┘
-         │
-         v
-┌─────────────────┐
-│ Try Connect    │ ← Timeout in 2 seconds
-└────────┬────────┘
-         │
-         v
-┌─────────────────┐
-│ Verify Works   │ ← Send simple command to test
-└────────┬────────┘
-         │
-         v
-┌─────────────────┐
-│ Store Status   │ ← Mark as ready/failed
-└─────────────────┘
 
+### Focus Gained Flow
 
-┌─────────────────┐
-│ Focus Gained   │
-└────────┬────────┘
-         │
-         v
-┌─────────────────┐
-│ Get Connection │ ← Reuse from pool or create new
-└────────┬────────┘
-         │
-         v
-┌─────────────────┐
-│ Send Commands  │ ← 3x font increase with retry
-└────────┬────────┘
-         │
-         v
-┌─────────────────┐
-│ Report Status  │ ← JSON with zooming field
-└─────────────────┘
+```mermaid
+flowchart TD
+    FocusGained[Focus Gained Event]
+    LookupKitty[Lookup Kitty in Registry]
+    KittyFound{Kitty found?}
+    GetConnection[Get Connection from Pool]
+    ConnectionStatus{Connection status?}
+    CreateNew[Create New Connection]
+    ReuseExisting[Reuse Existing Connection]
+    SendIncrease[Send Font Increase x3]
+    IncreaseSuccess{All commands OK?}
+    RetryIncrease[Retry with Backoff]
+    ReportSuccess[Report Status: Success]
+    ReportFailed[Report Status: Failed]
+    TrackFocus[Track as Currently Focused]
 
+    FocusGained --> LookupKitty
+    LookupKitty --> KittyFound
+    KittyFound -->|Yes| GetConnection
+    KittyFound -->|No| ReportFailed
+    GetConnection --> ConnectionStatus
+    ConnectionStatus -->|Ready| ReuseExisting
+    ConnectionStatus -->|Not Ready| CreateNew
+    ReuseExisting --> SendIncrease
+    CreateNew --> SendIncrease
+    SendIncrease --> IncreaseSuccess
+    IncreaseSuccess -->|Yes| ReportSuccess
+    IncreaseSuccess -->|No| RetryIncrease
+    RetryIncrease --> SendIncrease
+    ReportSuccess --> TrackFocus
+    ReportFailed --> TrackFocus
+```
 
-┌─────────────────┐
-│ Focus Lost     │
-└────────┬────────┘
-         │
-         v
-┌─────────────────┐
-│ Find Kitty     │ ← Which kitty had focus?
-└────────┬────────┘
-         │
-         v
-┌─────────────────┐
-│ Send Commands  │ ← 3x font decrease with retry
-└────────┬────────┘
-         │
-         v
-┌─────────────────┐
-│ Report Status  │ ← JSON with zooming field
-└─────────────────┘
+### Focus Lost Flow
+
+```mermaid
+flowchart TD
+    FocusLost[Focus Lost Event]
+    GetFocusedKitty[Get Currently Focused Kitty]
+    HasFocused{Has focused kitty?}
+    SendDecrease[Send Font Decrease x3]
+    DecreaseSuccess{All commands OK?}
+    RetryDecrease[Retry with Backoff]
+    ReportLostSuccess[Report Status: Success]
+    ReportLostFailed[Report Status: Failed]
+    ClearFocus[Clear Focus Tracker]
+
+    FocusLost --> GetFocusedKitty
+    GetFocusedKitty --> HasFocused
+    HasFocused -->|Yes| SendDecrease
+    HasFocused -->|No| ClearFocus
+    SendDecrease --> DecreaseSuccess
+    DecreaseSuccess -->|Yes| ReportLostSuccess
+    DecreaseSuccess -->|No| RetryDecrease
+    RetryDecrease --> SendDecrease
+    ReportLostSuccess --> ClearFocus
+    ReportLostFailed --> ClearFocus
 ```
 
 ## Error Handling
