@@ -34,7 +34,7 @@ enum FocusEvent {
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    #[arg(short, long)]
+    #[arg(short, long, default_value = "")]
     app_id: String,
 
     #[arg(short, long)]
