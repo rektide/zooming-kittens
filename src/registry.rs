@@ -322,6 +322,5 @@ fn get_kitty_socket_path(pid: i32) -> PathBuf {
         .unwrap_or_else(|_| "/tmp".to_string());
 
     PathBuf::from(runtime_dir)
-        .join("kitty")
         .join(format!("kitty-{}.sock", pid))
 }
