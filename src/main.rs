@@ -193,8 +193,6 @@ async fn main() -> std::io::Result<()> {
                         continue;
                     }
 
-                    registry.cleanup_dead_connections().await;
-
                     
                     let mut socket_query = Socket::connect()?;
                     let reply = socket_query.send(Request::Windows)?;
