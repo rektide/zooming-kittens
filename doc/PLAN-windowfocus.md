@@ -134,3 +134,10 @@ After upgrading:
 - niri GitHub Issue #1889: https://github.com/YaLTeR/niri/issues/1889
 - niri v25.11 Release: https://github.com/YaLTeR/niri/releases/tag/v25.11
 - niri-ipc crate: https://crates.io/crates/niri-ipc
+
+## Environment Variables
+
+- `ZOOMING_APPNAME` - Sets the default app_id to track and systemd service name (default: "zooming-kittens")
+  - Used by both run.sh and journal.sh scripts
+  - When set, both service name and default app_id use this value
+  - Allows customizing for different terminal emulators (e.g., "alacritty", "foot", "kitty")

@@ -14,24 +14,28 @@ if [ ! -f "$PROJECT_DIR/target/release/kitty-focus-tracker" ]; then
     cargo build --release
 fi
 
+# Get service name from ZOOMING_APPNAME env var (defaults to zooming-kittens)
+SERVICE_NAME="${ZOOMING_APPNAME:-zooming-kittens}"
+
 # Start via systemd-run
 # Using --unit makes unit name predictable
-echo "Starting kitty-zoom via systemd-run..."
+echo "Starting $SERVICE_NAME via systemd-run..."
 systemd-run --user \
     --quiet \
-    --unit=kitty-zoom \
+    --unit="$SERVICE_NAME" \
     --setenv=RUST_BACKTRACE=full \
+    --setenv=ZOOMING_APPNAME="$SERVICE_NAME" \
     "$PROJECT_DIR/target/release/kitty-focus-tracker" --verbose
 
 echo ""
-echo "kitty-zoom is running"
-echo "Unit name: kitty-zoom.service"
+echo "$SERVICE_NAME is running"
+echo "Unit name: $SERVICE_NAME.service"
 echo ""
 echo "To view logs:"
 echo "  ./journal.sh"
 echo ""
 echo "Or use directly:"
-echo "  journalctl --user -u kitty-zoom.service -f"
+echo "  journalctl --user -u $SERVICE_NAME.service -f"
 echo ""
 echo "To stop:"
-echo "  systemctl --user stop kitty-zoom.service"
+echo "  systemctl --user stop $SERVICE_NAME.service"
