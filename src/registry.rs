@@ -117,7 +117,15 @@ impl KittyRegistry {
                     let now = Instant::now();
 
                     for (pid, conn) in connections.iter() {
-                        if now.duration_since(conn.last_used) > idle_timeout {
+                        let is_dead = !is_process_alive(*pid);
+                        let is_idle = now.duration_since(conn.last_used) > idle_timeout;
+
+                        if is_dead || is_idle {
+                            if is_dead {
+                                eprintln!("Reaping dead PID {}", pid);
+                            } else {
+                                eprintln!("Reaping idle PID {} (unused for >{:?})", pid, idle_timeout);
+                            }
                             to_remove.push(*pid);
                         }
                     }
@@ -143,6 +151,32 @@ impl KittyRegistry {
 
     pub async fn decrease_font_size(&self, pid: i32) -> Result<ZoomingResult, Box<dyn std::error::Error>> {
         self.execute_font_command(pid, false).await
+    }
+
+    pub async fn cleanup_dead_connections(&self) {
+        let mut to_remove = Vec::new();
+
+        {
+            let connections = self.connections.lock().await;
+
+            for pid in connections.keys() {
+                if !is_process_alive(*pid) {
+                    to_remove.push(*pid);
+                }
+            }
+        }
+
+        for pid in &to_remove {
+            eprintln!("Cleaning up dead PID {}", pid);
+            let mut connections = self.connections.lock().await;
+            if let Some(conn) = connections.remove(pid) {
+                let mut client = conn.client.lock().await;
+                if let Err(e) = client.close().await {
+                    eprintln!("Error closing connection for PID {}: {}", pid, e);
+                }
+            }
+            self.statuses.lock().await.remove(pid);
+        }
     }
 
     async fn execute_font_command(&self, pid: i32, increase: bool) -> Result<ZoomingResult, Box<dyn std::error::Error>> {
@@ -323,4 +357,8 @@ fn get_kitty_socket_path(pid: i32) -> PathBuf {
 
     PathBuf::from(runtime_dir)
         .join(format!("kitty-{}.sock", pid))
+}
+
+fn is_process_alive(pid: i32) -> bool {
+    std::path::Path::new(&format!("/proc/{}", pid)).exists()
 }
