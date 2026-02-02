@@ -3,8 +3,8 @@
 
 set -euo pipefail
 
-# Get service name from ZOOMING_APPNAME env var (defaults to zooming-kittens)
-SERVICE_NAME="${ZOOMING_APPNAME:-zooming-kittens}.service"
+# Get service name from ZOOMING_APPNAME env var (defaults to kitty)
+SERVICE_NAME="${ZOOMING_APPNAME:-kitty}.service"
 
 # Try to get PID of running service
 PID=$(systemctl --user show --property=MainPID --value "$SERVICE_NAME" 2>/dev/null || echo "")
