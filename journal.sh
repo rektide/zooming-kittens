@@ -15,7 +15,8 @@ if [ -n "$PID" ]; then
     echo ""
     journalctl --user \
         --identifier="${SERVICE_NAME%.service}" \
-        -f
+        -f \
+        "$@"
 else
     echo "No running service found"
     echo ""
@@ -24,7 +25,8 @@ else
     journalctl --user \
         --identifier="${SERVICE_NAME%.service}" \
         --no-pager \
-        -n 50
+        -n 50 \
+        "$@"
 fi
 
 # Explanation:

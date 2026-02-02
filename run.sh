@@ -25,7 +25,7 @@ systemd-run --user \
     --unit="$SERVICE_NAME" \
     --setenv=RUST_BACKTRACE=full \
     --setenv=ZOOMING_APPNAME="$SERVICE_NAME" \
-    "$PROJECT_DIR/target/release/kitty-focus-tracker" --verbose
+    "$PROJECT_DIR/target/release/kitty-focus-tracker" --verbose "$@"
 
 echo ""
 echo "$SERVICE_NAME is running"
