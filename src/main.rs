@@ -1,6 +1,6 @@
 use clap::Parser;
 use niri_ipc::socket::Socket;
-use niri_ipc::{Event, Request, Response};
+use niri_ipc::{Request, Response};
 use registry::{FocusTracker, KittyRegistry, RegistryConfig};
 use serde::Serialize;
 
@@ -59,8 +59,21 @@ fn is_kitty_window(app_id: &str, target_app_id: &str) -> bool {
 async fn main() -> std::io::Result<()> {
     let args = Args::parse();
     
+    // Set default app_id from ZOOMING_APPNAME env var if not provided
+    let app_id = if args.app_id.is_empty() {
+        match std::env::var("ZOOMING_APPNAME") {
+            Ok(val) => val,
+            Err(_) => String::from("zooming-kittens"),
+        }
+    } else {
+        args.app_id.as_str().to_string()
+    };
     if args.verbose {
         eprintln!("Starting event stream for window focus changes...");
+    }
+    
+    if args.verbose {
+        eprintln!("Tracking app_id: {}", app_id);
     }
     
     let config = RegistryConfig {
@@ -88,7 +101,7 @@ async fn main() -> std::io::Result<()> {
     }
     
     if args.verbose {
-        eprintln!("Tracking app_id: {}", args.app_id);
+        eprintln!("Tracking app_id: {}", app_id);
     }
     
     let mut socket = Socket::connect()?;
@@ -137,7 +150,7 @@ async fn main() -> std::io::Result<()> {
                     
                     if let Some(w) = window {
                         if let Some(ref app_id) = w.app_id {
-                            if is_kitty_window(app_id, &args.app_id) {
+                            if is_kitty_window(app_id, &app_id) {
                                 if args.verbose {
                                     eprintln!(
                                         "Window {} gained focus (app_id: {}, pid: {:?})",
