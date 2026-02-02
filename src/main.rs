@@ -14,6 +14,8 @@ enum CliSubcommand {
         #[arg(short, long)]
         output: bool,
     },
+    #[command(name = "cleanup")]
+    Cleanup,
 }
 
 #[derive(Serialize)]
@@ -110,6 +112,14 @@ async fn main() -> std::io::Result<()> {
     // Handle subcommands
     if let Some(CliSubcommand::GenerateSystemd { output }) = args.command {
         print_systemd_service(output)?;
+        return Ok(());
+    }
+
+    if let Some(CliSubcommand::Cleanup) = args.command {
+        let config = RegistryConfig::default();
+        let registry = KittyRegistry::new(config);
+        registry.cleanup_dead_connections().await;
+        eprintln!("Cleanup complete");
         return Ok(());
     }
 
