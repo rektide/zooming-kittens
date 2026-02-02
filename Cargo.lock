@@ -354,9 +354,9 @@ dependencies = [
 
 [[package]]
 name = "kitty-rc"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7f850e11efb62dfebc7d0d0732c471c47632ffcf61983abbb9550d6b7e3734a"
+checksum = "164b2274c721f76acaae6182304a38773e28f703f8720c113ccc45dc6b1c03cc"
 dependencies = [
  "aes-gcm",
  "base85",
