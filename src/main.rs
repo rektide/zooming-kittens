@@ -1,20 +1,25 @@
 use clap::Parser;
-use kitty_rc::commands::SetFontSizeCommand;
-use kitty_rc::KittyClient;
 use niri_ipc::socket::Socket;
-use niri_ipc::{Request, Response, Window};
+use niri_ipc::{Request, Response};
+use registry::{FocusTracker, KittyRegistry, RegistryConfig};
 use serde::Serialize;
 use std::collections::HashMap;
-use std::fs;
-use std::path::PathBuf;
+
+mod registry;
 
 #[derive(Serialize)]
 #[serde(tag = "event")]
 enum FocusEvent {
     #[serde(rename = "focus_gained")]
-    FocusGained { window_id: u64, app_id: String },
+    FocusGained {
+        window_id: u64,
+        app_id: String,
+        zooming: registry::ZoomingResult,
+    },
     #[serde(rename = "focus_lost")]
-    FocusLost,
+    FocusLost {
+        zooming: Option<registry::ZoomingResult>,
+    },
 }
 
 #[derive(Parser, Debug)]
@@ -25,6 +30,21 @@ struct Args {
 
     #[arg(short, long)]
     verbose: bool,
+
+    #[arg(long, default_value = "2")]
+    socket_timeout: u64,
+
+    #[arg(long, default_value = "3")]
+    max_retries: u32,
+
+    #[arg(long, default_value = "10")]
+    max_connections: usize,
+
+    #[arg(long, default_value = "1800")]
+    idle_timeout: u64,
+
+    #[arg(long, default_value = "300")]
+    reap_interval: u64,
 }
 
 struct KittyWindow {
@@ -34,42 +54,6 @@ struct KittyWindow {
 
 fn is_kitty_window(app_id: &str, target_app_id: &str) -> bool {
     app_id == target_app_id
-}
-
-fn get_kitty_password() -> std::io::Result<String> {
-    let password_path = dirs::config_dir()
-        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "Config directory not found"))?
-        .join("kitty/rc.password");
-
-    fs::read_to_string(password_path)
-        .map(|s| s.trim().to_string())
-}
-
-fn get_kitty_socket_path(pid: i32) -> PathBuf {
-    let runtime_dir = std::env::var("XDG_RUNTIME_DIR")
-        .unwrap_or_else(|_| "/tmp".to_string());
-
-    PathBuf::from(runtime_dir)
-        .join("kitty")
-        .join(format!("kitty-{}.sock", pid))
-}
-
-async fn adjust_kitty_font_size(pid: i32, increase: bool) -> Result<(), Box<dyn std::error::Error>> {
-    let password = get_kitty_password()?;
-    let socket_path = get_kitty_socket_path(pid);
-
-    let client = KittyClient::new(&socket_path, Some(&password)).await?;
-
-    let increment_op = if increase { "+" } else { "-" };
-
-    for _ in 0..3 {
-        let cmd = SetFontSizeCommand::new(0)
-            .increment_op(increment_op)
-            .build()?;
-        client.execute(&cmd).await?;
-    }
-
-    Ok(())
 }
 
 #[tokio::main]
@@ -95,6 +79,19 @@ async fn main() -> std::io::Result<()> {
             "Failed to get event stream",
         ));
     }
+
+    let config = RegistryConfig {
+        socket_timeout: std::time::Duration::from_secs(args.socket_timeout),
+        max_retries: args.max_retries,
+        max_connections: args.max_connections,
+        idle_timeout: std::time::Duration::from_secs(args.idle_timeout),
+        reap_interval: std::time::Duration::from_secs(args.reap_interval),
+    };
+
+    let registry = KittyRegistry::new(config);
+    registry.start_reaper().await;
+
+    let mut focus_tracker = FocusTracker::new();
 
     if args.verbose {
         eprintln!("Listening for window focus events...");
@@ -132,49 +129,62 @@ async fn main() -> std::io::Result<()> {
                     Some(focused_id) => {
                         if let Some(window) = windows.get(&focused_id) {
                             if is_kitty_window(&window.app_id, &args.app_id) {
-                                let event = FocusEvent::FocusGained {
-                                    window_id: focused_id,
-                                    app_id: window.app_id.clone(),
-                                };
-                                println!("{}", serde_json::to_string(&event).unwrap());
-
-                                if let Some(pid) = window.pid {
+                                let zooming_result = if let Some(pid) = window.pid {
                                     if args.verbose {
                                         eprintln!("Increasing font size for kitty PID {}", pid);
                                     }
-                                    if let Err(e) = adjust_kitty_font_size(pid, true).await {
-                                        eprintln!("Error adjusting font size: {}", e);
+
+                                    match registry.increase_font_size(pid).await {
+                                        Ok(result) => result,
+                                        Err(e) => {
+                                            eprintln!("Error adjusting font size: {}", e);
+                                            registry::ZoomingResult::Failed
+                                        }
                                     }
-                                }
+                                } else {
+                                    registry::ZoomingResult::NotConfigured
+                                };
+
+                                focus_tracker.on_focus_gained(window.pid.unwrap_or(0));
+
+                                let event = FocusEvent::FocusGained {
+                                    window_id: focused_id,
+                                    app_id: window.app_id.clone(),
+                                    zooming: zooming_result,
+                                };
+                                println!("{}", serde_json::to_string(&event).unwrap());
                             }
                         }
                     }
                     None => {
-                        let event = FocusEvent::FocusLost;
-                        println!("{}", serde_json::to_string(&event).unwrap());
+                        let zooming_result = if let Some(pid) = focus_tracker.on_focus_lost() {
+                            if args.verbose {
+                                eprintln!("Decreasing font size for kitty PID {}", pid);
+                            }
 
-                        if args.verbose {
-                            eprintln!("Decreasing font size for all kitty windows");
-                        }
-
-                        for window in windows.values() {
-                            if is_kitty_window(&window.app_id, &args.app_id) {
-                                if let Some(pid) = window.pid {
-                                    if args.verbose {
-                                        eprintln!("Decreasing font size for kitty PID {}", pid);
-                                    }
-                                    if let Err(e) = adjust_kitty_font_size(pid, false).await {
-                                        eprintln!("Error adjusting font size: {}", e);
-                                    }
+                            match registry.decrease_font_size(pid).await {
+                                Ok(result) => Some(result),
+                                Err(e) => {
+                                    eprintln!("Error adjusting font size: {}", e);
+                                    Some(registry::ZoomingResult::Failed)
                                 }
                             }
-                        }
+                        } else {
+                            if args.verbose {
+                                eprintln!("No kitty currently focused, skipping font decrease");
+                            }
+                            None
+                        };
+
+                        let event = FocusEvent::FocusLost { zooming: zooming_result };
+                        println!("{}", serde_json::to_string(&event).unwrap());
                     }
                 },
                 _ => {}
             },
             Err(e) => {
                 eprintln!("Error reading event: {:?}", e);
+                registry.shutdown().await;
                 return Err(e);
             }
         }
