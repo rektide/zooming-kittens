@@ -49,6 +49,7 @@ pub struct RegistryConfig {
     pub max_connections: usize,
     pub idle_timeout: Duration,
     pub reap_interval: Duration,
+    pub verbose: bool,
 }
 
 impl Default for RegistryConfig {
@@ -59,6 +60,7 @@ impl Default for RegistryConfig {
             max_connections: 10,
             idle_timeout: Duration::from_secs(1800), // 30 minutes
             reap_interval: Duration::from_secs(300),  // 5 minutes
+            verbose: false,
         }
     }
 }
@@ -225,10 +227,26 @@ impl KittyRegistry {
                     .build()?;
 
                 let mut client = client.lock().await;
-                if let Err(e) = client.execute(&cmd).await {
-                    all_succeeded = false;
-                    last_error = Some(e.to_string());
-                    break;
+                let result = client.execute(&cmd).await;
+                if self.config.verbose {
+                    eprintln!("Font command result for PID {}: {:?}", pid, result);
+                }
+                match result {
+                    Ok(response) => {
+                        if !response.ok {
+                            all_succeeded = false;
+                            let error_msg = response.error.unwrap_or_else(|| "Unknown error".to_string());
+                            eprintln!("Kitty returned error for PID {}: {}", pid, error_msg);
+                            last_error = Some(error_msg);
+                            break;
+                        }
+                    }
+                    Err(e) => {
+                        all_succeeded = false;
+                        last_error = Some(e.to_string());
+                        eprintln!("Error executing font command for PID {}: {}", pid, e);
+                        break;
+                    }
                 }
             }
 
@@ -282,6 +300,10 @@ impl KittyRegistry {
             }
         }
 
+        if self.config.verbose {
+            eprintln!("Connecting to kitty PID {} at socket: {:?}", pid, socket_path);
+        }
+
         let client = match Kitty::builder()
             .socket_path(socket_path)
             .timeout(self.config.socket_timeout)
@@ -289,8 +311,14 @@ impl KittyRegistry {
             .connect()
             .await
         {
-            Ok(c) => c,
+            Ok(c) => {
+                if self.config.verbose {
+                    eprintln!("Successfully connected to kitty PID {}", pid);
+                }
+                c
+            }
             Err(e) => {
+                eprintln!("Failed to connect to kitty PID {}: {}", pid, e);
                 self.set_status(pid, KittyConnectionStatus::Failed).await;
                 return Err(e.to_string());
             }

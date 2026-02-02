@@ -137,6 +137,7 @@ async fn main() -> std::io::Result<()> {
         max_connections: args.max_connections,
         idle_timeout: std::time::Duration::from_secs(args.idle_timeout),
         reap_interval: std::time::Duration::from_secs(args.reap_interval),
+        verbose: args.verbose,
     };
     
     let registry = KittyRegistry::new(config);
