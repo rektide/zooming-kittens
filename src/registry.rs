@@ -1,5 +1,4 @@
 use dashmap::DashMap;
-use futures::{Stream, StreamExt};
 use kitty_rc::commands::SetFontSizeCommand;
 use kitty_rc::Kitty;
 use serde::Serialize;
@@ -65,30 +64,6 @@ impl Default for RegistryConfig {
             reap_interval: Duration::from_secs(300),  // 5 minutes
             verbose: false,
         }
-    }
-}
-
-pub struct FocusTracker {
-    current_focused_kitty: Option<i32>,
-}
-
-impl FocusTracker {
-    pub fn new() -> Self {
-        Self {
-            current_focused_kitty: None,
-        }
-    }
-
-    pub fn on_focus_gained(&mut self, pid: i32) {
-        self.current_focused_kitty = Some(pid);
-    }
-
-    pub fn on_focus_lost(&mut self) -> Option<i32> {
-        self.current_focused_kitty.take()
-    }
-
-    pub fn current_focused(&self) -> Option<i32> {
-        self.current_focused_kitty
     }
 }
 
