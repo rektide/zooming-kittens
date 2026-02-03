@@ -86,6 +86,8 @@ impl NiriRegistry {
         let verbosity = self.verbosity;
 
         tokio::spawn(async move {
+            let mut last_focused_window_id: Option<u64> = None;
+
             while let Ok(event) = read_event() {
                 if verbosity.log_all_events() {
                     eprintln!("Niri event: {:?}", event);
@@ -93,13 +95,36 @@ impl NiriRegistry {
 
                 match event {
                     Event::WindowFocusTimestampChanged { id, .. } => {
-                        // Query window info
+                        if verbosity.log_window_events() {
+                            eprintln!("WindowFocusTimestampChanged: id={}", id);
+                        }
+
                         if let Some(window_info) = Self::get_window_info(id).await {
                             if verbosity.log_window_events() {
                                 eprintln!(
-                                    "Focus event: window_id={}, app_id={:?}",
-                                    id, window_info.app_id
+                                    "Focus event: window_id={}, app_id={:?}, pid={:?}",
+                                    id, window_info.app_id, window_info.pid
                                 );
+                            }
+
+                            if let Some(prev_id) = last_focused_window_id {
+                                if prev_id != id {
+                                    if let Some(prev_window_info) = Self::get_window_info(prev_id).await {
+                                        if verbosity.log_window_events() {
+                                            eprintln!(
+                                                "Blur event: window_id={}, app_id={:?}, pid={:?}",
+                                                prev_id, prev_window_info.app_id, prev_window_info.pid
+                                            );
+                                        }
+                                        let niri_event = NiriEvent::Blur {
+                                            window_id: prev_id,
+                                            window: prev_window_info,
+                                        };
+                                        if let Err(_) = tx.send(niri_event) {
+                                            break;
+                                        }
+                                    }
+                                }
                             }
 
                             let niri_event = NiriEvent::Focus {
@@ -109,6 +134,80 @@ impl NiriRegistry {
 
                             if let Err(_) = tx.send(niri_event) {
                                 break;
+                            }
+
+                            last_focused_window_id = Some(id);
+                        }
+                    }
+                    Event::WindowFocusChanged { id: Some(window_id) } => {
+                        if verbosity.log_window_events() {
+                            eprintln!("WindowFocusChanged: window_id={}", window_id);
+                        }
+
+                        if let Some(window_info) = Self::get_window_info(window_id).await {
+                            if verbosity.log_window_events() {
+                                eprintln!(
+                                    "Focus event: window_id={}, app_id={:?}, pid={:?}",
+                                    window_id, window_info.app_id, window_info.pid
+                                );
+                            }
+
+                            if let Some(prev_id) = last_focused_window_id {
+                                if prev_id != window_id {
+                                    if let Some(prev_window_info) = Self::get_window_info(prev_id).await {
+                                        if verbosity.log_window_events() {
+                                            eprintln!(
+                                                "Blur event: window_id={}, app_id={:?}, pid={:?}",
+                                                prev_id, prev_window_info.app_id, prev_window_info.pid
+                                            );
+                                        }
+                                        let niri_event = NiriEvent::Blur {
+                                            window_id: prev_id,
+                                            window: prev_window_info,
+                                        };
+                                        if let Err(_) = tx.send(niri_event) {
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+
+                            let niri_event = NiriEvent::Focus {
+                                window_id,
+                                window: window_info,
+                            };
+
+                            if let Err(_) = tx.send(niri_event) {
+                                break;
+                            }
+
+                            last_focused_window_id = Some(window_id);
+                        }
+                    }
+                    Event::WindowFocusChanged { id: None } => {
+                        last_focused_window_id = None;
+                    }
+                    Event::WindowsChanged { windows } => {
+                        if last_focused_window_id.is_none() {
+                            if let Some(focused_window) = windows.iter().find(|w| w.is_focused) {
+                                if verbosity.log_window_events() {
+                                    eprintln!(
+                                        "Initial focus detected: window_id={}, app_id={:?}, pid={:?}",
+                                        focused_window.id, focused_window.app_id, focused_window.pid
+                                    );
+                                }
+
+                                let window_info = WindowInfo::from_niri_window(focused_window);
+                                let niri_event = NiriEvent::Focus {
+                                    window_id: focused_window.id,
+                                    window: window_info,
+                                };
+
+                                if let Err(_) = tx.send(niri_event) {
+                                    break;
+                                }
+
+                                last_focused_window_id = Some(focused_window.id);
                             }
                         }
                     }

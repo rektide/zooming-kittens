@@ -172,14 +172,18 @@ impl KittyRegistry {
                     kpid
                 }
                 None => {
-                    if self.config.verbose {
-                        eprintln!("Could not find kitty master process for shell PID {}", pid);
-                    }
                     self.set_status(pid, KittyConnectionStatus::NoSocket).await;
                     return Ok(ZoomingResult::NotConfigured);
                 }
             }
         };
+
+        let socket_path = get_kitty_socket_path(kitty_pid);
+
+        if !socket_path.exists() {
+            self.set_status(pid, KittyConnectionStatus::NoSocket).await;
+            return Ok(ZoomingResult::NotConfigured);
+        }
 
         if self.config.verbose {
             eprintln!("Mapped shell PID {} to kitty master PID {}", pid, kitty_pid);
@@ -193,13 +197,6 @@ impl KittyRegistry {
                 return Ok(ZoomingResult::NotConfigured);
             }
         };
-
-        let socket_path = get_kitty_socket_path(kitty_pid);
-
-        if !socket_path.exists() {
-            self.set_status(pid, KittyConnectionStatus::NoSocket).await;
-            return Ok(ZoomingResult::NotConfigured);
-        }
 
         let increment_op = if increase { "+" } else { "-" };
 
@@ -228,8 +225,8 @@ impl KittyRegistry {
 
             let mut all_succeeded = true;
 
-            for _ in 0..amount {
-                let cmd = SetFontSizeCommand::new(0)
+            for _count in 0..amount {
+                let cmd = SetFontSizeCommand::new(1)
                     .increment_op(increment_op)
                     .build()?;
 
@@ -242,6 +239,7 @@ impl KittyRegistry {
 
                 let mut client = client.lock().await;
                 let result = client.execute(&cmd).await;
+
                 if self.config.verbose {
                     eprintln!(
                         "Font command result for PID {} (kitty: {}): {:?}",

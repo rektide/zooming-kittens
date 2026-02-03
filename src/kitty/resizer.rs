@@ -30,12 +30,10 @@ impl KittyResizer {
             match event {
                 NiriEvent::Focus { window, .. } => {
                     if let Some(pid) = window.pid {
-                        if self.kitty_registry.verbose() {
-                            eprintln!(
-                                "Kitty window {} gained focus, increasing font by +{}",
-                                window.id, self.step_size
-                            );
-                        }
+                        eprintln!(
+                            "Kitty window {} gained focus (PID {}), increasing font by +{}",
+                            window.id, pid, self.step_size
+                        );
                         let _ = self
                             .kitty_registry
                             .increase_font_size_by(pid, self.step_size)
@@ -44,12 +42,10 @@ impl KittyResizer {
                 }
                 NiriEvent::Blur { window, .. } => {
                     if let Some(pid) = window.pid {
-                        if self.kitty_registry.verbose() {
-                            eprintln!(
-                                "Kitty window {} lost focus, decreasing font by -{}",
-                                window.id, self.step_size
-                            );
-                        }
+                        eprintln!(
+                            "Kitty window {} lost focus (PID {}), decreasing font by -{}",
+                            window.id, pid, self.step_size
+                        );
                         let _ = self
                             .kitty_registry
                             .decrease_font_size_by(pid, self.step_size)

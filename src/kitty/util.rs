@@ -19,9 +19,25 @@ pub fn get_kitty_password() -> Result<String, std::io::Error> {
 }
 
 pub fn get_kitty_socket_path(pid: i32) -> PathBuf {
-    let runtime_dir = std::env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| "/tmp".to_string());
+    let runtime_dir = std::env::var("XDG_RUNTIME_DIR").ok();
 
-    PathBuf::from(runtime_dir).join(format!("kitty-{}.sock", pid))
+    let paths: Vec<PathBuf> = match runtime_dir {
+        Some(dir) => vec![PathBuf::from(dir).join(format!("kitty-{}.sock", pid))],
+        None => {
+            vec![
+                PathBuf::from(format!("/run/user/1000/kitty-{}.sock", pid)),
+                PathBuf::from(format!("/tmp/kitty-{}.sock", pid)),
+            ]
+        }
+    };
+
+    for path in &paths {
+        if path.exists() {
+            return path.clone();
+        }
+    }
+
+    paths[0].clone()
 }
 
 pub fn is_process_alive(pid: i32) -> bool {
