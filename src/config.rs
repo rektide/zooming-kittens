@@ -56,7 +56,7 @@ impl Config {
     /// Load configuration from multiple sources in order:
     /// 1. Default values
     /// 2. Config file at $XDG_CONFIG_HOME/kitty-focus-tracker/config.toml
-    /// 3. Environment variables (KFT_* prefix)
+    /// 3. Environment variables (ZK_* prefix)
     /// 4. CLI args (if provided)
     pub fn load(args: Option<&CliArgs>) -> Result<Self, figment2::Error> {
         let mut figment = Figment::new();
@@ -70,8 +70,8 @@ impl Config {
             }
         }
 
-        // Add environment variables with KFT_ prefix
-        figment = figment.merge(Env::prefixed("KFT_").split("__"));
+        // Add environment variables with ZK_ prefix
+        figment = figment.merge(Env::prefixed("ZK_").split("__"));
 
         // Add CLI args if provided
         if let Some(args) = args {

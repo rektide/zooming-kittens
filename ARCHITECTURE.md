@@ -27,20 +27,20 @@ src/
 
 Configuration is managed by **figment2** and loads from multiple sources in order of precedence:
 
-1. **Default values** - Built into the Config struct
+1. **Default values** - Built into Config struct
 2. **Config file** - `$XDG_CONFIG_HOME/kitty-focus-tracker/config.toml`
-3. **Environment variables** - Prefixed with `KFT_` (e.g., `KFT_VERBOSE=true`)
+3. **Environment variables** - Prefixed with `ZK_` (e.g., `ZK_VERBOSE=true`)
 4. **CLI arguments** - Highest priority, override all other sources
 
 ### Environment Variables
 
-- `KFT_APP_ID` - Application ID to track
-- `KFT_VERBOSE` - Enable verbose logging
-- `KFT_SOCKET_TIMEOUT_SECS` - Socket timeout in seconds
-- `KFT_MAX_RETRIES` - Maximum connection retry attempts
-- `KFT_MAX_CONNECTIONS` - Maximum concurrent connections
-- `KFT_IDLE_TIMEOUT_SECS` - Idle connection timeout in seconds
-- `KFT_REAP_INTERVAL_SECS` - Connection reaping interval in seconds
+- `ZK_APP_ID` - Application ID to track
+- `ZK_VERBOSE` - Enable verbose logging
+- `ZK_SOCKET_TIMEOUT_SECS` - Socket timeout in seconds
+- `ZK_MAX_RETRIES` - Maximum connection retry attempts
+- `ZK_MAX_CONNECTIONS` - Maximum concurrent connections
+- `ZK_IDLE_TIMEOUT_SECS` - Idle connection timeout in seconds
+- `ZK_REAP_INTERVAL_SECS` - Connection reaping interval in seconds
 
 ### Example Config File
 
