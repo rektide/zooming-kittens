@@ -5,19 +5,46 @@
 ```
 src/
 ├── main.rs                    # Entry point with CLI parsing and orchestration
+├── config.rs                   # Configuration management using figment2
 ├── commands/                  # Command handlers
 │   ├── mod.rs
-│   └── fonts.rs             # Font size commands (inc/dec/set/list)
+│   ├── fonts.rs             # Font size commands (inc/dec/set/list)
+│   └── systemd.rs           # systemd service generation
 ├── niri/                       # Niri window manager event handling
 │   ├── mod.rs
 │   ├── types.rs              # Event types (NiriEvent, WindowInfo)
 │   └── registry.rs            # Event stream provider (NiriRegistry)
-├── kitty/                       # Kitty terminal operations
-│   ├── mod.rs
-│   ├── process.rs            # Process discovery (PID mapping)
-│   └── resizer.rs            # Stream consumer (KittyResizer)
-└── registry.rs                 # Kitty connection management (KittyRegistry)
+└── kitty/                       # Kitty terminal operations
+    ├── mod.rs
+    ├── registry.rs            # Kitty connection management (KittyRegistry)
+    ├── types.rs              # Kitty types (KittyConnectionStatus, ZoomingResult)
+    ├── util.rs               # Utility functions (password, socket path, process alive)
+    ├── process.rs            # Process discovery (PID mapping)
+    └── resizer.rs            # Stream consumer (KittyResizer)
 ```
+
+## Configuration
+
+Configuration is managed by **figment2** and loads from multiple sources in order of precedence:
+
+1. **Default values** - Built into the Config struct
+2. **Config file** - `$XDG_CONFIG_HOME/kitty-focus-tracker/config.toml`
+3. **Environment variables** - Prefixed with `KFT_` (e.g., `KFT_VERBOSE=true`)
+4. **CLI arguments** - Highest priority, override all other sources
+
+### Environment Variables
+
+- `KFT_APP_ID` - Application ID to track
+- `KFT_VERBOSE` - Enable verbose logging
+- `KFT_SOCKET_TIMEOUT_SECS` - Socket timeout in seconds
+- `KFT_MAX_RETRIES` - Maximum connection retry attempts
+- `KFT_MAX_CONNECTIONS` - Maximum concurrent connections
+- `KFT_IDLE_TIMEOUT_SECS` - Idle connection timeout in seconds
+- `KFT_REAP_INTERVAL_SECS` - Connection reaping interval in seconds
+
+### Example Config File
+
+See `config.example.toml` for a sample configuration file.
 
 ## Async Stream Architecture
 
