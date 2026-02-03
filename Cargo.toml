@@ -11,8 +11,10 @@ path = "src/main.rs"
 clap = { version = "4.5.56", features = ["derive"] }
 dashmap = "6.1.0"
 dirs = "6.0.0"
+futures = "0.3"
 kitty-rc = "0.4.3"
 niri-ipc = "25.11.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 tokio = "1.49.0"
+tokio-stream = "0.1"
