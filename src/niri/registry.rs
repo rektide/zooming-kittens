@@ -1,21 +1,19 @@
-use futures::{Stream, StreamExt};
 use niri_ipc::{Event, Request, Response};
 use niri_ipc::socket::Socket;
-use std::pin::Pin;
 use tokio::sync::mpsc;
-use tokio_stream::{StreamExt as TokioStreamExt, wrappers::ReceiverStream};
+use tokio_stream::{Stream, StreamExt, wrappers::UnboundedReceiverStream};
 
 use crate::niri::types::{NiriEvent, WindowInfo};
 
 pub struct NiriRegistry {
-    socket: Socket,
+    socket: Option<Socket>,
     event_tx: mpsc::UnboundedSender<NiriEvent>,
-    event_rx: mpsc::UnboundedReceiver<NiriEvent>,
+    event_rx: Option<mpsc::UnboundedReceiver<NiriEvent>>,
 }
 
 impl NiriRegistry {
     pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
-        let socket = Socket::connect()?;
+        let mut socket = Socket::connect()?;
         let reply = socket.send(Request::EventStream)?;
 
         match reply {
@@ -26,10 +24,10 @@ impl NiriRegistry {
         }
 
         let (event_tx, event_rx) = mpsc::unbounded_channel();
-        let registry = Self {
-            socket,
+        let mut registry = Self {
+            socket: Some(socket),
             event_tx,
-            event_rx,
+            event_rx: Some(event_rx),
         };
 
         registry.start_event_listener().await;
@@ -37,25 +35,25 @@ impl NiriRegistry {
         Ok(registry)
     }
 
-    pub fn events(&self) -> impl Stream<Item = NiriEvent> + '_ {
-        ReceiverStream::new(self.event_rx.clone())
+    pub fn into_events(mut self) -> impl Stream<Item = NiriEvent> + Send + Unpin {
+        UnboundedReceiverStream::new(self.event_rx.take().unwrap())
     }
 
-    pub fn focus_events(&self) -> impl Stream<Item = NiriEvent> + '_ {
-        self.events()
+    pub fn focus_events(self) -> impl Stream<Item = NiriEvent> + Send + Unpin {
+        self.into_events()
             .filter(|event| matches!(event, NiriEvent::Focus { .. }))
     }
 
-    pub fn blur_events(&self) -> impl Stream<Item = NiriEvent> + '_ {
-        self.events()
+    pub fn blur_events(self) -> impl Stream<Item = NiriEvent> + Send + Unpin {
+        self.into_events()
             .filter(|event| matches!(event, NiriEvent::Blur { .. }))
     }
 
-    pub fn windows_matching<P>(&self, predicate: P) -> impl Stream<Item = NiriEvent> + '_
+    pub fn windows_matching<P>(self, predicate: P) -> impl Stream<Item = NiriEvent> + Send + Unpin
     where
         P: Fn(&WindowInfo) -> bool + Send + Sync,
     {
-        self.events()
+        self.into_events()
             .filter(move |event| {
                 if let Some(window) = event.window() {
                     (predicate)(window)
@@ -65,29 +63,24 @@ impl NiriRegistry {
             })
     }
 
-    pub fn window_events(&self) -> impl Stream<Item = NiriEvent> + '_ {
-        self.events()
+    pub fn window_events(self) -> impl Stream<Item = NiriEvent> + Send + Unpin {
+        self.into_events()
             .filter(|event| {
                 matches!(event, NiriEvent::Focus { .. } | NiriEvent::Blur { .. })
             })
-            .boxed()
     }
 
-    pub fn filter_map<F, R>(&self, f: F) -> impl Stream<Item = R> + '_
+    pub fn filter_map<F, R>(self, f: F) -> impl Stream<Item = R> + Send + Unpin
     where
-        F: Fn(&NiriEvent) -> Option<R> + Send + Sync,
+        F: Fn(NiriEvent) -> Option<R> + Send + Sync,
     {
-        self.events()
+        self.into_events()
             .filter_map(f)
-            .boxed()
     }
 
-    pub fn boxed(self: &Self) -> Pin<Box<dyn Stream<Item = NiriEvent> + Send + Sync + '_>> {
-        self.events().boxed()
-    }
-
-    async fn start_event_listener(&self) {
-        let mut read_event = self.socket.read_events();
+    async fn start_event_listener(&mut self) {
+        let socket = self.socket.take().unwrap();
+        let mut read_event = socket.read_events();
         let tx = self.event_tx.clone();
 
         tokio::spawn(async move {
@@ -95,7 +88,7 @@ impl NiriRegistry {
                 let niri_event = match event {
                     Event::WindowFocusTimestampChanged { id, .. } => {
                         // Query window info
-                        if let Ok(window_info) = Self::get_window_info(id).await {
+                        if let Some(window_info) = Self::get_window_info(id).await {
                             NiriEvent::Focus {
                                 window_id: id,
                                 window: window_info,

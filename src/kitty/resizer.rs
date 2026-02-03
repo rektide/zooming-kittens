@@ -1,5 +1,4 @@
-use crate::kitty::registry::KittyRegistry;
-use crate::registry::ZoomingResult;
+use crate::registry::{KittyRegistry, ZoomingResult};
 use crate::niri::types::NiriEvent;
 use futures::{Stream, StreamExt};
 
@@ -18,20 +17,20 @@ impl KittyResizer {
     ) -> Result<ZoomingResult, Box<dyn std::error::Error>> {
         while let Some(event) = events.next().await {
             match event {
-                NiriEvent::Focus { window } => {
+                NiriEvent::Focus { window, .. } => {
                     if let Some(pid) = window.pid {
                         if self.kitty_registry.verbose() {
                             eprintln!("Kitty window {} gained focus, increasing font", window.id);
                         }
-                        self.kitty_registry.increase_font_size(pid).await?
+                        let _ = self.kitty_registry.increase_font_size(pid).await;
                     }
                 }
-                NiriEvent::Blur { window } => {
+                NiriEvent::Blur { window, .. } => {
                     if let Some(pid) = window.pid {
                         if self.kitty_registry.verbose() {
                             eprintln!("Kitty window {} lost focus, decreasing font", window.id);
                         }
-                        self.kitty_registry.decrease_font_size(pid).await?
+                        let _ = self.kitty_registry.decrease_font_size(pid).await;
                     }
                 }
                 _ => {}
