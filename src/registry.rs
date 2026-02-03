@@ -1,3 +1,4 @@
+use dashmap::DashMap;
 use kitty_rc::commands::SetFontSizeCommand;
 use kitty_rc::Kitty;
 use serde::Serialize;
@@ -39,6 +40,7 @@ struct ManagedConnection {
 pub struct KittyRegistry {
     connections: Arc<Mutex<HashMap<i32, ManagedConnection>>>,
     statuses: Arc<Mutex<HashMap<i32, KittyConnectionStatus>>>,
+    pid_cache: Arc<DashMap<i32, i32>>,
     config: RegistryConfig,
 }
 
@@ -94,6 +96,7 @@ impl KittyRegistry {
         Self {
             connections: Arc::new(Mutex::new(HashMap::new())),
             statuses: Arc::new(Mutex::new(HashMap::new())),
+            pid_cache: Arc::new(DashMap::new()),
             config,
         }
     }
@@ -182,15 +185,37 @@ impl KittyRegistry {
     }
 
     async fn execute_font_command(&self, pid: i32, increase: bool) -> Result<ZoomingResult, Box<dyn std::error::Error>> {
+        let kitty_pid = if let Some(cached) = self.pid_cache.get(&pid) {
+            *cached
+        } else {
+            match find_kitty_master_pid(pid) {
+                Some(kpid) => {
+                    self.pid_cache.insert(pid, kpid);
+                    kpid
+                }
+                None => {
+                    if self.config.verbose {
+                        eprintln!("Could not find kitty master process for shell PID {}", pid);
+                    }
+                    self.set_status(pid, KittyConnectionStatus::NoSocket).await;
+                    return Ok(ZoomingResult::NotConfigured);
+                }
+            }
+        };
+
+        if self.config.verbose {
+            eprintln!("Mapped shell PID {} to kitty master PID {}", pid, kitty_pid);
+        }
+
         let password = match get_kitty_password() {
             Ok(pw) => pw,
             Err(_) => {
-                self.set_status(pid, KittyConnectionStatus::NotConfigured).await;
+                self.set_status(kitty_pid, KittyConnectionStatus::NotConfigured).await;
                 return Ok(ZoomingResult::NotConfigured);
             }
         };
 
-        let socket_path = get_kitty_socket_path(pid);
+        let socket_path = get_kitty_socket_path(kitty_pid);
 
         if !socket_path.exists() {
             self.set_status(pid, KittyConnectionStatus::NoSocket).await;
@@ -211,7 +236,7 @@ impl KittyRegistry {
                 sleep(delay).await;
             }
 
-            let client = match self.get_or_create_connection(pid, &socket_path, &password).await {
+            let client = match self.get_or_create_connection(kitty_pid, &socket_path, &password).await {
                 Ok(client) => client,
                 Err(e) => {
                     last_error = Some(e.to_string());
@@ -227,20 +252,20 @@ impl KittyRegistry {
                     .build()?;
 
                 if self.config.verbose {
-                    eprintln!("Sending command to PID {}: {:?}", pid, cmd);
+                    eprintln!("Sending command to PID {} (kitty: {}): {:?}", pid, kitty_pid, cmd);
                 }
 
                 let mut client = client.lock().await;
                 let result = client.execute(&cmd).await;
                 if self.config.verbose {
-                    eprintln!("Font command result for PID {}: {:?}", pid, result);
+                    eprintln!("Font command result for PID {} (kitty: {}): {:?}", pid, kitty_pid, result);
                 }
                 match result {
                     Ok(response) => {
                         if !response.ok {
                             all_succeeded = false;
                             let error_msg = response.error.unwrap_or_else(|| "Unknown error".to_string());
-                            eprintln!("Kitty returned error for PID {}: {}", pid, error_msg);
+                            eprintln!("Kitty returned error for PID {} (kitty: {}): {}", pid, kitty_pid, error_msg);
                             last_error = Some(error_msg);
                             break;
                         }
@@ -248,14 +273,14 @@ impl KittyRegistry {
                     Err(e) => {
                         all_succeeded = false;
                         last_error = Some(e.to_string());
-                        eprintln!("Error executing font command for PID {}: {}", pid, e);
+                        eprintln!("Error executing font command for PID {} (kitty: {}): {}", pid, kitty_pid, e);
                         break;
                     }
                 }
             }
 
             if all_succeeded {
-                self.update_last_used(pid).await;
+                self.update_last_used(kitty_pid).await;
                 self.set_status(pid, KittyConnectionStatus::Ready).await;
 
                 let font_adjustment = format!("{}3", if increase { "+" } else { "-" });
@@ -393,4 +418,31 @@ fn get_kitty_socket_path(pid: i32) -> PathBuf {
 
 fn is_process_alive(pid: i32) -> bool {
     std::path::Path::new(&format!("/proc/{}", pid)).exists()
+}
+
+fn find_kitty_master_pid(shell_pid: i32) -> Option<i32> {
+    let mut pid = shell_pid;
+    let max_depth = 20;
+    
+    for _ in 0..max_depth {
+        let proc_path = format!("/proc/{}/stat", pid);
+        if let Ok(stat) = fs::read_to_string(&proc_path) {
+            let parts: Vec<&str> = stat.split_whitespace().collect();
+            if parts.len() > 1 {
+                let comm = parts[1];
+                let comm_clean = comm.trim_start_matches('(').trim_end_matches(')');
+                if comm_clean == "kitty" {
+                    return Some(pid);
+                }
+                if let Some(ppid_str) = parts.get(3) {
+                    if let Ok(ppid) = ppid_str.parse::<i32>() {
+                        pid = ppid;
+                        continue;
+                    }
+                }
+            }
+        }
+        break;
+    }
+    None
 }

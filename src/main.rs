@@ -206,12 +206,12 @@ async fn main() -> std::io::Result<()> {
                     };
                     
                     if let Some(w) = window {
-                        if let Some(ref app_id) = w.app_id {
-                            if is_kitty_window(app_id, &app_id) {
+                        if let Some(ref window_app_id) = w.app_id {
+                            if is_kitty_window(window_app_id, &app_id) {
                                 if args.verbose {
                                     eprintln!(
                                         "Window {} gained focus (app_id: {}, pid: {:?})",
-                                        id, app_id, w.pid
+                                        id, window_app_id, w.pid
                                     );
                                 }
                                 
@@ -254,7 +254,7 @@ async fn main() -> std::io::Result<()> {
                                 
                                 let event = FocusEvent::FocusGained {
                                     window_id: id,
-                                    app_id: app_id.clone(),
+                                    app_id: window_app_id.clone(),
                                     zooming: zooming_result,
                                 };
                                 println!("{}", serde_json::to_string(&event).unwrap());
