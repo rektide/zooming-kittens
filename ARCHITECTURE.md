@@ -6,11 +6,29 @@ The current structure has several concerns that should be better separated:
 
 1. **Mixing CLI and business logic**: `main.rs` contains CLI parsing, event loop logic, and window management
 2. **Registry too large**: `registry.rs` handles connections, commands, process mapping, and configuration - too many responsibilities
-3. **Commands scattered**: Focus tracking logic in main.rs, font commands in separate module
+3. **CLI and Commands are tightly coupled but in separate layers**: CLI parsing (`cli/`) defines what commands exist, and command handlers (`commands/`) implement them. These layers are so closely related that separating them creates unnecessary indirection and makes the code harder to navigate.
 
-## Proposed Structure
+## Updated Proposed Structure
 
 ```
+src/
+├── main.rs                      # Entry point only
+├── cli/                          # CLI parsing AND command handlers together
+│   ├── mod.rs
+│   ├── args.rs                  # clap-derived Args structs
+│   ├── fonts.rs                 # Font commands (inc/dec/set/list)
+│   └── focus.rs                # Focus tracking event loop
+├── kitty/                         # Kitty-specific logic
+│   ├── mod.rs
+│   ├── client.rs                 # Kitty connection wrapper
+│   ├── registry.rs               # Connection pool and cache
+│   └── process.rs               # Process discovery and PID mapping
+├── config.rs                    # Configuration management
+├── error.rs                     # Error types
+└── util.rs                      # Utilities (systemd generation, etc.)
+```
+
+**Note**: CLI parsing and command handlers are merged into `cli/` since they are tightly coupled - CLI defines command structure and handlers implement them. Separating creates unnecessary indirection.
 src/
 ├── main.rs                      # Entry point, minimal CLI parsing only
 ├── cli/                          # All CLI argument parsing
@@ -33,17 +51,15 @@ src/
 ## Separation of Concerns
 
 ### CLI Layer (`cli/`)
-- **Purpose**: Parse command-line arguments
-- **Contains**: clap-derived structs for all commands
-- **Exports**: Parsed, typed command structures
-
-### Commands Layer (`commands/`)
-- **Purpose**: Execute user commands
-- **Contains**: High-level command handlers
-- **Dependencies**: Uses `kitty/` for operations, `config/` for settings
+- **Purpose**: Parse command-line arguments AND execute commands
+- **Contains**:
+  - clap-derived Args structs for all commands
+  - Command handlers (`fonts.rs`, `focus.rs`)
+- **Exports**: Parsed command structures and handler functions
+- **Why merged**: CLI parsing and command execution are tightly coupled - CLI defines what commands exist, handlers implement them. Keeping them together reduces indirection and makes navigation easier.
 - **Examples**:
   - `fonts::handle_font_command()` - execute font commands
-  - `focus::run_focus_tracker()` - run the event loop
+  - `focus::run_focus_tracker()` - run the event loop (future)
 
 ### Kitty Layer (`kitty/`)
 - **Purpose**: Abstract kitty terminal emulator interactions
@@ -82,6 +98,7 @@ src/
 
 1. **Phase 1**: Create new directory structure
    - Create `cli/`, `kitty/`, `config/` directories
+   - Merge `commands/` into `cli/`
    - Move relevant code from existing files
 
 2. **Phase 2**: Extract interfaces
@@ -93,7 +110,7 @@ src/
    - Add integration tests for layer boundaries
 
 4. **Phase 4**: Clean up
-   - Remove old files
+   - Remove old `commands/` directory
    - Update documentation
 
 ## Benefits
