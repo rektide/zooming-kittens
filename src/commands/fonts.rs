@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::Subcommand;
 use kitty_rc::commands::SetFontSizeCommand;
 use kitty_rc::Kitty;
 use std::path::PathBuf;

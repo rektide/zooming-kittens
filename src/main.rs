@@ -1,10 +1,10 @@
 use clap::{Parser, Subcommand};
 use commands::fonts::handle_font_command;
+use commands::systemd::generate_systemd_service;
 use commands::FontCommand;
 use kitty::{KittyRegistry, RegistryConfig};
 use kitty::resizer::KittyResizer;
 use niri::registry::NiriRegistry;
-use std::io::Write;
 
 mod commands;
 mod kitty;
@@ -53,32 +53,6 @@ struct Args {
     command: Option<CliSubcommand>,
 }
 
-fn print_systemd_service(output: bool) -> std::io::Result<()> {
-    let service_name = std::env::var("ZOOMING_APPNAME").ok().unwrap_or_else(|| "zooming-kittens".to_string());
-    let _description = format!("{} Focus Tracker", service_name);
-    let binary_path = std::env::current_exe()?;
-    let binary_path = binary_path.to_str().ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "kitty-focus-tracker"))?;
-
-    if output {
-        std::io::stdout().write_all(b"[Unit]\n").unwrap();
-        std::io::stdout().write_all(format!("Description={}\n", _description).as_bytes()).unwrap();
-        std::io::stdout().write_all(b"After=niri.target\n").unwrap();
-        std::io::stdout().write_all(b"Wants=niri.target\n").unwrap();
-        std::io::stdout().write_all(b"\n").unwrap();
-        std::io::stdout().write_all(b"[Service]\n").unwrap();
-        std::io::stdout().write_all(b"Type=simple\n").unwrap();
-        std::io::stdout().write_all(b"ExecStart=").unwrap();
-        std::io::stdout().write_all(binary_path.as_bytes()).unwrap();
-        std::io::stdout().write_all(b"\n").unwrap();
-        std::io::stdout().write_all(b"Environment=RUST_BACKTRACE=full\n").unwrap();
-        std::io::stdout().write_all(b"Restart=always\n").unwrap();
-        std::io::stdout().write_all(b"\n").unwrap();
-        std::io::stdout().write_all(b"[Install]\n").unwrap();
-        std::io::stdout().write_all(b"WantedBy=default.target\n").unwrap();
-    }
-    Ok(())
-}
-
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
     let args = Args::parse();
@@ -94,7 +68,7 @@ async fn main() -> std::io::Result<()> {
     };
     // Handle subcommands
     if let Some(CliSubcommand::GenerateSystemd { output }) = args.command {
-        print_systemd_service(output)?;
+        generate_systemd_service(output)?;
         return Ok(());
     }
 
