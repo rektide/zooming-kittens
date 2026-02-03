@@ -521,3 +521,89 @@ src/
 5. ✅ Comprehensive test coverage
 6. ✅ No performance regressions
 7. ✅ Documentation for public APIs
+
+---
+
+## Implementation Notes
+
+### What Was Actually Implemented
+
+All 5 phases were completed successfully:
+
+#### Phase 1: NiriRegistry Foundation ✅
+- Created `src/niri/mod.rs`, `src/niri/types.rs`, `src/niri/registry.rs`
+- Defined `NiriEvent` and `WindowInfo` types
+- Implemented connection to niri IPC
+- Set up event channel for streaming
+
+#### Phase 2: Stream Methods ✅
+- Implemented `into_events()` to consume registry and return stream
+- Added `focus_events()`, `blur_events()` for filtered streams
+- Added `windows_matching<P>()` for generic predicate-based filtering
+- Used `tokio_stream` for stream utilities (UnboundedReceiverStream)
+- All methods consume `self` to transfer ownership of the receiver
+
+#### Phase 3: Kitty Resizer ✅
+- Created `src/kitty/mod.rs`, `src/kitty/process.rs`, `src/kitty/resizer.rs`
+- Extracted `find_kitty_master_pid()` from registry.rs to kitty/process.rs
+- Created `KittyResizer` with `process_events()` method
+- Handles Focus and Blur events independently
+
+#### Phase 4: Main Entry Point ✅
+- Updated `src/main.rs` to use new stream architecture
+- Removed old manual event loop
+- Wired up NiriRegistry → filter → KittyResizer pipeline
+- Kept existing CLI subcommands intact
+
+#### Phase 5: Cleanup and Documentation ✅
+- Removed unused `FocusTracker` from registry.rs
+- Cleaned up unused imports
+- Updated `ARCHITECTURE.md` to document stream architecture
+- Updated this PLAN-stream.md with implementation notes
+
+### Deviations from Original Plan
+
+1. **Stream Ownership**: Original plan had `events()` returning borrowed stream, but implementation uses `into_events()` consuming `self`. This is simpler and avoids complexity with UnboundedReceiver not being cloneable.
+
+2. **Channel Type**: Used `mpsc::unbounded_channel` with `UnboundedReceiverStream` instead of bounded channels. This is fine for this use case since backpressure isn't a concern.
+
+3. **FocusTracker Removal**: Removed `FocusTracker` entirely since Blur events are now received directly from niri, making manual focus tracking unnecessary.
+
+### Key Technical Decisions
+
+1. **Consuming API**: Stream methods consume `self` rather than borrowing. This transfers ownership of the UnboundedReceiver and allows clean API without cloning issues.
+
+2. **tokio_stream over futures**: Used `tokio_stream` for stream utilities because its filter/map API is synchronous (returns bool directly) vs futures requiring Future<Output=bool>.
+
+3. **Separate Blur Events**: Original code only tracked "previous window" to decrease font, but now we handle Blur events directly from niri, which is more correct.
+
+### Remaining Work
+
+1. **Testing**: Add comprehensive unit and integration tests (not implemented yet)
+2. **Debounce**: Consider adding debounce to prevent rapid font adjustments (removed from original code)
+3. **Logging**: Add structured logging for events
+4. **Metrics**: Optional: add metrics collection for performance monitoring
+
+### Performance Considerations
+
+The new stream architecture should have minimal overhead:
+- Unbounded channel: O(1) send/receive
+- Stream operators: compile-time optimized
+- No additional allocations per event
+
+The main benefit is composability and maintainability rather than performance improvement.
+
+### Files Changed
+
+- `Cargo.toml`: Added `futures` and `tokio-stream` dependencies
+- `src/main.rs`: Replaced old event loop with stream pipeline
+- `src/registry.rs`: Removed `FocusTracker`, kept `KittyRegistry`
+- `src/niri/mod.rs`: New module
+- `src/niri/types.rs`: New event type definitions
+- `src/niri/registry.rs`: New event stream provider
+- `src/kitty/mod.rs`: New module
+- `src/kitty/process.rs`: Extracted PID discovery
+- `src/kitty/resizer.rs`: New event consumer
+- `src/commands/fonts.rs`: No changes, still works
+- `ARCHITECTURE.md`: Updated to reflect stream architecture
+- `doc/PLAN-stream.md`: This file with implementation notes

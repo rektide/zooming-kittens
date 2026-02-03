@@ -1,122 +1,104 @@
-# Project Structure
+# Architecture
 
-## Current Issues
-
-The current structure has several concerns that should be better separated:
-
-1. **Mixing CLI and business logic**: `main.rs` contains CLI parsing, event loop logic, and window management
-2. **Registry too large**: `registry.rs` handles connections, commands, process mapping, and configuration - too many responsibilities
-3. **CLI and Commands are tightly coupled but in separate layers**: CLI parsing (`cli/`) defines what commands exist, and command handlers (`commands/`) implement them. These layers are so closely related that separating them creates unnecessary indirection and makes the code harder to navigate.
-
-## Updated Proposed Structure
+## Current Structure
 
 ```
 src/
-├── main.rs                      # Entry point only
-├── cli/                          # CLI parsing AND command handlers together
+├── main.rs                    # Entry point with CLI parsing and orchestration
+├── commands/                  # Command handlers
 │   ├── mod.rs
-│   ├── args.rs                  # clap-derived Args structs
-│   ├── fonts.rs                 # Font commands (inc/dec/set/list)
-│   └── focus.rs                # Focus tracking event loop
-├── kitty/                         # Kitty-specific logic
+│   └── fonts.rs             # Font size commands (inc/dec/set/list)
+├── niri/                       # Niri window manager event handling
 │   ├── mod.rs
-│   ├── client.rs                 # Kitty connection wrapper
-│   ├── registry.rs               # Connection pool and cache
-│   └── process.rs               # Process discovery and PID mapping
-├── config.rs                    # Configuration management
-├── error.rs                     # Error types
-└── util.rs                      # Utilities (systemd generation, etc.)
+│   ├── types.rs              # Event types (NiriEvent, WindowInfo)
+│   └── registry.rs            # Event stream provider (NiriRegistry)
+├── kitty/                       # Kitty terminal operations
+│   ├── mod.rs
+│   ├── process.rs            # Process discovery (PID mapping)
+│   └── resizer.rs            # Stream consumer (KittyResizer)
+└── registry.rs                 # Kitty connection management (KittyRegistry)
 ```
 
-**Note**: CLI parsing and command handlers are merged into `cli/` since they are tightly coupled - CLI defines command structure and handlers implement them. Separating creates unnecessary indirection.
-src/
-├── main.rs                      # Entry point, minimal CLI parsing only
-├── cli/                          # All CLI argument parsing
-│   ├── mod.rs
-│   └── args.rs                  # clap-derived Args structs
-├── commands/                      # All command handlers
-│   ├── mod.rs
-│   ├── fonts.rs                  # Font size commands (inc/dec/set/list)
-│   └── focus.rs                 # Focus tracking event loop
-├── kitty/                         # Kitty-specific logic
-│   ├── mod.rs
-│   ├── client.rs                 # Kitty connection wrapper
-│   ├── registry.rs               # Connection pool and cache
-│   └── process.rs               # Process discovery and PID mapping
-├── config.rs                    # Configuration management
-├── error.rs                     # Error types
-└── util.rs                     # Utilities (systemd generation, etc.)
-```
+## Async Stream Architecture
 
-## Separation of Concerns
+The application uses Rust's async Stream trait to create a composable, event-driven architecture:
 
-### CLI Layer (`cli/`)
-- **Purpose**: Parse command-line arguments AND execute commands
-- **Contains**:
-  - clap-derived Args structs for all commands
-  - Command handlers (`fonts.rs`, `focus.rs`)
-- **Exports**: Parsed command structures and handler functions
-- **Why merged**: CLI parsing and command execution are tightly coupled - CLI defines what commands exist, handlers implement them. Keeping them together reduces indirection and makes navigation easier.
-- **Examples**:
-  - `fonts::handle_font_command()` - execute font commands
-  - `focus::run_focus_tracker()` - run the event loop (future)
+### Event Flow
 
-### Kitty Layer (`kitty/`)
-- **Purpose**: Abstract kitty terminal emulator interactions
-- **Contains**:
-  - `client::KittyClient` - Wrapper around kitty-rc library
-  - `registry::KittyRegistry` - Connection pool with caching
-  - `process::find_kitty_master_pid()` - Process discovery
-- **Responsibilities**:
-  - Socket discovery
-  - Connection management
-  - Command execution
-  - PID mapping (shell → kitty master)
+1. **NiriRegistry** connects to niri IPC and creates an event stream
+2. Events are filtered to find kitty windows matching the target app_id
+3. **KittyResizer** consumes the filtered stream and adjusts font sizes
 
-### Config Layer (`config.rs`)
-- **Purpose**: Load and validate configuration
-- **Contains**: Structs for app settings
-- **Sources**: Environment variables, config files, CLI args
-- **Exports**: `Config` struct
+### Key Components
 
-### Error Layer (`error.rs`)
-- **Purpose**: Centralized error handling
-- **Contains**: Custom error types
+#### NiriRegistry (`src/niri/registry.rs`)
+- **Purpose**: Provide event streams from niri window manager
+- **Key Methods**:
+  - `new()` - Connect to niri and start event listener
+  - `into_events()` - Consume registry and return event stream
+  - `windows_matching(predicate)` - Filter events by window properties
+  - `focus_events()` - Stream of focus events only
+  - `blur_events()` - Stream of blur events only
+
+#### KittyResizer (`src/kitty/resizer.rs`)
+- **Purpose**: Consume niri events and adjust kitty font sizes
+- **Key Methods**:
+  - `new(kitty_registry)` - Create resizer with KittyRegistry
+  - `process_events(stream)` - Consume event stream and process Focus/Blur events
+
+#### KittyRegistry (`src/registry.rs`)
+- **Purpose**: Manage kitty terminal connections and execute commands
 - **Features**:
-  - From trait implementations for all error types
-  - Helpful error messages
-  - Error conversion utilities
+  - Connection pooling with automatic cleanup
+  - PID mapping (shell → kitty master)
+  - Retry logic and timeouts
+  - Idle connection reaping
 
-### Utility Layer (`util.rs`)
-- **Purpose**: Helper functions that don't fit elsewhere
-- **Contains**: One-off utilities
-- **Examples**:
-  - `print_systemd_service()` - systemd file generation
-  - Environment variable helpers
+### Event Types
 
-## Migration Path
+```rust
+enum NiriEvent {
+    Focus { window_id: u64, window: WindowInfo },
+    Blur { window_id: u64, window: WindowInfo },
+    Create { window_id: u64, window: WindowInfo },
+    Destroy { window_id: u64 },
+}
 
-1. **Phase 1**: Create new directory structure
-   - Create `cli/`, `kitty/`, `config/` directories
-   - Merge `commands/` into `cli/`
-   - Move relevant code from existing files
+struct WindowInfo {
+    id: u64,
+    app_id: Option<String>,
+    pid: Option<i32>,
+    title: Option<String>,
+}
+```
 
-2. **Phase 2**: Extract interfaces
-   - Define clear APIs between layers
-   - Update imports across codebase
+## Benefits of Stream Architecture
 
-3. **Phase 3**: Test and refactor
-   - Ensure all functionality still works
-   - Add integration tests for layer boundaries
+1. **Composability**: Use standard stream combinators (filter, map, etc.)
+2. **Testability**: Each component can be tested with mock streams
+3. **Flexibility**: Easy to add new event consumers or filters
+4. **Separation**: Niri events and kitty operations are cleanly separated
+5. **Type Safety**: Compile-time guarantees about event types
 
-4. **Phase 4**: Clean up
-   - Remove old `commands/` directory
-   - Update documentation
+## Example Usage
 
-## Benefits
+```rust
+let niri_registry = NiriRegistry::new().await?;
+let kitty_registry = KittyRegistry::new(config);
+let mut resizer = KittyResizer::new(kitty_registry);
 
-1. **Testability**: Each layer can be unit tested independently
-2. **Maintainability**: Changes to CLI don't affect kitty logic
-3. **Reusability**: Kitty layer can be used by other tools
-4. **Clarity**: Clear purpose for each module
-5. **Growth**: Easy to add new commands or kitty operations
+// Filter for kitty windows
+let kitty_events = niri_registry.windows_matching(|window| {
+    window.app_id.as_deref() == Some("kitty")
+});
+
+// Process events
+resizer.process_events(kitty_events).await?;
+```
+
+## Future Enhancements
+
+- Add debounce support to prevent rapid font adjustments
+- Support multiple kitty instances with different configurations
+- Add event logging and debugging tools
+- Implement plugin system for custom event handlers
