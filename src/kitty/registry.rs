@@ -1,36 +1,14 @@
+use crate::kitty::types::{KittyConnectionStatus, RegistryConfig, ZoomingResult};
+use crate::kitty::util::{get_kitty_password, get_kitty_socket_path, is_process_alive};
 use dashmap::DashMap;
 use kitty_rc::commands::SetFontSizeCommand;
 use kitty_rc::Kitty;
-use serde::Serialize;
 use std::collections::HashMap;
-use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 use tokio::time::sleep;
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum KittyConnectionStatus {
-    Ready,
-    NoSocket,
-    NotConfigured,
-    Failed,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(tag = "status", rename_all = "snake_case")]
-pub enum ZoomingResult {
-    Success {
-        pid: i32,
-        font_adjustment: String,
-    },
-    NotConfigured,
-    ConnectionFailed,
-    AuthFailed,
-    Failed,
-}
 
 struct ManagedConnection {
     client: Arc<Mutex<Kitty>>,
@@ -44,24 +22,14 @@ pub struct KittyRegistry {
     config: RegistryConfig,
 }
 
-#[derive(Clone)]
-pub struct RegistryConfig {
-    pub socket_timeout: Duration,
-    pub max_retries: u32,
-    pub max_connections: usize,
-    pub idle_timeout: Duration,
-    pub reap_interval: Duration,
-    pub verbose: bool,
-}
-
 impl Default for RegistryConfig {
     fn default() -> Self {
         Self {
             socket_timeout: Duration::from_secs(2),
             max_retries: 3,
             max_connections: 10,
-            idle_timeout: Duration::from_secs(1800), // 30 minutes
-            reap_interval: Duration::from_secs(300),  // 5 minutes
+            idle_timeout: Duration::from_secs(1800),
+            reap_interval: Duration::from_secs(300),
             verbose: false,
         }
     }
@@ -371,32 +339,3 @@ impl KittyRegistry {
         self.statuses.lock().await.clear();
     }
 }
-
-fn get_kitty_password() -> Result<String, std::io::Error> {
-    let password_path = dirs::config_dir()
-        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "Config directory not found"))?
-        .join("kitty/rc.password");
-
-    if !password_path.exists() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "Password file not found",
-        ));
-    }
-
-    fs::read_to_string(password_path)
-        .map(|s| s.trim().to_string())
-}
-
-fn get_kitty_socket_path(pid: i32) -> PathBuf {
-    let runtime_dir = std::env::var("XDG_RUNTIME_DIR")
-        .unwrap_or_else(|_| "/tmp".to_string());
-
-    PathBuf::from(runtime_dir)
-        .join(format!("kitty-{}.sock", pid))
-}
-
-fn is_process_alive(pid: i32) -> bool {
-    std::path::Path::new(&format!("/proc/{}", pid)).exists()
-}
-

@@ -1,5 +1,8 @@
 pub mod process;
+pub mod registry;
 pub mod resizer;
+pub mod types;
+pub mod util;
 
-pub use process::find_kitty_master_pid;
-pub use resizer::KittyResizer;
+pub use registry::KittyRegistry;
+pub use types::{RegistryConfig, ZoomingResult};

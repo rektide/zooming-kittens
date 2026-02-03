@@ -1,15 +1,14 @@
 use clap::{Parser, Subcommand};
 use commands::fonts::handle_font_command;
 use commands::FontCommand;
+use kitty::{KittyRegistry, RegistryConfig};
 use kitty::resizer::KittyResizer;
 use niri::registry::NiriRegistry;
-use registry::{KittyRegistry, RegistryConfig};
 use std::io::Write;
 
 mod commands;
 mod kitty;
 mod niri;
-mod registry;
 
 #[derive(Subcommand, Debug)]
 enum CliSubcommand {

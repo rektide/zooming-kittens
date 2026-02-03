@@ -1,4 +1,4 @@
-use crate::registry::{KittyRegistry, ZoomingResult};
+use crate::kitty::{KittyRegistry, ZoomingResult};
 use crate::niri::types::NiriEvent;
 use futures::{Stream, StreamExt};
 
