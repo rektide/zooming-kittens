@@ -36,13 +36,13 @@ struct Args {
     #[arg(short, long)]
     verbose: bool,
 
-    #[arg(long, default_value = "2")]
+    #[arg(long, default_value = "5")]
     socket_timeout: u64,
 
     #[arg(long, default_value = "3")]
     max_retries: u32,
 
-    #[arg(long, default_value = "10")]
+    #[arg(long, default_value = "30")]
     max_connections: usize,
 
     #[arg(long, default_value = "1800")]

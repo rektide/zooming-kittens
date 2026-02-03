@@ -11,7 +11,7 @@ verbose = false
 
 # Socket timeout in seconds
 # Can be overridden by CLI --socket-timeout or ZK_SOCKET_TIMEOUT_SECS
-socket_timeout_secs = 2
+socket_timeout_secs = 5
 
 # Maximum connection retry attempts
 # Can be overridden by CLI --max-retries or ZK_MAX_RETRIES
@@ -19,7 +19,7 @@ max_retries = 3
 
 # Maximum number of concurrent connections
 # Can be overridden by CLI --max-connections or ZK_MAX_CONNECTIONS
-max_connections = 10
+max_connections = 30
 
 # Idle timeout for connections in seconds
 # Can be overridden by CLI --idle-timeout or ZK_IDLE_TIMEOUT_SECS

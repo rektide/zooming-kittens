@@ -131,7 +131,7 @@ fn default_verbose() -> bool {
 }
 
 fn default_socket_timeout() -> u64 {
-    2
+    5
 }
 
 fn default_max_retries() -> u32 {
@@ -139,7 +139,7 @@ fn default_max_retries() -> u32 {
 }
 
 fn default_max_connections() -> usize {
-    10
+    30
 }
 
 fn default_idle_timeout() -> u64 {
