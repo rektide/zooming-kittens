@@ -1,0 +1,30 @@
+# kitty-focus-tracker Configuration
+# This file is loaded from: $XDG_CONFIG_HOME/kitty-focus-tracker/config.toml
+
+# Application ID to track (e.g., "kitty")
+# Can be overridden by CLI argument or KFT_APP_ID environment variable
+app_id = "kitty"
+
+# Enable verbose logging
+# Can be overridden by CLI flag --verbose or KFT_VERBOSE=true
+verbose = false
+
+# Socket timeout in seconds
+# Can be overridden by CLI --socket-timeout or KFT_SOCKET_TIMEOUT_SECS
+socket_timeout_secs = 2
+
+# Maximum connection retry attempts
+# Can be overridden by CLI --max-retries or KFT_MAX_RETRIES
+max_retries = 3
+
+# Maximum number of concurrent connections
+# Can be overridden by CLI --max-connections or KFT_MAX_CONNECTIONS
+max_connections = 10
+
+# Idle timeout for connections in seconds
+# Can be overridden by CLI --idle-timeout or KFT_IDLE_TIMEOUT_SECS
+idle_timeout_secs = 1800  # 30 minutes
+
+# Interval between reaping idle connections in seconds
+# Can be overridden by CLI --reap-interval or KFT_REAP_INTERVAL_SECS
+reap_interval_secs = 300  # 5 minutes

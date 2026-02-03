@@ -1,4 +1,5 @@
-use crate::kitty::types::{KittyConnectionStatus, RegistryConfig, ZoomingResult};
+use crate::config::RegistryConfig;
+use crate::kitty::types::{KittyConnectionStatus, ZoomingResult};
 use crate::kitty::util::{get_kitty_password, get_kitty_socket_path, is_process_alive};
 use dashmap::DashMap;
 use kitty_rc::commands::SetFontSizeCommand;
@@ -20,19 +21,6 @@ pub struct KittyRegistry {
     statuses: Arc<Mutex<HashMap<i32, KittyConnectionStatus>>>,
     pid_cache: Arc<DashMap<i32, i32>>,
     config: RegistryConfig,
-}
-
-impl Default for RegistryConfig {
-    fn default() -> Self {
-        Self {
-            socket_timeout: Duration::from_secs(2),
-            max_retries: 3,
-            max_connections: 10,
-            idle_timeout: Duration::from_secs(1800),
-            reap_interval: Duration::from_secs(300),
-            verbose: false,
-        }
-    }
 }
 
 impl KittyRegistry {

@@ -5,4 +5,4 @@ pub mod types;
 pub mod util;
 
 pub use registry::KittyRegistry;
-pub use types::{RegistryConfig, ZoomingResult};
+pub use types::ZoomingResult;

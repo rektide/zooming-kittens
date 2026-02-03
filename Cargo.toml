@@ -11,6 +11,7 @@ path = "src/main.rs"
 clap = { version = "4.5.56", features = ["derive"] }
 dashmap = "6.1.0"
 dirs = "6.0.0"
+figment2 = { version = "0.11.4", features = ["toml"] }
 futures = "0.3"
 kitty-rc = "0.4.3"
 niri-ipc = "25.11.0"

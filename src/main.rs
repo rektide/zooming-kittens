@@ -2,11 +2,13 @@ use clap::{Parser, Subcommand};
 use commands::fonts::handle_font_command;
 use commands::systemd::generate_systemd_service;
 use commands::FontCommand;
-use kitty::{KittyRegistry, RegistryConfig};
+use config::{Config, CliArgs};
+use kitty::KittyRegistry;
 use kitty::resizer::KittyResizer;
 use niri::registry::NiriRegistry;
 
 mod commands;
+mod config;
 mod kitty;
 mod niri;
 
@@ -53,19 +55,36 @@ struct Args {
     command: Option<CliSubcommand>,
 }
 
+impl Args {
+    /// Convert to CliArgs for config loading
+    fn to_cli_args(&self) -> CliArgs {
+        // Handle ZOOMING_APPNAME env var for backwards compatibility
+        let app_id = if self.app_id.is_empty() {
+            match std::env::var("ZOOMING_APPNAME") {
+                Ok(val) => val,
+                Err(_) => String::from("kitty"),
+            }
+        } else {
+            self.app_id.clone()
+        };
+
+        CliArgs {
+            app_id,
+            verbose: self.verbose,
+            socket_timeout: self.socket_timeout,
+            max_retries: self.max_retries,
+            max_connections: self.max_connections,
+            idle_timeout: self.idle_timeout,
+            reap_interval: self.reap_interval,
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
     let args = Args::parse();
-    
-    // Set default app_id from ZOOMING_APPNAME env var if not provided
-    let app_id = if args.app_id.is_empty() {
-        match std::env::var("ZOOMING_APPNAME") {
-            Ok(val) => val,
-            Err(_) => String::from("kitty"),
-        }
-    } else {
-        args.app_id.as_str().to_string()
-    };
+    let cli_args = args.to_cli_args();
+
     // Handle subcommands
     if let Some(CliSubcommand::GenerateSystemd { output }) = args.command {
         generate_systemd_service(output)?;
@@ -73,8 +92,8 @@ async fn main() -> std::io::Result<()> {
     }
 
     if let Some(CliSubcommand::Cleanup) = args.command {
-        let config = RegistryConfig::default();
-        let registry = KittyRegistry::new(config);
+        let config = Config::load(None).unwrap_or_default();
+        let registry = KittyRegistry::new(config.to_registry_config());
         registry.cleanup_dead_connections().await;
         eprintln!("Cleanup complete");
         return Ok(());
@@ -87,29 +106,21 @@ async fn main() -> std::io::Result<()> {
         return Ok(());
     }
 
-    if args.verbose {
+    // Load config from file, env, and CLI args
+    let config = Config::load(Some(&cli_args)).unwrap_or_else(|e| {
+        eprintln!("Config error: {}, using defaults", e);
+        Config::default()
+    });
+
+    let app_id = config.app_id.clone();
+
+    if config.verbose {
         eprintln!("Starting event stream for window focus changes...");
-    }
-    
-    if args.verbose {
         eprintln!("Tracking app_id: {}", app_id);
     }
-    
-    let config = RegistryConfig {
-        socket_timeout: std::time::Duration::from_secs(args.socket_timeout),
-        max_retries: args.max_retries,
-        max_connections: args.max_connections,
-        idle_timeout: std::time::Duration::from_secs(args.idle_timeout),
-        reap_interval: std::time::Duration::from_secs(args.reap_interval),
-        verbose: args.verbose,
-    };
 
-    let kitty_registry = KittyRegistry::new(config);
+    let kitty_registry = KittyRegistry::new(config.to_registry_config());
     kitty_registry.start_reaper().await;
-
-    if args.verbose {
-        eprintln!("Tracking app_id: {}", app_id);
-    }
 
     let niri_registry = NiriRegistry::new().await
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
