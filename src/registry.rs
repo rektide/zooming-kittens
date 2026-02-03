@@ -1,4 +1,5 @@
 use dashmap::DashMap;
+use futures::{Stream, StreamExt};
 use kitty_rc::commands::SetFontSizeCommand;
 use kitty_rc::Kitty;
 use serde::Serialize;
@@ -188,7 +189,7 @@ impl KittyRegistry {
         let kitty_pid = if let Some(cached) = self.pid_cache.get(&pid) {
             *cached
         } else {
-            match find_kitty_master_pid(pid) {
+            match crate::kitty::process::find_kitty_master_pid(pid) {
                 Some(kpid) => {
                     self.pid_cache.insert(pid, kpid);
                     kpid
@@ -378,6 +379,10 @@ impl KittyRegistry {
         self.statuses.lock().await.get(&pid).cloned()
     }
 
+    pub fn verbose(&self) -> bool {
+        self.config.verbose
+    }
+
     pub async fn shutdown(&self) {
         let mut connections = self.connections.lock().await;
 
@@ -420,29 +425,3 @@ fn is_process_alive(pid: i32) -> bool {
     std::path::Path::new(&format!("/proc/{}", pid)).exists()
 }
 
-fn find_kitty_master_pid(shell_pid: i32) -> Option<i32> {
-    let mut pid = shell_pid;
-    let max_depth = 20;
-    
-    for _ in 0..max_depth {
-        let proc_path = format!("/proc/{}/stat", pid);
-        if let Ok(stat) = fs::read_to_string(&proc_path) {
-            let parts: Vec<&str> = stat.split_whitespace().collect();
-            if parts.len() > 1 {
-                let comm = parts[1];
-                let comm_clean = comm.trim_start_matches('(').trim_end_matches(')');
-                if comm_clean == "kitty" {
-                    return Some(pid);
-                }
-                if let Some(ppid_str) = parts.get(3) {
-                    if let Ok(ppid) = ppid_str.parse::<i32>() {
-                        pid = ppid;
-                        continue;
-                    }
-                }
-            }
-        }
-        break;
-    }
-    None
-}

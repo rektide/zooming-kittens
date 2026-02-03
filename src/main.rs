@@ -8,6 +8,8 @@ use serde::Serialize;
 use std::io::Write;
 
 mod commands;
+mod kitty;
+mod niri;
 mod registry;
 
 #[derive(Subcommand, Debug)]
@@ -64,11 +66,6 @@ struct Args {
 
     #[command(subcommand)]
     command: Option<CliSubcommand>,
-}
-
-struct KittyWindow {
-    app_id: String,
-    pid: Option<i32>,
 }
 
 fn is_kitty_window(app_id: &str, target_app_id: &str) -> bool {
