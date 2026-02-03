@@ -3,15 +3,8 @@ use kitty_rc::commands::SetFontSizeCommand;
 use kitty_rc::Kitty;
 use std::path::PathBuf;
 
-#[derive(Parser, Debug)]
-#[command(name = "kfont", author, version, about, long_about = None)]
-struct Args {
-    #[command(subcommand)]
-    command: FontCommand,
-}
-
 #[derive(Subcommand, Debug)]
-enum FontCommand {
+pub enum FontCommand {
     /// Increase font size
     #[command(name = "inc")]
     Inc {
@@ -117,11 +110,8 @@ fn get_password() -> Option<String> {
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args = Args::parse();
-
-    match args.command {
+pub async fn handle_font_command(cmd: FontCommand) -> Result<(), Box<dyn std::error::Error>> {
+    match cmd {
         FontCommand::List => {
             let instances = find_kitty_instances();
             if instances.is_empty() {

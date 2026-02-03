@@ -7,10 +7,6 @@ edition = "2024"
 name = "kitty-focus-tracker"
 path = "src/main.rs"
 
-[[bin]]
-name = "kfont"
-path = "src/kfont.rs"
-
 [dependencies]
 clap = { version = "4.5.56", features = ["derive"] }
 dashmap = "6.1.0"

@@ -1,10 +1,13 @@
 use clap::{Parser, Subcommand};
+use commands::fonts::handle_font_command;
+use commands::FontCommand;
 use niri_ipc::socket::Socket;
 use niri_ipc::{Request, Response};
 use registry::{FocusTracker, KittyRegistry, RegistryConfig};
 use serde::Serialize;
 use std::io::Write;
 
+mod commands;
 mod registry;
 
 #[derive(Subcommand, Debug)]
@@ -16,6 +19,8 @@ enum CliSubcommand {
     },
     #[command(name = "cleanup")]
     Cleanup,
+    #[command(subcommand)]
+    Font(FontCommand),
 }
 
 #[derive(Serialize)]
@@ -120,6 +125,13 @@ async fn main() -> std::io::Result<()> {
         let registry = KittyRegistry::new(config);
         registry.cleanup_dead_connections().await;
         eprintln!("Cleanup complete");
+        return Ok(());
+    }
+
+    if let Some(CliSubcommand::Font(font_cmd)) = args.command {
+        handle_font_command(font_cmd).await.map_err(|e| {
+            std::io::Error::new(std::io::ErrorKind::Other, e.to_string())
+        })?;
         return Ok(());
     }
 
