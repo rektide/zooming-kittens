@@ -24,7 +24,7 @@ enum CliSubcommand {
     Cleanup,
     #[command(name = "zoomer", about = "Run focus tracking for a specific app with +6/-6 font adjustments")]
     Zoomer {
-        #[arg(short, long, help = "Application ID to track (e.g., 'kitty')")]
+        #[arg(short, long, default_value = "kitty", help = "Application ID to track (e.g., 'kitty')")]
         app_id: String,
     },
     #[command(subcommand)]
