@@ -37,7 +37,7 @@ enum CliSubcommand {
 #[derive(Parser, Debug)]
 #[command(author, version, about = "Track niri window focus and adjust kitty terminal font sizes", long_about = None)]
 struct Args {
-    #[arg(short, long, default_value = "", long, help = "Application ID to track when running in default mode")]
+    #[arg(short, long, default_value = "kitty", long, help = "Application ID to track when running in default mode")]
     app_id: String,
 
     #[arg(short, long, long, help = "Enable verbose logging output")]
@@ -65,18 +65,8 @@ struct Args {
 impl Args {
     /// Convert to CliArgs for config loading
     fn to_cli_args(&self) -> CliArgs {
-        // Handle ZOOMING_APPNAME env var for backwards compatibility
-        let app_id = if self.app_id.is_empty() {
-            match std::env::var("ZOOMING_APPNAME") {
-                Ok(val) => val,
-                Err(_) => String::from("kitty"),
-            }
-        } else {
-            self.app_id.clone()
-        };
-
         CliArgs {
-            app_id,
+            app_id: self.app_id.clone(),
             verbose: self.verbose,
             socket_timeout: self.socket_timeout,
             max_retries: self.max_retries,
