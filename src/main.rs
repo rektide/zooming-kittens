@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand};
 use commands::fonts::handle_font_command;
 use commands::systemd::generate_systemd_service;
+use commands::zoomer::run_zoomer;
 use commands::FontCommand;
 use config::{Config, CliArgs};
 use kitty::KittyRegistry;
@@ -14,41 +15,47 @@ mod niri;
 
 #[derive(Subcommand, Debug)]
 enum CliSubcommand {
-    #[command(name = "generate-systemd")]
+    #[command(name = "generate-systemd", about = "Generate a systemd service file for auto-startup")]
     GenerateSystemd {
-        #[arg(short, long)]
+        #[arg(short, long, help = "Print the systemd service file to stdout")]
         output: bool,
     },
-    #[command(name = "cleanup")]
+    #[command(name = "cleanup", about = "Clean up dead connections in the connection pool")]
     Cleanup,
+    #[command(name = "zoomer", about = "Run focus tracking for a specific app with +6/-6 font adjustments")]
+    Zoomer {
+        #[arg(short, long, help = "Application ID to track (e.g., 'kitty')")]
+        app_id: String,
+    },
     #[command(subcommand)]
+    #[command(about = "Manually control kitty font sizes")]
     Font(FontCommand),
 }
 
 
 
 #[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
+#[command(author, version, about = "Track niri window focus and adjust kitty terminal font sizes", long_about = None)]
 struct Args {
-    #[arg(short, long, default_value = "")]
+    #[arg(short, long, default_value = "", long, help = "Application ID to track when running in default mode")]
     app_id: String,
 
-    #[arg(short, long)]
+    #[arg(short, long, long, help = "Enable verbose logging output")]
     verbose: bool,
 
-    #[arg(long, default_value = "5")]
+    #[arg(long, default_value = "5", long, help = "Socket timeout in seconds")]
     socket_timeout: u64,
 
-    #[arg(long, default_value = "3")]
+    #[arg(long, default_value = "3", long, help = "Maximum connection retry attempts")]
     max_retries: u32,
 
-    #[arg(long, default_value = "30")]
+    #[arg(long, default_value = "30", long, help = "Maximum number of concurrent connections")]
     max_connections: usize,
 
-    #[arg(long, default_value = "1800")]
+    #[arg(long, default_value = "1800", long, help = "Idle connection timeout in seconds")]
     idle_timeout: u64,
 
-    #[arg(long, default_value = "300")]
+    #[arg(long, default_value = "300", long, help = "Connection pool reaping interval in seconds")]
     reap_interval: u64,
 
     #[command(subcommand)]
@@ -96,6 +103,14 @@ async fn main() -> std::io::Result<()> {
         let registry = KittyRegistry::new(config.to_registry_config());
         registry.cleanup_dead_connections().await;
         eprintln!("Cleanup complete");
+        return Ok(());
+    }
+
+    if let Some(CliSubcommand::Zoomer { app_id: zoomer_app_id }) = args.command {
+        let config = Config::load(Some(&cli_args)).unwrap_or_default();
+        run_zoomer(zoomer_app_id, config.verbose, config.to_registry_config()).await.map_err(|e| {
+            std::io::Error::new(std::io::ErrorKind::Other, e.to_string())
+        })?;
         return Ok(());
     }
 

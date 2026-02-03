@@ -4,11 +4,22 @@ use futures::{Stream, StreamExt};
 
 pub struct KittyResizer {
     kitty_registry: KittyRegistry,
+    step_size: u32,
 }
 
 impl KittyResizer {
     pub fn new(kitty_registry: KittyRegistry) -> Self {
-        Self { kitty_registry }
+        Self {
+            kitty_registry,
+            step_size: 3,
+        }
+    }
+
+    pub fn with_step_size(kitty_registry: KittyRegistry, step_size: u32) -> Self {
+        Self {
+            kitty_registry,
+            step_size,
+        }
     }
 
     pub async fn process_events(
@@ -20,17 +31,17 @@ impl KittyResizer {
                 NiriEvent::Focus { window, .. } => {
                     if let Some(pid) = window.pid {
                         if self.kitty_registry.verbose() {
-                            eprintln!("Kitty window {} gained focus, increasing font", window.id);
+                            eprintln!("Kitty window {} gained focus, increasing font by +{}", window.id, self.step_size);
                         }
-                        let _ = self.kitty_registry.increase_font_size(pid).await;
+                        let _ = self.kitty_registry.increase_font_size_by(pid, self.step_size).await;
                     }
                 }
                 NiriEvent::Blur { window, .. } => {
                     if let Some(pid) = window.pid {
                         if self.kitty_registry.verbose() {
-                            eprintln!("Kitty window {} lost focus, decreasing font", window.id);
+                            eprintln!("Kitty window {} lost focus, decreasing font by -{}", window.id, self.step_size);
                         }
-                        let _ = self.kitty_registry.decrease_font_size(pid).await;
+                        let _ = self.kitty_registry.decrease_font_size_by(pid, self.step_size).await;
                     }
                 }
                 _ => {}

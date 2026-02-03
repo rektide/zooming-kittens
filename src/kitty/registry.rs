@@ -83,11 +83,19 @@ impl KittyRegistry {
     }
 
     pub async fn increase_font_size(&self, pid: i32) -> Result<ZoomingResult, Box<dyn std::error::Error>> {
-        self.execute_font_command(pid, true).await
+        self.execute_font_command(pid, true, 3).await
     }
 
     pub async fn decrease_font_size(&self, pid: i32) -> Result<ZoomingResult, Box<dyn std::error::Error>> {
-        self.execute_font_command(pid, false).await
+        self.execute_font_command(pid, false, 3).await
+    }
+
+    pub async fn increase_font_size_by(&self, pid: i32, amount: u32) -> Result<ZoomingResult, Box<dyn std::error::Error>> {
+        self.execute_font_command(pid, true, amount).await
+    }
+
+    pub async fn decrease_font_size_by(&self, pid: i32, amount: u32) -> Result<ZoomingResult, Box<dyn std::error::Error>> {
+        self.execute_font_command(pid, false, amount).await
     }
 
     pub async fn cleanup_dead_connections(&self) {
@@ -116,7 +124,7 @@ impl KittyRegistry {
         }
     }
 
-    async fn execute_font_command(&self, pid: i32, increase: bool) -> Result<ZoomingResult, Box<dyn std::error::Error>> {
+    async fn execute_font_command(&self, pid: i32, increase: bool, amount: u32) -> Result<ZoomingResult, Box<dyn std::error::Error>> {
         let kitty_pid = if let Some(cached) = self.pid_cache.get(&pid) {
             *cached
         } else {
@@ -178,7 +186,7 @@ impl KittyRegistry {
 
             let mut all_succeeded = true;
 
-            for _ in 0..3 {
+            for _ in 0..amount {
                 let cmd = SetFontSizeCommand::new(0)
                     .increment_op(increment_op)
                     .build()?;
@@ -215,7 +223,7 @@ impl KittyRegistry {
                 self.update_last_used(kitty_pid).await;
                 self.set_status(pid, KittyConnectionStatus::Ready).await;
 
-                let font_adjustment = format!("{}3", if increase { "+" } else { "-" });
+                let font_adjustment = format!("{}{}", if increase { "+" } else { "-" }, amount);
                 return Ok(ZoomingResult::Success {
                     pid,
                     font_adjustment,
