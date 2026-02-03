@@ -1,8 +1,9 @@
 use futures::{Stream, StreamExt};
 use niri_ipc::{Event, Request, Response};
 use niri_ipc::socket::Socket;
+use std::pin::Pin;
 use tokio::sync::mpsc;
-use tokio_stream::wrappers::ReceiverStream;
+use tokio_stream::{StreamExt as TokioStreamExt, wrappers::ReceiverStream};
 
 use crate::niri::types::{NiriEvent, WindowInfo};
 
@@ -62,6 +63,27 @@ impl NiriRegistry {
                     false
                 }
             })
+    }
+
+    pub fn window_events(&self) -> impl Stream<Item = NiriEvent> + '_ {
+        self.events()
+            .filter(|event| {
+                matches!(event, NiriEvent::Focus { .. } | NiriEvent::Blur { .. })
+            })
+            .boxed()
+    }
+
+    pub fn filter_map<F, R>(&self, f: F) -> impl Stream<Item = R> + '_
+    where
+        F: Fn(&NiriEvent) -> Option<R> + Send + Sync,
+    {
+        self.events()
+            .filter_map(f)
+            .boxed()
+    }
+
+    pub fn boxed(self: &Self) -> Pin<Box<dyn Stream<Item = NiriEvent> + Send + Sync + '_>> {
+        self.events().boxed()
     }
 
     async fn start_event_listener(&self) {
