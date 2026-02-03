@@ -6,6 +6,79 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::time::Duration;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
+pub enum Verbosity {
+    #[default]
+    Quiet = 0,
+    Error = 1,
+    Warn = 2,
+    Info = 3,
+    Debug = 4,
+    Trace = 5,
+}
+
+impl Verbosity {
+    pub fn from_count(count: u8) -> Self {
+        match count {
+            0 => Self::Quiet,
+            1 => Self::Error,
+            2 => Self::Warn,
+            3 => Self::Info,
+            4 => Self::Debug,
+            5 => Self::Trace,
+            _ => Self::Trace,
+        }
+    }
+
+    pub fn log_all_events(&self) -> bool {
+        *self >= Self::Trace
+    }
+
+    pub fn log_window_events(&self) -> bool {
+        *self >= Self::Debug
+    }
+}
+
+/// CLI arguments subset that can override config
+#[derive(Debug, Clone)]
+pub struct CliArgs {
+    pub app_id: String,
+    pub verbosity: Verbosity,
+    pub socket_timeout: u64,
+    pub max_retries: u32,
+    pub max_connections: usize,
+    pub idle_timeout: u64,
+    pub reap_interval: u64,
+}
+
+fn default_app_id() -> String {
+    String::from("kitty")
+}
+
+fn default_verbose() -> bool {
+    false
+}
+
+fn default_socket_timeout() -> u64 {
+    5
+}
+
+fn default_max_retries() -> u32 {
+    3
+}
+
+fn default_max_connections() -> usize {
+    30
+}
+
+fn default_idle_timeout() -> u64 {
+    1800 // 30 minutes
+}
+
+fn default_reap_interval() -> u64 {
+    300 // 5 minutes
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
@@ -16,6 +89,10 @@ pub struct Config {
     /// Enable verbose logging
     #[serde(default = "default_verbose")]
     pub verbose: bool,
+
+    /// Verbosity level (0-5, higher = more verbose)
+    #[serde(skip)]
+    pub verbosity: Verbosity,
 
     /// Socket timeout in seconds
     #[serde(default = "default_socket_timeout")]
@@ -43,6 +120,7 @@ impl Default for Config {
         Self {
             app_id: default_app_id(),
             verbose: default_verbose(),
+            verbosity: Verbosity::Info,
             socket_timeout_secs: default_socket_timeout(),
             max_retries: default_max_retries(),
             max_connections: default_max_connections(),
@@ -78,7 +156,7 @@ impl Config {
             if !args.app_id.is_empty() {
                 figment = figment.merge(("app_id", &args.app_id));
             }
-            if args.verbose {
+            if args.verbosity != Verbosity::default() {
                 figment = figment.merge(("verbose", true));
             }
             figment = figment.merge(("socket_timeout_secs", args.socket_timeout));
@@ -91,7 +169,7 @@ impl Config {
         figment.extract()
     }
 
-    /// Get the path to the config file
+    /// Get path to config file
     fn config_path() -> Option<PathBuf> {
         dirs::config_dir().map(|dir| dir.join("kitty-focus-tracker").join("config.toml"))
     }
@@ -104,50 +182,9 @@ impl Config {
             max_connections: self.max_connections,
             idle_timeout: Duration::from_secs(self.idle_timeout_secs),
             reap_interval: Duration::from_secs(self.reap_interval_secs),
-            verbose: self.verbose,
+            verbose: self.verbose || self.verbosity >= Verbosity::Debug,
         }
     }
-}
-
-/// CLI arguments subset that can override config
-#[derive(Debug, Clone)]
-pub struct CliArgs {
-    pub app_id: String,
-    pub verbose: bool,
-    pub socket_timeout: u64,
-    pub max_retries: u32,
-    pub max_connections: usize,
-    pub idle_timeout: u64,
-    pub reap_interval: u64,
-}
-
-// Default value functions
-fn default_app_id() -> String {
-    String::from("kitty")
-}
-
-fn default_verbose() -> bool {
-    false
-}
-
-fn default_socket_timeout() -> u64 {
-    5
-}
-
-fn default_max_retries() -> u32 {
-    3
-}
-
-fn default_max_connections() -> usize {
-    30
-}
-
-fn default_idle_timeout() -> u64 {
-    1800 // 30 minutes
-}
-
-fn default_reap_interval() -> u64 {
-    300 // 5 minutes
 }
 
 // Re-export RegistryConfig for kitty module

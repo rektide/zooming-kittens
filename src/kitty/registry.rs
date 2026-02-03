@@ -1,9 +1,9 @@
-use crate::config::RegistryConfig;
+use crate::config::{RegistryConfig, Verbosity};
 use crate::kitty::types::{KittyConnectionStatus, ZoomingResult};
 use crate::kitty::util::{get_kitty_password, get_kitty_socket_path, is_process_alive};
 use dashmap::DashMap;
-use kitty_rc::commands::SetFontSizeCommand;
 use kitty_rc::Kitty;
+use kitty_rc::commands::SetFontSizeCommand;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -21,6 +21,7 @@ pub struct KittyRegistry {
     statuses: Arc<Mutex<HashMap<i32, KittyConnectionStatus>>>,
     pid_cache: Arc<DashMap<i32, i32>>,
     config: RegistryConfig,
+    verbosity: Verbosity,
 }
 
 impl KittyRegistry {
@@ -30,11 +31,26 @@ impl KittyRegistry {
             statuses: Arc::new(Mutex::new(HashMap::new())),
             pid_cache: Arc::new(DashMap::new()),
             config,
+            verbosity: Verbosity::Info,
         }
     }
 
     pub fn with_defaults() -> Self {
         Self::new(RegistryConfig::default())
+    }
+
+    pub fn with_verbosity(config: RegistryConfig, verbosity: Verbosity) -> Self {
+        Self {
+            connections: Arc::new(Mutex::new(HashMap::new())),
+            statuses: Arc::new(Mutex::new(HashMap::new())),
+            pid_cache: Arc::new(DashMap::new()),
+            config,
+            verbosity,
+        }
+    }
+
+    pub fn verbosity(&self) -> Verbosity {
+        self.verbosity
     }
 
     pub async fn start_reaper(&self) {
@@ -61,7 +77,10 @@ impl KittyRegistry {
                             if is_dead {
                                 eprintln!("Reaping dead PID {}", pid);
                             } else {
-                                eprintln!("Reaping idle PID {} (unused for >{:?})", pid, idle_timeout);
+                                eprintln!(
+                                    "Reaping idle PID {} (unused for >{:?})",
+                                    pid, idle_timeout
+                                );
                             }
                             to_remove.push(*pid);
                         }
@@ -82,19 +101,33 @@ impl KittyRegistry {
         });
     }
 
-    pub async fn increase_font_size(&self, pid: i32) -> Result<ZoomingResult, Box<dyn std::error::Error>> {
+    pub async fn increase_font_size(
+        &self,
+        pid: i32,
+    ) -> Result<ZoomingResult, Box<dyn std::error::Error>> {
         self.execute_font_command(pid, true, 3).await
     }
 
-    pub async fn decrease_font_size(&self, pid: i32) -> Result<ZoomingResult, Box<dyn std::error::Error>> {
+    pub async fn decrease_font_size(
+        &self,
+        pid: i32,
+    ) -> Result<ZoomingResult, Box<dyn std::error::Error>> {
         self.execute_font_command(pid, false, 3).await
     }
 
-    pub async fn increase_font_size_by(&self, pid: i32, amount: u32) -> Result<ZoomingResult, Box<dyn std::error::Error>> {
+    pub async fn increase_font_size_by(
+        &self,
+        pid: i32,
+        amount: u32,
+    ) -> Result<ZoomingResult, Box<dyn std::error::Error>> {
         self.execute_font_command(pid, true, amount).await
     }
 
-    pub async fn decrease_font_size_by(&self, pid: i32, amount: u32) -> Result<ZoomingResult, Box<dyn std::error::Error>> {
+    pub async fn decrease_font_size_by(
+        &self,
+        pid: i32,
+        amount: u32,
+    ) -> Result<ZoomingResult, Box<dyn std::error::Error>> {
         self.execute_font_command(pid, false, amount).await
     }
 
@@ -124,7 +157,12 @@ impl KittyRegistry {
         }
     }
 
-    async fn execute_font_command(&self, pid: i32, increase: bool, amount: u32) -> Result<ZoomingResult, Box<dyn std::error::Error>> {
+    async fn execute_font_command(
+        &self,
+        pid: i32,
+        increase: bool,
+        amount: u32,
+    ) -> Result<ZoomingResult, Box<dyn std::error::Error>> {
         let kitty_pid = if let Some(cached) = self.pid_cache.get(&pid) {
             *cached
         } else {
@@ -150,7 +188,8 @@ impl KittyRegistry {
         let password = match get_kitty_password() {
             Ok(pw) => pw,
             Err(_) => {
-                self.set_status(kitty_pid, KittyConnectionStatus::NotConfigured).await;
+                self.set_status(kitty_pid, KittyConnectionStatus::NotConfigured)
+                    .await;
                 return Ok(ZoomingResult::NotConfigured);
             }
         };
@@ -176,7 +215,10 @@ impl KittyRegistry {
                 sleep(delay).await;
             }
 
-            let client = match self.get_or_create_connection(kitty_pid, &socket_path, &password).await {
+            let client = match self
+                .get_or_create_connection(kitty_pid, &socket_path, &password)
+                .await
+            {
                 Ok(client) => client,
                 Err(e) => {
                     last_error = Some(e.to_string());
@@ -192,20 +234,31 @@ impl KittyRegistry {
                     .build()?;
 
                 if self.config.verbose {
-                    eprintln!("Sending command to PID {} (kitty: {}): {:?}", pid, kitty_pid, cmd);
+                    eprintln!(
+                        "Sending command to PID {} (kitty: {}): {:?}",
+                        pid, kitty_pid, cmd
+                    );
                 }
 
                 let mut client = client.lock().await;
                 let result = client.execute(&cmd).await;
                 if self.config.verbose {
-                    eprintln!("Font command result for PID {} (kitty: {}): {:?}", pid, kitty_pid, result);
+                    eprintln!(
+                        "Font command result for PID {} (kitty: {}): {:?}",
+                        pid, kitty_pid, result
+                    );
                 }
                 match result {
                     Ok(response) => {
                         if !response.ok {
                             all_succeeded = false;
-                            let error_msg = response.error.unwrap_or_else(|| "Unknown error".to_string());
-                            eprintln!("Kitty returned error for PID {} (kitty: {}): {}", pid, kitty_pid, error_msg);
+                            let error_msg = response
+                                .error
+                                .unwrap_or_else(|| "Unknown error".to_string());
+                            eprintln!(
+                                "Kitty returned error for PID {} (kitty: {}): {}",
+                                pid, kitty_pid, error_msg
+                            );
                             last_error = Some(error_msg);
                             break;
                         }
@@ -213,7 +266,10 @@ impl KittyRegistry {
                     Err(e) => {
                         all_succeeded = false;
                         last_error = Some(e.to_string());
-                        eprintln!("Error executing font command for PID {} (kitty: {}): {}", pid, kitty_pid, e);
+                        eprintln!(
+                            "Error executing font command for PID {} (kitty: {}): {}",
+                            pid, kitty_pid, e
+                        );
                         break;
                     }
                 }
@@ -242,7 +298,12 @@ impl KittyRegistry {
         Ok(ZoomingResult::ConnectionFailed)
     }
 
-    async fn get_or_create_connection(&self, pid: i32, socket_path: &PathBuf, password: &str) -> Result<Arc<Mutex<Kitty>>, String> {
+    async fn get_or_create_connection(
+        &self,
+        pid: i32,
+        socket_path: &PathBuf,
+        password: &str,
+    ) -> Result<Arc<Mutex<Kitty>>, String> {
         {
             let mut connections = self.connections.lock().await;
 
@@ -270,7 +331,10 @@ impl KittyRegistry {
         }
 
         if self.config.verbose {
-            eprintln!("Connecting to kitty PID {} at socket: {:?}", pid, socket_path);
+            eprintln!(
+                "Connecting to kitty PID {} at socket: {:?}",
+                pid, socket_path
+            );
         }
 
         let client = match Kitty::builder()
@@ -295,10 +359,13 @@ impl KittyRegistry {
 
         let mut connections = self.connections.lock().await;
         let client_arc = Arc::new(Mutex::new(client));
-        connections.insert(pid, ManagedConnection {
-            client: Arc::clone(&client_arc),
-            last_used: Instant::now(),
-        });
+        connections.insert(
+            pid,
+            ManagedConnection {
+                client: Arc::clone(&client_arc),
+                last_used: Instant::now(),
+            },
+        );
 
         Ok(client_arc)
     }

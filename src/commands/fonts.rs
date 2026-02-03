@@ -1,6 +1,6 @@
 use clap::Subcommand;
-use kitty_rc::commands::SetFontSizeCommand;
 use kitty_rc::Kitty;
+use kitty_rc::commands::SetFontSizeCommand;
 use std::path::PathBuf;
 
 #[derive(Subcommand, Debug)]
@@ -81,7 +81,9 @@ fn find_kitty_instances() -> Vec<(i32, PathBuf)> {
         for entry in entries.flatten() {
             if let Ok(name) = entry.file_name().into_string() {
                 if name.starts_with("kitty-") && name.ends_with(".sock") {
-                    let pid_str = name.strip_prefix("kitty-").and_then(|s| s.strip_suffix(".sock"));
+                    let pid_str = name
+                        .strip_prefix("kitty-")
+                        .and_then(|s| s.strip_suffix(".sock"));
                     if let Some(pid_str) = pid_str {
                         if let Ok(pid) = pid_str.parse::<i32>() {
                             let socket_path = entry.path();
@@ -104,7 +106,9 @@ fn get_password() -> Option<String> {
     let password_path = config_dir.join("rc.password");
 
     if password_path.exists() {
-        std::fs::read_to_string(&password_path).ok().map(|s| s.trim().to_string())
+        std::fs::read_to_string(&password_path)
+            .ok()
+            .map(|s| s.trim().to_string())
     } else {
         None
     }
@@ -125,7 +129,12 @@ pub async fn handle_font_command(cmd: FontCommand) -> Result<(), Box<dyn std::er
             return Ok(());
         }
 
-        FontCommand::Inc { pid, socket, password, count } => {
+        FontCommand::Inc {
+            pid,
+            socket,
+            password,
+            count,
+        } => {
             let pid = pid.unwrap_or_else(|| {
                 let instances = find_kitty_instances();
                 if instances.len() == 1 {
@@ -137,7 +146,8 @@ pub async fn handle_font_command(cmd: FontCommand) -> Result<(), Box<dyn std::er
             });
 
             let socket = socket.map(PathBuf::from).unwrap_or_else(|| {
-                let runtime_dir = std::env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| "/tmp".to_string());
+                let runtime_dir =
+                    std::env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| "/tmp".to_string());
                 PathBuf::from(runtime_dir).join(format!("kitty-{}.sock", pid))
             });
 
@@ -150,10 +160,7 @@ pub async fn handle_font_command(cmd: FontCommand) -> Result<(), Box<dyn std::er
                     .connect()
                     .await?
             } else {
-                Kitty::builder()
-                    .socket_path(&socket)
-                    .connect()
-                    .await?
+                Kitty::builder().socket_path(&socket).connect().await?
             };
 
             for _ in 0..count {
@@ -168,7 +175,12 @@ pub async fn handle_font_command(cmd: FontCommand) -> Result<(), Box<dyn std::er
             println!("Font size increased {} times", count);
         }
 
-        FontCommand::Dec { pid, socket, password, count } => {
+        FontCommand::Dec {
+            pid,
+            socket,
+            password,
+            count,
+        } => {
             let pid = pid.unwrap_or_else(|| {
                 let instances = find_kitty_instances();
                 if instances.len() == 1 {
@@ -180,7 +192,8 @@ pub async fn handle_font_command(cmd: FontCommand) -> Result<(), Box<dyn std::er
             });
 
             let socket = socket.map(PathBuf::from).unwrap_or_else(|| {
-                let runtime_dir = std::env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| "/tmp".to_string());
+                let runtime_dir =
+                    std::env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| "/tmp".to_string());
                 PathBuf::from(runtime_dir).join(format!("kitty-{}.sock", pid))
             });
 
@@ -193,10 +206,7 @@ pub async fn handle_font_command(cmd: FontCommand) -> Result<(), Box<dyn std::er
                     .connect()
                     .await?
             } else {
-                Kitty::builder()
-                    .socket_path(&socket)
-                    .connect()
-                    .await?
+                Kitty::builder().socket_path(&socket).connect().await?
             };
 
             for _ in 0..count {
@@ -211,7 +221,13 @@ pub async fn handle_font_command(cmd: FontCommand) -> Result<(), Box<dyn std::er
             println!("Font size decreased {} times", count);
         }
 
-        FontCommand::Set { pid, socket, password, size, all } => {
+        FontCommand::Set {
+            pid,
+            socket,
+            password,
+            size,
+            all,
+        } => {
             if all {
                 let instances = find_kitty_instances();
                 if instances.is_empty() {
@@ -227,7 +243,8 @@ pub async fn handle_font_command(cmd: FontCommand) -> Result<(), Box<dyn std::er
                             .socket_path(socket)
                             .password(pw.as_str())
                             .connect()
-                            .await {
+                            .await
+                        {
                             Ok(k) => k,
                             Err(_) => {
                                 eprintln!("PID {}: Failed to connect", pid);
@@ -235,10 +252,7 @@ pub async fn handle_font_command(cmd: FontCommand) -> Result<(), Box<dyn std::er
                             }
                         }
                     } else {
-                        match Kitty::builder()
-                            .socket_path(socket)
-                            .connect()
-                            .await {
+                        match Kitty::builder().socket_path(socket).connect().await {
                             Ok(k) => k,
                             Err(_) => {
                                 eprintln!("PID {}: Failed to connect", pid);
@@ -267,7 +281,8 @@ pub async fn handle_font_command(cmd: FontCommand) -> Result<(), Box<dyn std::er
                 });
 
                 let socket = socket.map(PathBuf::from).unwrap_or_else(|| {
-                    let runtime_dir = std::env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| "/tmp".to_string());
+                    let runtime_dir =
+                        std::env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| "/tmp".to_string());
                     PathBuf::from(runtime_dir).join(format!("kitty-{}.sock", pid))
                 });
 
@@ -280,10 +295,7 @@ pub async fn handle_font_command(cmd: FontCommand) -> Result<(), Box<dyn std::er
                         .connect()
                         .await?
                 } else {
-                    Kitty::builder()
-                        .socket_path(&socket)
-                        .connect()
-                        .await?
+                    Kitty::builder().socket_path(&socket).connect().await?
                 };
 
                 let cmd = SetFontSizeCommand::new(size as i32).build()?;

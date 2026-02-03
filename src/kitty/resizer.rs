@@ -31,17 +31,29 @@ impl KittyResizer {
                 NiriEvent::Focus { window, .. } => {
                     if let Some(pid) = window.pid {
                         if self.kitty_registry.verbose() {
-                            eprintln!("Kitty window {} gained focus, increasing font by +{}", window.id, self.step_size);
+                            eprintln!(
+                                "Kitty window {} gained focus, increasing font by +{}",
+                                window.id, self.step_size
+                            );
                         }
-                        let _ = self.kitty_registry.increase_font_size_by(pid, self.step_size).await;
+                        let _ = self
+                            .kitty_registry
+                            .increase_font_size_by(pid, self.step_size)
+                            .await;
                     }
                 }
                 NiriEvent::Blur { window, .. } => {
                     if let Some(pid) = window.pid {
                         if self.kitty_registry.verbose() {
-                            eprintln!("Kitty window {} lost focus, decreasing font by -{}", window.id, self.step_size);
+                            eprintln!(
+                                "Kitty window {} lost focus, decreasing font by -{}",
+                                window.id, self.step_size
+                            );
                         }
-                        let _ = self.kitty_registry.decrease_font_size_by(pid, self.step_size).await;
+                        let _ = self
+                            .kitty_registry
+                            .decrease_font_size_by(pid, self.step_size)
+                            .await;
                     }
                 }
                 _ => {}
