@@ -79,6 +79,121 @@ fn default_reap_interval() -> u64 {
     300 // 5 minutes
 }
 
+fn default_step_size() -> u32 {
+    1
+}
+
+/// Zoom type: absolute, additive, or multiplicative
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ZoomType {
+    /// Set to an absolute font size
+    Absolute,
+    /// Add to current font size (+N)
+    Additive,
+    /// Multiply current font size (*N)
+    Multiplicative,
+}
+
+/// Zoom configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ZoomConfig {
+    /// Absolute font size to set on focus
+    pub absolute: Option<f64>,
+
+    /// Additive amount (e.g., 6 means +6 on focus, -6 on blur)
+    pub additive: Option<f64>,
+
+    /// Multiplicative factor (e.g., 1.5 means *1.5 on focus, /1.5 on blur)
+    pub multiplicative: Option<f64>,
+
+    /// Number of steps to apply at once
+    #[serde(default = "default_step_size")]
+    pub step_size: u32,
+}
+
+impl Default for ZoomConfig {
+    fn default() -> Self {
+        Self {
+            absolute: None,
+            additive: None,
+            multiplicative: None,
+            step_size: default_step_size(),
+        }
+    }
+}
+
+impl ZoomConfig {
+    /// Validate that only one zoom type is configured
+    /// Returns an error if multiple zoom types are set
+    pub fn validate(&self) -> Result<(), String> {
+        let set_types = [
+            self.absolute.is_some(),
+            self.additive.is_some(),
+            self.multiplicative.is_some(),
+        ];
+
+        let count = set_types.iter().filter(|&&x| x).count();
+
+        if count > 1 {
+            let mut types = Vec::new();
+            if self.absolute.is_some() {
+                types.push("absolute");
+            }
+            if self.additive.is_some() {
+                types.push("additive");
+            }
+            if self.multiplicative.is_some() {
+                types.push("multiplicative");
+            }
+            return Err(format!(
+                "Multiple zoom types configured: {}. Only one zoom type may be set.",
+                types.join(", ")
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// Get the active zoom type
+    pub fn active_type(&self) -> Option<ZoomType> {
+        if self.absolute.is_some() {
+            Some(ZoomType::Absolute)
+        } else if self.additive.is_some() {
+            Some(ZoomType::Additive)
+        } else if self.multiplicative.is_some() {
+            Some(ZoomType::Multiplicative)
+        } else {
+            None
+        }
+    }
+
+    /// Get the zoom value for the active type
+    pub fn value(&self) -> Option<f64> {
+        match self.active_type() {
+            Some(ZoomType::Absolute) => self.absolute,
+            Some(ZoomType::Additive) => self.additive,
+            Some(ZoomType::Multiplicative) => self.multiplicative,
+            None => None,
+        }
+    }
+
+    /// Check if this config has any zoom type set
+    pub fn is_configured(&self) -> bool {
+        self.active_type().is_some()
+    }
+}
+
+/// CLI arguments subset for zoom configuration
+#[derive(Debug, Clone, Default)]
+pub struct CliZoomArgs {
+    pub absolute: Option<f64>,
+    pub additive: Option<f64>,
+    pub multiplicative: Option<f64>,
+    pub step_size: Option<u32>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
@@ -113,6 +228,9 @@ pub struct Config {
     /// Interval between reaping idle connections in seconds
     #[serde(default = "default_reap_interval")]
     pub reap_interval_secs: u64,
+
+    /// Zoom configuration
+    pub zoom: ZoomConfig,
 }
 
 impl Default for Config {
@@ -126,6 +244,7 @@ impl Default for Config {
             max_connections: default_max_connections(),
             idle_timeout_secs: default_idle_timeout(),
             reap_interval_secs: default_reap_interval(),
+            zoom: ZoomConfig::default(),
         }
     }
 }
@@ -136,7 +255,10 @@ impl Config {
     /// 2. Config file at $XDG_CONFIG_HOME/kitty-focus-tracker/config.toml
     /// 3. Environment variables (ZK_* prefix)
     /// 4. CLI args (if provided)
-    pub fn load(args: Option<&CliArgs>) -> Result<Self, figment2::Error> {
+    pub fn load(
+        args: Option<&CliArgs>,
+        zoom_args: Option<&CliZoomArgs>,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         let mut figment = Figment::new();
 
         // Add config file if it exists
@@ -166,7 +288,44 @@ impl Config {
             figment = figment.merge(("reap_interval_secs", args.reap_interval));
         }
 
-        figment.extract()
+        // Extract base config
+        let mut config: Config = figment.extract()?;
+
+        // Validate zoom config from file
+        config
+            .zoom
+            .validate()
+            .map_err(|e| format!("Invalid zoom configuration: {}", e))?;
+
+        // Apply CLI zoom args if provided (overrides config file)
+        if let Some(zoom) = zoom_args {
+            if zoom.absolute.is_some() {
+                config.zoom.absolute = zoom.absolute;
+                config.zoom.additive = None;
+                config.zoom.multiplicative = None;
+            }
+            if zoom.additive.is_some() {
+                config.zoom.additive = zoom.additive;
+                config.zoom.absolute = None;
+                config.zoom.multiplicative = None;
+            }
+            if zoom.multiplicative.is_some() {
+                config.zoom.multiplicative = zoom.multiplicative;
+                config.zoom.absolute = None;
+                config.zoom.additive = None;
+            }
+            if zoom.step_size.is_some() {
+                config.zoom.step_size = zoom.step_size.unwrap();
+            }
+
+            // Validate after CLI overrides
+            config
+                .zoom
+                .validate()
+                .map_err(|e| format!("Invalid zoom configuration: {}", e))?;
+        }
+
+        Ok(config)
     }
 
     /// Get path to config file
@@ -208,5 +367,53 @@ impl Default for RegistryConfig {
             reap_interval: Duration::from_secs(default_reap_interval()),
             verbose: default_verbose(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_zoom_config_validate_single_type() {
+        let mut config = ZoomConfig::default();
+        config.additive = Some(6.0);
+        assert!(config.validate().is_ok());
+        assert_eq!(config.active_type(), Some(ZoomType::Additive));
+        assert_eq!(config.value(), Some(6.0));
+    }
+
+    #[test]
+    fn test_zoom_config_validate_multiple_types_error() {
+        let mut config = ZoomConfig::default();
+        config.additive = Some(6.0);
+        config.multiplicative = Some(1.5);
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn test_zoom_config_validate_absolute() {
+        let mut config = ZoomConfig::default();
+        config.absolute = Some(18.0);
+        assert!(config.validate().is_ok());
+        assert_eq!(config.active_type(), Some(ZoomType::Absolute));
+        assert_eq!(config.value(), Some(18.0));
+    }
+
+    #[test]
+    fn test_zoom_config_validate_multiplicative() {
+        let mut config = ZoomConfig::default();
+        config.multiplicative = Some(1.5);
+        assert!(config.validate().is_ok());
+        assert_eq!(config.active_type(), Some(ZoomType::Multiplicative));
+        assert_eq!(config.value(), Some(1.5));
+    }
+
+    #[test]
+    fn test_zoom_config_no_type() {
+        let config = ZoomConfig::default();
+        assert!(config.validate().is_ok());
+        assert_eq!(config.active_type(), None);
+        assert_eq!(config.value(), None);
     }
 }

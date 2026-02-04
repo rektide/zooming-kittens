@@ -1,7 +1,18 @@
 use std::fs;
 use std::path::PathBuf;
+use std::sync::OnceLock;
 
 const KITTY_CONF_NAME: &str = "kitty.conf";
+
+static BASELINE_FONT_SIZE: OnceLock<Option<f64>> = OnceLock::new();
+
+pub fn get_baseline_font_size() -> Option<f64> {
+    *BASELINE_FONT_SIZE.get_or_init(|| parse_font_size(None).ok())
+}
+
+pub fn set_baseline_font_size(size: f64) {
+    let _ = BASELINE_FONT_SIZE.set(Some(size));
+}
 
 pub fn get_kitty_config_path() -> Result<PathBuf, String> {
     let config_dir = dirs::config_dir()

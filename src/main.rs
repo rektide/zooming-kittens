@@ -5,7 +5,7 @@ use commands::FontCommand;
 use commands::fonts::handle_font_command;
 use commands::systemd::generate_systemd_service;
 use commands::zoomer::run_zoomer;
-use config::{CliArgs, Config, Verbosity};
+use config::{CliArgs, CliZoomArgs, Config, Verbosity};
 use kitty::KittyRegistry;
 use kitty::resizer::KittyResizer;
 use niri::registry::NiriRegistry;
@@ -37,7 +37,7 @@ enum CliSubcommand {
     Cleanup,
     #[command(
         name = "zoomer",
-        about = "Run focus tracking for a specific app with +6/-6 font adjustments"
+        about = "Run focus tracking for a specific app with configurable font adjustments"
     )]
     Zoomer {
         #[arg(
@@ -46,10 +46,22 @@ enum CliSubcommand {
             default_value = "kitty",
             help = "Application ID to track (e.g., 'kitty')"
         )]
-        app_id: String, 
+        app_id: String,
 
         #[arg(short, long = "verbose", action = clap::ArgAction::Count, help = "Increase verbosity level (use -v, -vv, -vvv, -vvvv)")]
         verbose_count: u8,
+
+        #[arg(long, value_name = "SIZE", help = "Absolute font size to set on focus")]
+        zoom_absolute: Option<f64>,
+
+        #[arg(long, value_name = "AMOUNT", help = "Additive zoom amount (e.g., 6 for +6 on focus, -6 on blur)")]
+        zoom_additive: Option<f64>,
+
+        #[arg(long, value_name = "FACTOR", help = "Multiplicative zoom factor (e.g., 1.5 for *1.5 on focus, /1.5 on blur)")]
+        zoom_multiplicative: Option<f64>,
+
+        #[arg(long, value_name = "N", help = "Step size for zoom operations (default: 1)")]
+        zoom_step_size: Option<u32>,
     },
     #[command(subcommand)]
     #[command(about = "Manually control kitty font sizes")]
@@ -106,6 +118,18 @@ struct Args {
     )]
     reap_interval: u64,
 
+    #[arg(long, value_name = "SIZE", help = "Absolute font size to set on focus")]
+    zoom_absolute: Option<f64>,
+
+    #[arg(long, value_name = "AMOUNT", help = "Additive zoom amount (e.g., 6 for +6 on focus, -6 on blur)")]
+    zoom_additive: Option<f64>,
+
+    #[arg(long, value_name = "FACTOR", help = "Multiplicative zoom factor (e.g., 1.5 for *1.5 on focus, /1.5 on blur)")]
+    zoom_multiplicative: Option<f64>,
+
+    #[arg(long, value_name = "N", default_value = "1", help = "Step size for zoom operations (default: 1)")]
+    zoom_step_size: u32,
+
     #[command(subcommand)]
     command: Option<CliSubcommand>,
 }
@@ -121,6 +145,16 @@ struct Args {
             max_connections: self.max_connections,
             idle_timeout: self.idle_timeout,
             reap_interval: self.reap_interval,
+        }
+    }
+
+    /// Convert to CliZoomArgs for config loading
+    fn to_zoom_args(&self) -> CliZoomArgs {
+        CliZoomArgs {
+            absolute: self.zoom_absolute,
+            additive: self.zoom_additive,
+            multiplicative: self.zoom_multiplicative,
+            step_size: Some(self.zoom_step_size),
         }
     }
 }
@@ -142,7 +176,7 @@ async fn main() -> std::io::Result<()> {
     }
 
     if let Some(CliSubcommand::Cleanup) = args.command {
-        let config = Config::load(None).unwrap_or_default();
+        let config = Config::load(None, None).unwrap_or_default();
         let registry = KittyRegistry::new(config.to_registry_config());
         registry.cleanup_dead_connections().await;
         eprintln!("Cleanup complete");
@@ -152,11 +186,21 @@ async fn main() -> std::io::Result<()> {
     if let Some(CliSubcommand::Zoomer {
         app_id: zoomer_app_id,
         verbose_count,
+        zoom_absolute,
+        zoom_additive,
+        zoom_multiplicative,
+        zoom_step_size,
     }) = args.command
     {
-        let config = Config::load(Some(&cli_args)).unwrap_or_default();
+        let zoom_args = CliZoomArgs {
+            absolute: zoom_absolute,
+            additive: zoom_additive,
+            multiplicative: zoom_multiplicative,
+            step_size: zoom_step_size,
+        };
+        let config = Config::load(Some(&cli_args), Some(&zoom_args)).unwrap_or_default();
         let verbosity = Verbosity::from_count(args.verbose_count + verbose_count);
-        run_zoomer(zoomer_app_id, verbosity, config.to_registry_config())
+        run_zoomer(zoomer_app_id, verbosity, config)
             .await
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
         return Ok(());
@@ -170,7 +214,8 @@ async fn main() -> std::io::Result<()> {
     }
 
     // Load config from file, env, and CLI args
-    let config = Config::load(Some(&cli_args)).unwrap_or_else(|e| {
+    let zoom_args = args.to_zoom_args();
+    let config = Config::load(Some(&cli_args), Some(&zoom_args)).unwrap_or_else(|e| {
         eprintln!("Config error: {}, using defaults", e);
         Config::default()
     });
@@ -190,7 +235,7 @@ async fn main() -> std::io::Result<()> {
         .await
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
 
-    let mut kitty_resizer = KittyResizer::new(kitty_registry);
+    let mut kitty_resizer = KittyResizer::with_zoom_config(kitty_registry, config.zoom);
 
     let kitty_events =
         niri_registry.windows_matching(|window| window.app_id.as_deref() == Some(&app_id));
