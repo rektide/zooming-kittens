@@ -1,4 +1,6 @@
 use clap::{Parser, Subcommand};
+use commands::ConfSizeCommand;
+use commands::conf_size::handle_conf_size_command;
 use commands::FontCommand;
 use commands::fonts::handle_font_command;
 use commands::systemd::generate_systemd_service;
@@ -16,6 +18,11 @@ mod niri;
 #[derive(Subcommand, Debug)]
 enum CliSubcommand {
     #[command(
+        name = "conf-size",
+        about = "Get the configured font size from kitty.conf"
+    )]
+    ConfSize(ConfSizeCommand),
+    #[command(
         name = "generate-systemd",
         about = "Generate a systemd service file for auto-startup"
     )]
@@ -25,7 +32,7 @@ enum CliSubcommand {
     },
     #[command(
         name = "cleanup",
-        about = "Clean up dead connections in the connection pool"
+        about = "Clean up dead connections in connection pool"
     )]
     Cleanup,
     #[command(
@@ -39,7 +46,7 @@ enum CliSubcommand {
             default_value = "kitty",
             help = "Application ID to track (e.g., 'kitty')"
         )]
-        app_id: String,
+        app_id: String, 
 
         #[arg(short, long = "verbose", action = clap::ArgAction::Count, help = "Increase verbosity level (use -v, -vv, -vvv, -vvvv)")]
         verbose_count: u8,
@@ -124,6 +131,11 @@ async fn main() -> std::io::Result<()> {
     let cli_args = args.to_cli_args();
 
     // Handle subcommands
+    if let Some(CliSubcommand::ConfSize(cmd)) = args.command {
+        handle_conf_size_command(cmd)?;
+        return Ok(());
+    }
+
     if let Some(CliSubcommand::GenerateSystemd { output }) = args.command {
         generate_systemd_service(output)?;
         return Ok(());

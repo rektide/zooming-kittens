@@ -1,3 +1,4 @@
+pub mod conf_parser;
 pub mod process;
 pub mod registry;
 pub mod resizer;
