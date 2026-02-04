@@ -312,7 +312,7 @@ impl KittyRegistry {
         Ok(ZoomingResult::ConnectionFailed)
     }
 
-    async fn execute_font_command_with_op(
+    pub async fn execute_font_command_with_op(
         &self,
         pid: i32,
         op: &str,
