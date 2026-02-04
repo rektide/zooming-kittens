@@ -139,51 +139,6 @@ impl NiriRegistry {
                             last_focused_window_id = Some(id);
                         }
                     }
-                    Event::WindowFocusChanged { id: Some(window_id) } => {
-                        if verbosity.log_window_events() {
-                            eprintln!("WindowFocusChanged: window_id={}", window_id);
-                        }
-
-                        if let Some(window_info) = Self::get_window_info(window_id).await {
-                            if verbosity.log_window_events() {
-                                eprintln!(
-                                    "Focus event: window_id={}, app_id={:?}, pid={:?}",
-                                    window_id, window_info.app_id, window_info.pid
-                                );
-                            }
-
-                            if let Some(prev_id) = last_focused_window_id {
-                                if prev_id != window_id {
-                                    if let Some(prev_window_info) = Self::get_window_info(prev_id).await {
-                                        if verbosity.log_window_events() {
-                                            eprintln!(
-                                                "Blur event: window_id={}, app_id={:?}, pid={:?}",
-                                                prev_id, prev_window_info.app_id, prev_window_info.pid
-                                            );
-                                        }
-                                        let niri_event = NiriEvent::Blur {
-                                            window_id: prev_id,
-                                            window: prev_window_info,
-                                        };
-                                        if let Err(_) = tx.send(niri_event) {
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-
-                            let niri_event = NiriEvent::Focus {
-                                window_id,
-                                window: window_info,
-                            };
-
-                            if let Err(_) = tx.send(niri_event) {
-                                break;
-                            }
-
-                            last_focused_window_id = Some(window_id);
-                        }
-                    }
                     Event::WindowFocusChanged { id: None } => {
                         last_focused_window_id = None;
                     }
