@@ -261,7 +261,7 @@ pub async fn handle_font_command(cmd: FontCommand) -> Result<(), Box<dyn std::er
                         }
                     };
 
-                    let cmd = SetFontSizeCommand::new(size as i32).build()?;
+                    let cmd = SetFontCommand::builder().size(size as f64).build().unwrap().to_message()??;
                     let result = kitty.execute(&cmd).await?;
                     if result.ok {
                         println!("PID {}: Font size set to {}", pid, size);
@@ -298,7 +298,7 @@ pub async fn handle_font_command(cmd: FontCommand) -> Result<(), Box<dyn std::er
                     Kitty::builder().socket_path(&socket).connect().await?
                 };
 
-                let cmd = SetFontSizeCommand::new(size as i32).build()?;
+                let cmd = SetFontCommand::builder().size(size as f64).build().unwrap().to_message()??;
                 let result = kitty.execute(&cmd).await?;
                 if result.ok {
                     println!("Font size set to {}", size);
