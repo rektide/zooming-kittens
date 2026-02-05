@@ -164,7 +164,11 @@ pub async fn handle_font_command(cmd: FontCommand) -> Result<(), Box<dyn std::er
             };
 
             for _ in 0..count {
-                let cmd = SetFontSizeCommand::new(0).increment_op("+").build()?;
+                let cmd = SetFontSizeCommand::builder()
+                    .size(0.0)
+                    .increment_op("+".to_string())
+                    .build()
+                    .to_message()?;
                 let result = kitty.execute(&cmd).await?;
                 if !result.ok {
                     eprintln!("Error: {:?}", result.error);
@@ -210,7 +214,11 @@ pub async fn handle_font_command(cmd: FontCommand) -> Result<(), Box<dyn std::er
             };
 
             for _ in 0..count {
-                let cmd = SetFontSizeCommand::new(0).increment_op("-").build()?;
+                let cmd = SetFontSizeCommand::builder()
+                    .size(0.0)
+                    .increment_op("-".to_string())
+                    .build()
+                    .to_message()?;
                 let result = kitty.execute(&cmd).await?;
                 if !result.ok {
                     eprintln!("Error: {:?}", result.error);
@@ -261,7 +269,7 @@ pub async fn handle_font_command(cmd: FontCommand) -> Result<(), Box<dyn std::er
                         }
                     };
 
-                    let cmd = SetFontCommand::builder().size(size as f64).build().unwrap().to_message()??;
+                    let cmd = SetFontSizeCommand::builder().size(size as f64).build().to_message()?;
                     let result = kitty.execute(&cmd).await?;
                     if result.ok {
                         println!("PID {}: Font size set to {}", pid, size);
@@ -298,7 +306,7 @@ pub async fn handle_font_command(cmd: FontCommand) -> Result<(), Box<dyn std::er
                     Kitty::builder().socket_path(&socket).connect().await?
                 };
 
-                let cmd = SetFontCommand::builder().size(size as f64).build().unwrap().to_message()??;
+                let cmd = SetFontSizeCommand::builder().size(size as f64).build().to_message()?;
                 let result = kitty.execute(&cmd).await?;
                 if result.ok {
                     println!("Font size set to {}", size);

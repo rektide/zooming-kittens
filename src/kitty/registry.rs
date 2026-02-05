@@ -242,9 +242,11 @@ impl KittyRegistry {
             let mut all_succeeded = true;
 
             for _count in 0..amount {
-                let cmd = SetFontSizeCommand::new(1)
-                    .increment_op(increment_op)
-                    .build()?;
+                let cmd = SetFontSizeCommand::builder()
+                    .size(1.0)
+                    .increment_op(increment_op.to_string())
+                    .build()
+                    .to_message()?;
 
                 if self.config.verbose {
                     eprintln!(
@@ -381,9 +383,11 @@ impl KittyRegistry {
             let mut all_succeeded = true;
 
             for _count in 0..amount {
-                let cmd = SetFontSizeCommand::new(1)
-                    .increment_op(increment_op)
-                    .build()?;
+                let cmd = SetFontSizeCommand::builder()
+                    .size(1.0)
+                    .increment_op(increment_op.to_string())
+                    .build()
+                    .to_message()?;
 
                 if self.config.verbose {
                     eprintln!(
