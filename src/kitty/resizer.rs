@@ -8,18 +8,21 @@ use futures::{Stream, StreamExt};
 #[derive(Debug, Clone)]
 struct WindowState {
     current_font_size: Option<f64>,
+    current_zoom_factor: f64,
 }
 
 impl WindowState {
     fn new() -> Self {
         Self {
             current_font_size: None,
+            current_zoom_factor: 1.0,
         }
     }
 
     fn with_baseline() -> Self {
         Self {
             current_font_size: get_baseline_font_size(),
+            current_zoom_factor: 1.0,
         }
     }
 }
@@ -69,9 +72,9 @@ impl KittyResizer {
                                     if let Some(target) = self.zoom_config.absolute {
                                         if current_font < target {
                                             let diff = target - current_font;
-                                            let steps = (diff / step_size as f64).ceil() as u32;
+                                            let steps = (diff / step_size).ceil() as u32;
                                             let _ = self.kitty_registry
-                                                .increase_font_size_by(pid, steps * step_size)
+                                                .increase_font_size_by(pid, steps * step_size as u32)
                                                 .await;
                                             window_state.current_font_size = Some(target);
                                             eprintln!(
@@ -80,9 +83,9 @@ impl KittyResizer {
                                             );
                                         } else if current_font > target {
                                             let diff = current_font - target;
-                                            let steps = (diff / step_size as f64).ceil() as u32;
+                                            let steps = (diff / step_size).ceil() as u32;
                                             let _ = self.kitty_registry
-                                                .decrease_font_size_by(pid, steps * step_size)
+                                                .decrease_font_size_by(pid, steps * step_size as u32)
                                                 .await;
                                             window_state.current_font_size = Some(target);
                                             eprintln!(
@@ -94,9 +97,9 @@ impl KittyResizer {
                                 }
                                 ZoomType::Additive => {
                                     if let Some(amount) = self.zoom_config.additive {
-                                        let steps = (amount / step_size as f64).ceil() as u32;
+                                        let steps = (amount / step_size).ceil() as u32;
                                         let _ = self.kitty_registry
-                                            .increase_font_size_by(pid, steps * step_size)
+                                            .increase_font_size_by(pid, steps * step_size as u32)
                                             .await;
                                         window_state.current_font_size = Some(current_font + amount);
                                         eprintln!(
@@ -108,25 +111,51 @@ impl KittyResizer {
                                 ZoomType::Multiplicative => {
                                     if let Some(factor) = self.zoom_config.multiplicative {
                                         let baseline = get_baseline_font_size().unwrap_or(12.0);
-                                        let target = baseline * factor;
-                                        let current = current_font;
+                                        let target_factor = factor;
+                                        let current_factor = window_state.current_zoom_factor;
 
-                                        if (target - current).abs() > 0.01 {
-                                            let diff = target - current;
-                                            let steps = (diff.abs() / step_size as f64).ceil() as u32;
-                                            if diff > 0.0 {
-                                                let _ = self.kitty_registry
-                                                    .increase_font_size_by(pid, steps * step_size)
-                                                    .await;
-                                            } else {
-                                                let _ = self.kitty_registry
-                                                    .decrease_font_size_by(pid, steps * step_size)
-                                                    .await;
+                                        if (target_factor - current_factor).abs() > 0.001 {
+                                            let multiply = target_factor > current_factor;
+                                            let op = if multiply { "*" } else { "/" };
+                                            let step_factor = step_size;
+
+                                            let mut zoom_factor = current_factor;
+                                            let mut steps_applied = 0;
+
+                                            while (multiply && zoom_factor < target_factor) || (!multiply && zoom_factor > target_factor) {
+                                                let next_factor = if multiply {
+                                                    zoom_factor * step_factor
+                                                } else {
+                                                    zoom_factor / step_factor
+                                                };
+
+                                                let should_apply = if multiply {
+                                                    next_factor <= target_factor
+                                                } else {
+                                                    next_factor >= target_factor
+                                                };
+
+                                                if should_apply {
+                                                    let _ = self.kitty_registry
+                                                        .execute_font_command_with_op(pid, op, step_factor)
+                                                        .await;
+                                                    zoom_factor = next_factor;
+                                                    steps_applied += 1;
+                                                } else {
+                                                    let final_factor = target_factor / zoom_factor;
+                                                    let _ = self.kitty_registry
+                                                        .execute_font_command_with_op(pid, op, final_factor)
+                                                        .await;
+                                                    steps_applied += 1;
+                                                    break;
+                                                }
                                             }
-                                            window_state.current_font_size = Some(target);
+
+                                            window_state.current_zoom_factor = target_factor;
+                                            window_state.current_font_size = Some(baseline * target_factor);
                                             eprintln!(
-                                                "Kitty window {} gained focus (PID {}), scaling to {} ({}x from baseline {})",
-                                                window.id, pid, target, factor, baseline
+                                                "Kitty window {} gained focus (PID {}), scaling from {:.2}x to {:.2}x ({} steps)",
+                                                window.id, pid, current_factor, target_factor, steps_applied
                                             );
                                         }
                                     }
@@ -152,22 +181,24 @@ impl KittyResizer {
                                     let baseline = get_baseline_font_size().unwrap_or(12.0);
                                     if current_font > baseline {
                                         let diff = current_font - baseline;
-                                        let steps = (diff / step_size as f64).ceil() as u32;
+                                        let steps = (diff / step_size).ceil() as u32;
                                         let _ = self.kitty_registry
-                                            .decrease_font_size_by(pid, steps * step_size)
+                                            .decrease_font_size_by(pid, steps * step_size as u32)
                                             .await;
                                         window_state.current_font_size = Some(baseline);
+                                        window_state.current_zoom_factor = 1.0;
                                         eprintln!(
                                             "Kitty window {} lost focus (PID {}), restoring baseline font size to {}",
                                             window.id, pid, baseline
                                         );
                                     } else if current_font < baseline {
                                         let diff = baseline - current_font;
-                                        let steps = (diff / step_size as f64).ceil() as u32;
+                                        let steps = (diff / step_size).ceil() as u32;
                                         let _ = self.kitty_registry
-                                            .increase_font_size_by(pid, steps * step_size)
+                                            .increase_font_size_by(pid, steps * step_size as u32)
                                             .await;
                                         window_state.current_font_size = Some(baseline);
+                                        window_state.current_zoom_factor = 1.0;
                                         eprintln!(
                                             "Kitty window {} lost focus (PID {}), restoring baseline font size to {}",
                                             window.id, pid, baseline
@@ -176,9 +207,9 @@ impl KittyResizer {
                                 }
                                 ZoomType::Additive => {
                                     if let Some(amount) = self.zoom_config.additive {
-                                        let steps = (amount / step_size as f64).ceil() as u32;
+                                        let steps = (amount / step_size).ceil() as u32;
                                         let _ = self.kitty_registry
-                                            .decrease_font_size_by(pid, steps * step_size)
+                                            .decrease_font_size_by(pid, steps * step_size as u32)
                                             .await;
                                         window_state.current_font_size = Some(current_font - amount);
                                         eprintln!(
@@ -188,27 +219,51 @@ impl KittyResizer {
                                     }
                                 }
                                 ZoomType::Multiplicative => {
-                                    if let Some(factor) = self.zoom_config.multiplicative {
-                                        let baseline = get_baseline_font_size().unwrap_or(12.0);
-                                        let target = baseline / factor;
-                                        let current = current_font;
+                                    if let Some(_factor) = self.zoom_config.multiplicative {
+                                        let target_factor = 1.0;
+                                        let current_factor = window_state.current_zoom_factor;
 
-                                        if (current - target).abs() > 0.01 {
-                                            let diff = current - target;
-                                            let steps = (diff.abs() / step_size as f64).ceil() as u32;
-                                            if diff > 0.0 {
-                                                let _ = self.kitty_registry
-                                                    .decrease_font_size_by(pid, steps * step_size)
-                                                    .await;
-                                            } else {
-                                                let _ = self.kitty_registry
-                                                    .increase_font_size_by(pid, steps * step_size)
-                                                    .await;
+                                        if (target_factor - current_factor).abs() > 0.001 {
+                                            let multiply = target_factor > current_factor;
+                                            let op = if multiply { "*" } else { "/" };
+                                            let step_factor = step_size;
+
+                                            let mut zoom_factor = current_factor;
+                                            let mut steps_applied = 0;
+
+                                            while (multiply && zoom_factor < target_factor) || (!multiply && zoom_factor > target_factor) {
+                                                let next_factor = if multiply {
+                                                    zoom_factor * step_factor
+                                                } else {
+                                                    zoom_factor / step_factor
+                                                };
+
+                                                let should_apply = if multiply {
+                                                    next_factor <= target_factor
+                                                } else {
+                                                    next_factor >= target_factor
+                                                };
+
+                                                if should_apply {
+                                                    let _ = self.kitty_registry
+                                                        .execute_font_command_with_op(pid, op, step_factor)
+                                                        .await;
+                                                    zoom_factor = next_factor;
+                                                    steps_applied += 1;
+                                                } else {
+                                                    let final_factor = target_factor / zoom_factor;
+                                                    let _ = self.kitty_registry
+                                                        .execute_font_command_with_op(pid, op, final_factor)
+                                                        .await;
+                                                    break;
+                                                }
                                             }
-                                            window_state.current_font_size = Some(target);
+
+                                            window_state.current_zoom_factor = target_factor;
+                                            window_state.current_font_size = get_baseline_font_size();
                                             eprintln!(
-                                                "Kitty window {} lost focus (PID {}), scaling to {} (1/{}x from baseline {})",
-                                                window.id, pid, target, factor, baseline
+                                                "Kitty window {} lost focus (PID {}), scaling from {:.2}x to {:.2}x ({} steps)",
+                                                window.id, pid, current_factor, target_factor, steps_applied
                                             );
                                         }
                                     }

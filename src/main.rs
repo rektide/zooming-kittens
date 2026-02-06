@@ -61,7 +61,7 @@ enum CliSubcommand {
         zoom_multiplicative: Option<f64>,
 
         #[arg(long, value_name = "N", help = "Step size for zoom operations (default: 1)")]
-        zoom_step_size: Option<u32>,
+        zoom_step_size: Option<f64>,
     },
     #[command(subcommand)]
     #[command(about = "Manually control kitty font sizes")]
@@ -128,7 +128,7 @@ struct Args {
     zoom_multiplicative: Option<f64>,
 
     #[arg(long, value_name = "N", default_value = "1", help = "Step size for zoom operations (default: 1)")]
-    zoom_step_size: u32,
+    zoom_step_size: f64,
 
     #[command(subcommand)]
     command: Option<CliSubcommand>,
@@ -154,7 +154,7 @@ struct Args {
             absolute: self.zoom_absolute,
             additive: self.zoom_additive,
             multiplicative: self.zoom_multiplicative,
-            step_size: Some(self.zoom_step_size),
+            step_size: Some(self.zoom_step_size.into()),
         }
     }
 }

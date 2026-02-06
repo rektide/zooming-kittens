@@ -79,8 +79,8 @@ fn default_reap_interval() -> u64 {
     300 // 5 minutes
 }
 
-fn default_step_size() -> u32 {
-    1
+fn default_step_size() -> f64 {
+    1.0
 }
 
 /// Zoom type: absolute, additive, or multiplicative
@@ -110,7 +110,7 @@ pub struct ZoomConfig {
 
     /// Number of steps to apply at once
     #[serde(default = "default_step_size")]
-    pub step_size: u32,
+    pub step_size: f64,
 }
 
 impl Default for ZoomConfig {
@@ -191,7 +191,7 @@ pub struct CliZoomArgs {
     pub absolute: Option<f64>,
     pub additive: Option<f64>,
     pub multiplicative: Option<f64>,
-    pub step_size: Option<u32>,
+    pub step_size: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

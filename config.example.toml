@@ -79,14 +79,14 @@ additive = 6.0
 # Example: 1.5x on focus, /1.5 on blur
 # multiplicative = 1.5
 
-# Number of steps to apply at once (default: 1)
-# For additive zoom with step_size=2 and additive=6:
-#   Focus: +6 points (applied as 2 steps of +3)
-#   Blur: -6 points (applied as 2 steps of -3)
-# For multiplicative zoom with step_size=2 and multiplicative=1.5:
-#   Focus: *1.5 (applied as 2 steps)
-#   Blur: /1.5 (applied as 2 steps)
-step_size = 1
+# Number of steps to apply at once (default: 1.0)
+# For additive zoom with step_size=3.0 and additive=6.0:
+#   Focus: +6 points (applied as 2 steps of +3.0)
+#   Blur: -6 points (applied as 2 steps of -3.0)
+# For multiplicative zoom with step_size=2.0 and multiplicative=9.0:
+#   Focus: 2x, 2x, 2x, then (9/8)x to reach exactly 9x from baseline
+#   Blur: /2x, /2x, /2x, then /(1/8)x to reach exactly 1.0x baseline
+step_size = 1.0
 
 # =============================================================================
 # Environment Variables
@@ -116,17 +116,17 @@ step_size = 1
 # Example 2: Quick zoom jumps (additive with multiple steps)
 # [zoom]
 # additive = 12.0
-# step_size = 3  # Applies as 3 steps of +4/-4
+# step_size = 3.0  # Applies as 3 steps of +4/-4
 
 # Example 3: Smooth proportional scaling (multiplicative)
 # [zoom]
 # multiplicative = 1.3
-# step_size = 1
+# step_size = 1.0
 
 # Example 4: Subtle zoom for high-density displays
 # [zoom]
 # additive = 2.0
-# step_size = 1
+# step_size = 1.0
 
 # Example 5: Debug mode for troubleshooting
 # verbose = true

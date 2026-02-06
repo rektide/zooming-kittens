@@ -134,7 +134,7 @@ impl KittyRegistry {
     pub async fn multiply_font_size_by(
         &self,
         pid: i32,
-        factor: u32,
+        factor: f64,
     ) -> Result<ZoomingResult, Box<dyn std::error::Error>> {
         self.execute_font_command_with_op(pid, "*", factor).await
     }
@@ -142,7 +142,7 @@ impl KittyRegistry {
     pub async fn divide_font_size_by(
         &self,
         pid: i32,
-        factor: u32,
+        factor: f64,
     ) -> Result<ZoomingResult, Box<dyn std::error::Error>> {
         self.execute_font_command_with_op(pid, "/", factor).await
     }
@@ -318,7 +318,7 @@ impl KittyRegistry {
         &self,
         pid: i32,
         op: &str,
-        amount: u32,
+        amount: f64,
     ) -> Result<ZoomingResult, Box<dyn std::error::Error>> {
         let kitty_pid = if let Some(cached) = self.pid_cache.get(&pid) {
             *cached
@@ -356,6 +356,9 @@ impl KittyRegistry {
         };
 
         let increment_op = op;
+        let is_multiplicative = op == "*" || op == "/";
+        let iteration_count = if is_multiplicative { 1 } else { amount as u32 };
+        let cmd_size = if is_multiplicative { amount } else { 1.0 };
 
         let mut last_error = None;
 
@@ -382,9 +385,9 @@ impl KittyRegistry {
 
             let mut all_succeeded = true;
 
-            for _count in 0..amount {
+            for _count in 0..iteration_count {
                 let cmd = SetFontSizeCommand::builder()
-                    .size(1.0)
+                    .size(cmd_size)
                     .increment_op(increment_op.to_string())
                     .build()
                     .to_message()?;
