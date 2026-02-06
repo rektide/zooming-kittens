@@ -1,30 +1,134 @@
-# kitty-focus-tracker Configuration
-# This file is loaded from: $XDG_CONFIG_HOME/kitty-focus-tracker/config.toml
+# kitty-focus-tracker Configuration Example
+# 
+# This file demonstrates all available configuration options for kitty-focus-tracker.
+# Copy this to ~/.config/kitty-focus-tracker/config.toml and customize as needed.
+#
+# Configuration is loaded in the following priority order (highest first):
+# 1. CLI arguments
+# 2. Environment variables (prefixed with ZK_)
+# 3. This config file
+# 4. Default values
 
-# Application ID to track (e.g., "kitty")
-# Can be overridden by CLI argument or ZK_APP_ID environment variable
+# =============================================================================
+# Basic Settings
+# =============================================================================
+
+# Application ID to track (default: "kitty")
+# This should match the app-id of the terminal you want to monitor
 app_id = "kitty"
 
-# Enable verbose logging
-# Can be overridden by CLI flag --verbose or ZK_VERBOSE=true
+# Enable verbose logging (default: false)
+# When true, outputs detailed information about connection management and operations
 verbose = false
 
-# Socket timeout in seconds
-# Can be overridden by CLI --socket-timeout or ZK_SOCKET_TIMEOUT_SECS
+# =============================================================================
+# Connection Settings
+# =============================================================================
+
+# Socket timeout in seconds (default: 5)
+# How long to wait for a response from kitty before timing out
 socket_timeout_secs = 5
 
-# Maximum connection retry attempts
-# Can be overridden by CLI --max-retries or ZK_MAX_RETRIES
+# Maximum connection retry attempts (default: 3)
+# Number of times to retry failed connection attempts before giving up
 max_retries = 3
 
-# Maximum number of concurrent connections
-# Can be overridden by CLI --max-connections or ZK_MAX_CONNECTIONS
+# Maximum number of concurrent connections (default: 30)
+# Limits how many kitty instances can be connected to simultaneously
+# Useful if you have many kitty instances running
 max_connections = 30
 
-# Idle timeout for connections in seconds
-# Can be overridden by CLI --idle-timeout or ZK_IDLE_TIMEOUT_SECS
-idle_timeout_secs = 1800  # 30 minutes
+# Idle timeout for connections in seconds (default: 1800)
+# Connections unused for this long will be closed and removed
+# Set to 0 to disable idle timeout
+idle_timeout_secs = 1800
 
-# Interval between reaping idle connections in seconds
-# Can be overridden by CLI --reap-interval or ZK_REAP_INTERVAL_SECS
-reap_interval_secs = 300  # 5 minutes
+# Interval between reaping idle connections in seconds (default: 300)
+# How often to check for and close idle connections
+reap_interval_secs = 300
+
+# =============================================================================
+# Zoom Configuration
+# =============================================================================
+
+[zoom]
+# Configure how font size changes when focus moves between windows
+# Only ONE zoom type may be configured (absolute, additive, or multiplicative)
+
+# --------------------------------------------------------------------
+# Option 1: Absolute Font Size
+# --------------------------------------------------------------------
+# Set to a specific font size when focused, reset to original when blurred
+# Example: Always set to 18.0 when kitty is focused
+# absolute = 18.0
+
+# --------------------------------------------------------------------
+# Option 2: Additive Zoom
+# --------------------------------------------------------------------
+# Add/subtract points from current font size
+# Positive value: increases font size on focus, decreases on blur
+# Example: +6 on focus, -6 on blur
+additive = 6.0
+
+# --------------------------------------------------------------------
+# Option 3: Multiplicative Zoom
+# --------------------------------------------------------------------
+# Multiply/divide current font size by a factor
+# Values > 1.0: increases font size on focus, decreases on blur
+# Values < 1.0: decreases font size on focus, increases on blur
+# Example: 1.5x on focus, /1.5 on blur
+# multiplicative = 1.5
+
+# Number of steps to apply at once (default: 1)
+# For additive zoom with step_size=2 and additive=6:
+#   Focus: +6 points (applied as 2 steps of +3)
+#   Blur: -6 points (applied as 2 steps of -3)
+# For multiplicative zoom with step_size=2 and multiplicative=1.5:
+#   Focus: *1.5 (applied as 2 steps)
+#   Blur: /1.5 (applied as 2 steps)
+step_size = 1
+
+# =============================================================================
+# Environment Variables
+# =============================================================================
+#
+# Any setting can be overridden using environment variables with the ZK_ prefix.
+# Use double underscores for nested values.
+#
+# Examples:
+#   export ZK_APP_ID="my-terminal"
+#   export ZK_VERBOSE="true"
+#   export ZK_SOCKET_TIMEOUT_SECS="10"
+#   export ZK_ZOOM__ADDITIVE="8.0"
+#   export ZK_ZOOM__STEP_SIZE="2"
+#
+# Environment variables take precedence over this config file.
+
+# =============================================================================
+# Example Configurations
+# =============================================================================
+
+# Example 1: Large text accessibility (absolute zoom)
+# [zoom]
+# absolute = 24.0
+# step_size = 1
+
+# Example 2: Quick zoom jumps (additive with multiple steps)
+# [zoom]
+# additive = 12.0
+# step_size = 3  # Applies as 3 steps of +4/-4
+
+# Example 3: Smooth proportional scaling (multiplicative)
+# [zoom]
+# multiplicative = 1.3
+# step_size = 1
+
+# Example 4: Subtle zoom for high-density displays
+# [zoom]
+# additive = 2.0
+# step_size = 1
+
+# Example 5: Debug mode for troubleshooting
+# verbose = true
+# socket_timeout_secs = 10
+# max_retries = 5
