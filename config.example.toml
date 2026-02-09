@@ -89,6 +89,31 @@ additive = 6.0
 step_size = 1.0
 
 # =============================================================================
+# Longcat Configuration
+# =============================================================================
+
+[longcat]
+# Manage window heights in niri columns based on focus
+# When a window gains focus in a column with multiple windows:
+#   - Active window height is scaled by active_height_proportion
+#   - Other windows are scaled by other_height_proportion
+# When focus leaves the column, original heights are restored
+# If the user manually resizes windows, the mode is forgotten after debounce
+
+# Height proportion for active window (default: 0.5)
+# This multiplies the window's original height
+active_height_proportion = 0.5
+
+# Height proportion for other windows in the column (default: 0.5)
+# This multiplies the other windows' original heights
+other_height_proportion = 0.5
+
+# Debounce time in ms before detecting manual resize (default: 500)
+# Windows sometimes auto-resize after being resized; this debounce
+# prevents the mode from being forgotten too quickly
+resize_debounce_ms = 500
+
+# =============================================================================
 # Environment Variables
 # =============================================================================
 #
@@ -101,6 +126,9 @@ step_size = 1.0
 #   export ZK_SOCKET_TIMEOUT_SECS="10"
 #   export ZK_ZOOM__ADDITIVE="8.0"
 #   export ZK_ZOOM__STEP_SIZE="2"
+#   export ZK_LONGCAT__ACTIVE_HEIGHT_PROPORTION="0.6"
+#   export ZK_LONGCAT__OTHER_HEIGHT_PROPORTION="0.4"
+#   export ZK_LONGCAT__RESIZE_DEBOUNCE_MS="750"
 #
 # Environment variables take precedence over this config file.
 

@@ -95,6 +95,45 @@ pub enum ZoomType {
     Multiplicative,
 }
 
+/// Longcat configuration for managing window heights in columns
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LongcatConfig {
+    /// Height proportion for active window (default: 0.5)
+    #[serde(default = "default_active_height_proportion")]
+    pub active_height_proportion: f64,
+
+    /// Height proportion for other windows in the column (default: 0.5)
+    #[serde(default = "default_other_height_proportion")]
+    pub other_height_proportion: f64,
+
+    /// Debounce time in ms before detecting manual resize (default: 500)
+    #[serde(default = "default_resize_debounce_ms")]
+    pub resize_debounce_ms: u64,
+}
+
+impl Default for LongcatConfig {
+    fn default() -> Self {
+        Self {
+            active_height_proportion: default_active_height_proportion(),
+            other_height_proportion: default_other_height_proportion(),
+            resize_debounce_ms: default_resize_debounce_ms(),
+        }
+    }
+}
+
+fn default_active_height_proportion() -> f64 {
+    0.5
+}
+
+fn default_other_height_proportion() -> f64 {
+    0.5
+}
+
+fn default_resize_debounce_ms() -> u64 {
+    500
+}
+
 /// Zoom configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -231,6 +270,9 @@ pub struct Config {
 
     /// Zoom configuration
     pub zoom: ZoomConfig,
+
+    /// Longcat configuration for window height management
+    pub longcat: LongcatConfig,
 }
 
 impl Default for Config {
@@ -245,6 +287,7 @@ impl Default for Config {
             idle_timeout_secs: default_idle_timeout(),
             reap_interval_secs: default_reap_interval(),
             zoom: ZoomConfig::default(),
+            longcat: LongcatConfig::default(),
         }
     }
 }
