@@ -1,7 +1,9 @@
 use crate::config::Verbosity;
 use niri_ipc::socket::Socket;
 use niri_ipc::{Event, Request, Response};
+use std::sync::Arc;
 use tokio::sync::mpsc;
+use tokio::sync::RwLock;
 use tokio_stream::{Stream, StreamExt, wrappers::UnboundedReceiverStream};
 
 use crate::niri::types::{NiriEvent, WindowInfo};
@@ -11,6 +13,7 @@ pub struct NiriRegistry {
     event_tx: mpsc::UnboundedSender<NiriEvent>,
     event_rx: Option<mpsc::UnboundedReceiver<NiriEvent>>,
     verbosity: Verbosity,
+    query_socket_pool: Arc<RwLock<Option<Socket>>>,
 }
 
 impl NiriRegistry {
@@ -33,6 +36,7 @@ impl NiriRegistry {
             event_tx,
             event_rx: Some(event_rx),
             verbosity,
+            query_socket_pool: Arc::new(RwLock::new(None)),
         };
 
         registry.start_event_listener().await;
@@ -79,11 +83,25 @@ impl NiriRegistry {
         self.into_events().filter_map(f)
     }
 
+    async fn get_socket(&self) -> Result<Socket, Box<dyn std::error::Error>> {
+        let mut socket_guard = self.query_socket_pool.write().await;
+        if let Some(socket) = socket_guard.take() {
+            return Ok(socket);
+        }
+        Ok(Socket::connect()?)
+    }
+
+    async fn return_socket(&self, socket: Socket) {
+        let mut socket_guard = self.query_socket_pool.write().await;
+        *socket_guard = Some(socket);
+    }
+
     async fn start_event_listener(&mut self) {
         let socket = self.socket.take().unwrap();
         let mut read_event = socket.read_events();
         let tx = self.event_tx.clone();
         let verbosity = self.verbosity;
+        let query_socket_pool = self.query_socket_pool.clone();
 
         tokio::spawn(async move {
             let mut last_focused_window_id: Option<u64> = None;
@@ -99,7 +117,7 @@ impl NiriRegistry {
                             eprintln!("WindowFocusTimestampChanged: id={}", id);
                         }
 
-                        if let Some(window_info) = Self::get_window_info(id).await {
+                        if let Some(window_info) = Self::get_window_info(&query_socket_pool, id).await {
                             if verbosity.log_window_events() {
                                 eprintln!(
                                     "Focus event: window_id={}, app_id={:?}, pid={:?}",
@@ -109,7 +127,7 @@ impl NiriRegistry {
 
                             if let Some(prev_id) = last_focused_window_id {
                                 if prev_id != id {
-                                    if let Some(prev_window_info) = Self::get_window_info(prev_id).await {
+                                    if let Some(prev_window_info) = Self::get_window_info(&query_socket_pool, prev_id).await {
                                         if verbosity.log_window_events() {
                                             eprintln!(
                                                 "Blur event: window_id={}, app_id={:?}, pid={:?}",
@@ -172,17 +190,31 @@ impl NiriRegistry {
         });
     }
 
-    async fn get_window_info(window_id: u64) -> Option<WindowInfo> {
-        let mut socket = Socket::connect().ok()?;
+    async fn get_window_info(
+        query_socket_pool: &Arc<RwLock<Option<Socket>>>,
+        window_id: u64,
+    ) -> Option<WindowInfo> {
+        let mut socket_guard = query_socket_pool.write().await;
+        let mut socket = match socket_guard.take() {
+            Some(s) => s,
+            None => Socket::connect().ok()?,
+        };
+
         let reply = socket.send(Request::Windows).ok()?;
         let windows = match reply {
             Ok(Response::Windows(windows)) => windows,
-            _ => return None,
+            _ => {
+                *socket_guard = Some(socket);
+                return None;
+            }
         };
 
-        windows
+        let result = windows
             .iter()
             .find(|w| w.id == window_id)
-            .map(WindowInfo::from_niri_window)
+            .map(WindowInfo::from_niri_window);
+
+        *socket_guard = Some(socket);
+        result
     }
 }
