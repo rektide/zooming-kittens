@@ -533,8 +533,9 @@ pub async fn run_longcat(
         eprintln!("Resize debounce: {}ms", config.resize_debounce_ms);
     }
 
-    let niri_registry = NiriRegistry::new_with_verbosity(verbosity).await?;
+    let mut niri_registry = NiriRegistry::new_with_verbosity(verbosity).await?;
     let longcat = Arc::new(Longcat::new(config, verbosity));
+    let mut shutdown_rx = niri_registry.shutdown_rx().unwrap();
     let mut events = niri_registry.into_events();
 
     loop {
@@ -560,6 +561,13 @@ pub async fn run_longcat(
             _ = tokio::signal::ctrl_c() => {
                 if verbosity.log_window_events() {
                     eprintln!("Received Ctrl-C, shutting down...");
+                }
+                longcat.shutdown().await?;
+                break;
+            }
+            _ = shutdown_rx.recv() => {
+                if verbosity.log_window_events() {
+                    eprintln!("Registry shutdown signal received");
                 }
                 longcat.shutdown().await?;
                 break;
