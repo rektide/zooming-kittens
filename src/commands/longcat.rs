@@ -23,7 +23,7 @@ struct ActiveColumn {
 
 pub struct Longcat {
     niri_socket: Arc<RwLock<Option<niri_ipc::socket::Socket>>>,
-    config: LongcatConfig,
+    config: Arc<RwLock<LongcatConfig>>,
     verbosity: Verbosity,
     column_states: Arc<DashMap<(u64, usize), ColumnState>>,
     active_column: Arc<RwLock<Option<ActiveColumn>>>,
@@ -33,7 +33,7 @@ impl Longcat {
     pub fn new(config: LongcatConfig, verbosity: Verbosity) -> Self {
         Self {
             niri_socket: Arc::new(RwLock::new(None)),
-            config,
+            config: Arc::new(RwLock::new(config)),
             verbosity,
             column_states: Arc::new(DashMap::new()),
             active_column: Arc::new(RwLock::new(None)),
@@ -129,13 +129,15 @@ impl Longcat {
         Ok(())
     }
 
-    async fn check_manual_resize(
+    async fn check_manual_resize_and_update_proportions(
         &self,
         workspace_id: u64,
         column_idx: usize,
-    ) -> Result<bool, Box<dyn std::error::Error>> {
+        active_window_id: u64,
+    ) -> Result<(bool, Option<(f64, f64)>), Box<dyn std::error::Error>> {
         let windows = self.get_column_windows(workspace_id, column_idx).await?;
         let state_key = (workspace_id, column_idx);
+        let config = self.config.read().await;
 
         if let Some(mut state) = self.column_states.get_mut(&state_key) {
             let now = Instant::now();
@@ -149,15 +151,44 @@ impl Longcat {
                         if let Some(last_change) = state.last_height_change {
                             let elapsed = now.duration_since(last_change).as_millis() as u64;
 
-                            if elapsed >= self.config.resize_debounce_ms {
+                            if elapsed >= config.resize_debounce_ms {
                                 if self.verbosity.log_window_events() {
                                     eprintln!(
                                         "Manual resize detected for window {} after {}ms debounce",
                                         window.id, elapsed
                                     );
                                 }
+
+                                let total_height: f64 = windows
+                                    .iter()
+                                    .map(|w| w.layout.window_size.1 as f64)
+                                    .sum();
+
+                                let resized_window_id = window.id;
+                                let resized_is_active = resized_window_id == active_window_id;
+
+                                let (new_active_prop, new_other_prop) = if resized_is_active {
+                                    let active_height = current_height;
+                                    let other_height = total_height - active_height;
+                                    (active_height / total_height, other_height / total_height)
+                                } else {
+                                    let other_height = current_height;
+                                    let active_height = total_height - other_height;
+                                    (active_height / total_height, other_height / total_height)
+                                };
+
+                                if self.verbosity.log_window_events() {
+                                    eprintln!(
+                                        "Updating proportions: active {:.3} -> {:.3}, other {:.3} -> {:.3}",
+                                        config.active_height_proportion,
+                                        new_active_prop,
+                                        config.other_height_proportion,
+                                        new_other_prop
+                                    );
+                                }
+
                                 state.last_height_change = Some(now);
-                                return Ok(true);
+                                return Ok((true, Some((new_active_prop, new_other_prop))));
                             }
                         } else {
                             state.last_height_change = Some(now);
@@ -167,7 +198,7 @@ impl Longcat {
             }
         }
 
-        Ok(false)
+        Ok((false, None))
     }
 
     async fn clear_column_state(&self, workspace_id: u64, column_idx: usize) {
@@ -193,7 +224,16 @@ impl Longcat {
                 .map(|ac| ac.workspace_id != workspace_id || ac.column_idx != column_idx)
                 .unwrap_or(true);
 
-            if self.check_manual_resize(workspace_id, column_idx).await? {
+            let (manual_resize, new_proportions) = self
+                .check_manual_resize_and_update_proportions(workspace_id, column_idx, window_id)
+                .await?;
+
+            if manual_resize {
+                if let Some((new_active, new_other)) = new_proportions {
+                    let mut config = self.config.write().await;
+                    config.active_height_proportion = new_active;
+                    config.other_height_proportion = new_other;
+                }
                 self.clear_column_state(workspace_id, column_idx).await;
                 self.store_original_heights(workspace_id, column_idx).await?;
             } else if !self.column_states.contains_key(&state_key) {
@@ -261,7 +301,10 @@ impl Longcat {
 
         if let Some((workspace_id, column_idx)) = Self::get_column_key(window) {
             if self.column_states.contains_key(&(workspace_id, column_idx)) {
-                if self.check_manual_resize(workspace_id, column_idx).await? {
+                let (manual_resize, _) = self
+                    .check_manual_resize_and_update_proportions(workspace_id, column_idx, 0)
+                    .await?;
+                if manual_resize {
                     self.clear_column_state(workspace_id, column_idx).await;
                 }
             }
@@ -291,10 +334,11 @@ impl Longcat {
         }
 
         let state = self.column_states.get(&state_key).unwrap();
+        let config = self.config.read().await;
 
         let total_original_height: f64 = state.window_heights.values().sum();
-        let total_active_height = total_original_height * self.config.active_height_proportion;
-        let total_other_height = total_original_height * self.config.other_height_proportion;
+        let total_active_height = total_original_height * config.active_height_proportion;
+        let total_other_height = total_original_height * config.other_height_proportion;
 
         let active_original_sum: f64 = windows
             .iter()
@@ -356,7 +400,7 @@ impl Longcat {
                 workspace_id,
                 column_idx,
                 active_window_id,
-                self.config.active_height_proportion,
+                config.active_height_proportion,
                 &window_changes,
             );
         }
