@@ -293,6 +293,7 @@ impl Longcat {
                     if !is_staying_in_column {
                         self.restore_original_heights(workspace_id, column_idx)
                             .await?;
+                        self.clear_column_state(workspace_id, column_idx).await;
                         *active_col = None;
                     } else if self.verbosity.log_window_events() {
                         eprintln!(
