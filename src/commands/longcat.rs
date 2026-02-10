@@ -177,6 +177,25 @@ impl Longcat {
                                     (active_height / total_height, other_height / total_height)
                                 };
 
+                                for w in &windows {
+                                    let is_active = w.id == active_window_id;
+                                    let current = w.layout.window_size.1 as f64;
+                                    let original = if is_active {
+                                        if new_active_prop > 0.0 {
+                                            current / new_active_prop
+                                        } else {
+                                            current
+                                        }
+                                    } else {
+                                        if new_other_prop > 0.0 {
+                                            current / new_other_prop
+                                        } else {
+                                            current
+                                        }
+                                    };
+                                    state.window_heights.insert(w.id, original);
+                                }
+
                                 if self.verbosity.log_window_events() {
                                     eprintln!(
                                         "Updating proportions: active {:.3} -> {:.3}, other {:.3} -> {:.3}",
@@ -185,6 +204,7 @@ impl Longcat {
                                         config.other_height_proportion,
                                         new_other_prop
                                     );
+                                    eprintln!("Updated original heights based on current state");
                                 }
 
                                 state.last_height_change = Some(now);
@@ -234,8 +254,6 @@ impl Longcat {
                     config.active_height_proportion = new_active;
                     config.other_height_proportion = new_other;
                 }
-                self.clear_column_state(workspace_id, column_idx).await;
-                self.store_original_heights(workspace_id, column_idx).await?;
             } else if !self.column_states.contains_key(&state_key) {
                 self.store_original_heights(workspace_id, column_idx).await?;
             }
