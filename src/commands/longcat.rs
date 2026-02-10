@@ -2,7 +2,8 @@ use crate::config::{LongcatConfig, Verbosity};
 use crate::niri::registry::NiriRegistry;
 use dashmap::DashMap;
 use niri_ipc::{Action, Request, Response, SizeChange};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use serde_json;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
@@ -310,14 +311,11 @@ impl Longcat {
 
             if (current_height - target_height).abs() > 0.1 {
                 has_changes = true;
-                window_changes.push(WindowChange {
-                    window_id: window.id,
-                    app_id: window.app_id.clone(),
+                window_changes.push(WindowInfo {
+                    original: original_height,
+                    current: current_height,
+                    target: target_height,
                     title: window.title.clone(),
-                    current_height,
-                    original_height,
-                    target_height,
-                    is_active,
                 });
 
                 if self.verbosity.log_window_events() {
@@ -337,13 +335,11 @@ impl Longcat {
 
         if has_changes && self.verbosity.log_structured() {
             log_structured_change(&LongcatChange {
-                workspace_id,
-                column_idx,
-                active_window_id,
-                action: "Applying height adjustments".to_string(),
-                window_changes,
-                active_proportion: self.config.active_height_proportion,
-                other_proportion: self.config.other_height_proportion,
+                workspace: workspace_id,
+                column: column_idx,
+                active: active_window_id,
+                current_proportion: self.config.active_height_proportion,
+                windows: window_changes,
             });
         }
 
@@ -366,14 +362,11 @@ impl Longcat {
                     let current_height = window.layout.window_size.1 as f64;
 
                     if (current_height - original_height).abs() > 0.1 {
-                        window_changes.push(WindowChange {
-                            window_id: window.id,
-                            app_id: window.app_id.clone(),
+                        window_changes.push(WindowInfo {
+                            original: original_height,
+                            current: current_height,
+                            target: original_height,
                             title: window.title.clone(),
-                            current_height,
-                            original_height,
-                            target_height: original_height,
-                            is_active: window.is_focused,
                         });
 
                         let change = SizeChange::SetFixed(original_height as i32);
@@ -393,13 +386,11 @@ impl Longcat {
 
             if !window_changes.is_empty() && self.verbosity.log_structured() {
                 log_structured_change(&LongcatChange {
-                    workspace_id,
-                    column_idx,
-                    active_window_id: 0,
-                    action: "Restoring original heights".to_string(),
-                    window_changes,
-                    active_proportion: self.config.active_height_proportion,
-                    other_proportion: self.config.other_height_proportion,
+                    workspace: workspace_id,
+                    column: column_idx,
+                    active: 0,
+                    current_proportion: 1.0,
+                    windows: window_changes,
                 });
             }
         }
@@ -407,62 +398,26 @@ impl Longcat {
     }
 }
 
-#[derive(Debug, Serialize)]
-struct WindowChange {
-    window_id: u64,
-    app_id: Option<String>,
+#[derive(Debug, Serialize, Deserialize)]
+struct WindowInfo {
+    original: f64,
+    current: f64,
+    target: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
     title: Option<String>,
-    current_height: f64,
-    original_height: f64,
-    target_height: f64,
-    is_active: bool,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct LongcatChange {
-    workspace_id: u64,
-    column_idx: usize,
-    active_window_id: u64,
-    action: String,
-    window_changes: Vec<WindowChange>,
-    active_proportion: f64,
-    other_proportion: f64,
+    workspace: u64,
+    column: usize,
+    active: u64,
+    current_proportion: f64,
+    windows: Vec<WindowInfo>,
 }
 
 fn log_structured_change(change: &LongcatChange) {
-    eprintln!(
-        "╔═══════════════════════════════════════════════════════════════════════════╗"
-    );
-    eprintln!("║ Longcat: {}                                                 ║", change.action);
-    eprintln!(
-        "╠═══════════════════════════════════════════════════════════════════════════╣"
-    );
-    eprintln!("║ Workspace: {}, Column: {}                                      ║",
-        change.workspace_id, change.column_idx
-    );
-    eprintln!("║ Active window: {}                                              ║",
-        change.active_window_id
-    );
-    eprintln!("║ Proportions: active={:.2}, other={:.2}                           ║",
-        change.active_proportion, change.other_proportion
-    );
-    eprintln!(
-        "╠═══════════════════════════════════════════════════════════════════════════╣"
-    );
-    eprintln!("║ Window Changes:                                                   ║");
-    eprintln!("╠───────────────────────────────────────────────────────────────────────╣");
-    eprintln!("║ {:6} │ {:8} │ {:8} │ {:8} │ {:6} ║",
-        "ID", "Current", "Target", "Original", "Active");
-    eprintln!("╠───────────────────────────────────────────────────────────────────────╣");
-    for wc in &change.window_changes {
-        eprintln!(
-            "║ {:6} │ {:8.1} │ {:8.1} │ {:8.1} │ {:6} ║",
-            wc.window_id, wc.current_height, wc.target_height, wc.original_height, wc.is_active
-        );
-    }
-    eprintln!(
-        "╚═══════════════════════════════════════════════════════════════════════════╝"
-    );
+    eprintln!("{}", serde_json::to_string(change).unwrap());
 }
 
 pub async fn run_longcat(
