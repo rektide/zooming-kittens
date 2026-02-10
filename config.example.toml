@@ -100,13 +100,13 @@ step_size = 1.0
 # When focus leaves the column, original heights are restored
 # If the user manually resizes windows, the mode is forgotten after debounce
 
-# Height proportion for active window (default: 0.5)
+# Height proportion for active window (default: 0.7)
 # This multiplies the window's original height
-active_height_proportion = 0.5
+active_height_proportion = 0.7
 
-# Height proportion for other windows in the column (default: 0.5)
+# Height proportion for other windows in the column (default: 0.3)
 # This multiplies the other windows' original heights
-other_height_proportion = 0.5
+other_height_proportion = 0.3
 
 # Debounce time in ms before detecting manual resize (default: 500)
 # Windows sometimes auto-resize after being resized; this debounce

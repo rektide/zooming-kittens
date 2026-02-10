@@ -83,7 +83,7 @@ enum CliSubcommand {
         #[arg(
             long,
             value_name = "PROPORTION",
-            default_value = "0.5",
+            default_value = "0.7",
             help = "Height proportion for active window"
         )]
         active_height_proportion: f64,
@@ -91,7 +91,7 @@ enum CliSubcommand {
         #[arg(
             long,
             value_name = "PROPORTION",
-            default_value = "0.5",
+            default_value = "0.3",
             help = "Height proportion for other windows"
         )]
         other_height_proportion: f64,

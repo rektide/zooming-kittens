@@ -14,11 +14,18 @@ struct ColumnState {
     last_height_change: Option<Instant>,
 }
 
+#[derive(Debug, Clone)]
+struct ActiveColumn {
+    workspace_id: u64,
+    column_idx: usize,
+}
+
 pub struct Longcat {
     niri_socket: Arc<RwLock<Option<niri_ipc::socket::Socket>>>,
     config: LongcatConfig,
     verbosity: Verbosity,
     column_states: Arc<DashMap<(u64, usize), ColumnState>>,
+    active_column: Arc<RwLock<Option<ActiveColumn>>>,
 }
 
 impl Longcat {
@@ -28,6 +35,7 @@ impl Longcat {
             config,
             verbosity,
             column_states: Arc::new(DashMap::new()),
+            active_column: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -251,10 +259,25 @@ impl Longcat {
             .ok_or("Focused window not found")?;
 
         if let Some((workspace_id, column_idx)) = Self::get_column_key(focused_window) {
+            let state_key = (workspace_id, column_idx);
+            let mut active_col = self.active_column.write().await;
+
+            let is_new_column = active_col
+                .as_ref()
+                .map(|ac| ac.workspace_id != workspace_id || ac.column_idx != column_idx)
+                .unwrap_or(true);
+
             if self.check_manual_resize(workspace_id, column_idx).await? {
                 self.clear_column_state(workspace_id, column_idx).await;
                 self.store_original_heights(workspace_id, column_idx).await?;
+            } else if !self.column_states.contains_key(&state_key) {
+                self.store_original_heights(workspace_id, column_idx).await?;
             }
+
+            *active_col = Some(ActiveColumn {
+                workspace_id,
+                column_idx,
+            });
 
             self.apply_longcat_heights(workspace_id, column_idx, window_id)
                 .await?;
@@ -271,8 +294,30 @@ impl Longcat {
             .ok_or("Blurred window not found")?;
 
         if let Some((workspace_id, column_idx)) = Self::get_column_key(blurred_window) {
-            self.restore_original_heights(workspace_id, column_idx)
-                .await?;
+            let mut active_col = self.active_column.write().await;
+
+            let is_staying_in_column = windows.iter().any(|w| {
+                w.is_focused
+                    && w.layout
+                        .pos_in_scrolling_layout
+                        .map(|(col, _)| col == column_idx)
+                        .unwrap_or(false)
+            });
+
+            if let Some(ref ac) = *active_col {
+                if ac.workspace_id == workspace_id && ac.column_idx == column_idx {
+                    if !is_staying_in_column {
+                        self.restore_original_heights(workspace_id, column_idx)
+                            .await?;
+                        *active_col = None;
+                    } else if self.verbosity.log_window_events() {
+                        eprintln!(
+                            "Focus staying in column {}:{}, skipping restore",
+                            workspace_id, column_idx
+                        );
+                    }
+                }
+            }
         }
 
         Ok(())

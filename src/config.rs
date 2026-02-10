@@ -123,11 +123,11 @@ impl Default for LongcatConfig {
 }
 
 fn default_active_height_proportion() -> f64 {
-    0.5
+    0.7
 }
 
 fn default_other_height_proportion() -> f64 {
-    0.5
+    0.3
 }
 
 fn default_resize_debounce_ms() -> u64 {
