@@ -37,6 +37,10 @@ impl Verbosity {
     pub fn log_window_events(&self) -> bool {
         *self >= Self::Debug
     }
+
+    pub fn log_structured(&self) -> bool {
+        *self > Self::Quiet
+    }
 }
 
 /// CLI arguments subset that can override config

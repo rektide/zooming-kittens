@@ -72,6 +72,9 @@ enum CliSubcommand {
         about = "Manage window heights in niri columns based on focus"
     )]
     Longcat {
+        #[arg(short, long, help = "Quiet mode (suppress all output)")]
+        quiet: bool,
+
         #[arg(
             short,
             long = "verbose",
@@ -252,13 +255,18 @@ async fn main() -> std::io::Result<()> {
     }
 
     if let Some(CliSubcommand::Longcat {
+        quiet,
         verbose_count,
         active_height_proportion,
         other_height_proportion,
         resize_debounce_ms,
     }) = args.command
     {
-        let verbosity = Verbosity::from_count(verbose_count);
+        let verbosity = if quiet {
+            Verbosity::Quiet
+        } else {
+            Verbosity::from_count(verbose_count)
+        };
         let longcat_config = LongcatConfig {
             active_height_proportion,
             other_height_proportion,

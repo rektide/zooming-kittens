@@ -2,6 +2,7 @@ use crate::config::{LongcatConfig, Verbosity};
 use crate::niri::registry::NiriRegistry;
 use dashmap::DashMap;
 use niri_ipc::{Action, Request, Response, SizeChange};
+use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
@@ -125,81 +126,6 @@ impl Longcat {
 
         self.column_states
             .insert((workspace_id, column_idx), state);
-        Ok(())
-    }
-
-    async fn apply_longcat_heights(
-        &self,
-        workspace_id: u64,
-        column_idx: usize,
-        active_window_id: u64,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let windows = self.get_column_windows(workspace_id, column_idx).await?;
-
-        if windows.len() <= 1 {
-            if self.verbosity.log_window_events() {
-                eprintln!("Column has {} windows, skipping longcat adjustment", windows.len());
-            }
-            return Ok(());
-        }
-
-        let state_key = (workspace_id, column_idx);
-        if !self.column_states.contains_key(&state_key) {
-            self.store_original_heights(workspace_id, column_idx).await?;
-        }
-
-        let state = self.column_states.get(&state_key).unwrap();
-
-        for window in &windows {
-            let is_active = window.id == active_window_id;
-            let original_height = state.window_heights.get(&window.id).copied().unwrap_or(0.0);
-
-            let target_height = if is_active {
-                original_height * self.config.active_height_proportion
-            } else {
-                original_height * self.config.other_height_proportion
-            };
-
-            let change = SizeChange::SetFixed(target_height as i32);
-
-            if self.verbosity.log_window_events() {
-                eprintln!(
-                    "Setting window {} height: {} -> {} (active: {})",
-                    window.id, original_height, target_height, is_active
-                );
-            }
-
-            self.send_action(Action::SetWindowHeight {
-                id: Some(window.id),
-                change,
-            })
-            .await?;
-        }
-
-        Ok(())
-    }
-
-    async fn restore_original_heights(
-        &self,
-        workspace_id: u64,
-        column_idx: usize,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let state_key = (workspace_id, column_idx);
-        if let Some(state) = self.column_states.get(&state_key) {
-            for (&window_id, &original_height) in &state.window_heights {
-                let change = SizeChange::SetFixed(original_height as i32);
-
-                if self.verbosity.log_window_events() {
-                    eprintln!("Restoring window {} height to {}", window_id, original_height);
-                }
-
-                self.send_action(Action::SetWindowHeight {
-                    id: Some(window_id),
-                    change,
-                })
-                .await?;
-            }
-        }
         Ok(())
     }
 
@@ -343,6 +269,200 @@ impl Longcat {
 
         Ok(())
     }
+
+    async fn apply_longcat_heights(
+        &self,
+        workspace_id: u64,
+        column_idx: usize,
+        active_window_id: u64,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let windows = self.get_column_windows(workspace_id, column_idx).await?;
+
+        if windows.len() <= 1 {
+            if self.verbosity.log_window_events() {
+                eprintln!("Column has {} windows, skipping longcat adjustment", windows.len());
+            }
+            return Ok(());
+        }
+
+        let state_key = (workspace_id, column_idx);
+        if !self.column_states.contains_key(&state_key) {
+            self.store_original_heights(workspace_id, column_idx).await?;
+        }
+
+        let state = self.column_states.get(&state_key).unwrap();
+
+        let mut window_changes = Vec::new();
+        let mut has_changes = false;
+
+        for window in &windows {
+            let is_active = window.id == active_window_id;
+            let original_height = state.window_heights.get(&window.id).copied().unwrap_or(0.0);
+            let current_height = window.layout.window_size.1 as f64;
+
+            let target_height = if is_active {
+                original_height * self.config.active_height_proportion
+            } else {
+                original_height * self.config.other_height_proportion
+            };
+
+            let change = SizeChange::SetFixed(target_height as i32);
+
+            if (current_height - target_height).abs() > 0.1 {
+                has_changes = true;
+                window_changes.push(WindowChange {
+                    window_id: window.id,
+                    app_id: window.app_id.clone(),
+                    title: window.title.clone(),
+                    current_height,
+                    original_height,
+                    target_height,
+                    is_active,
+                });
+
+                if self.verbosity.log_window_events() {
+                    eprintln!(
+                        "Setting window {} height: {} -> {} (active: {})",
+                        window.id, current_height, target_height, is_active
+                    );
+                }
+
+                self.send_action(Action::SetWindowHeight {
+                    id: Some(window.id),
+                    change,
+                })
+                .await?;
+            }
+        }
+
+        if has_changes && self.verbosity.log_structured() {
+            log_structured_change(&LongcatChange {
+                workspace_id,
+                column_idx,
+                active_window_id,
+                action: "Applying height adjustments".to_string(),
+                window_changes,
+                active_proportion: self.config.active_height_proportion,
+                other_proportion: self.config.other_height_proportion,
+            });
+        }
+
+        Ok(())
+    }
+
+    async fn restore_original_heights(
+        &self,
+        workspace_id: u64,
+        column_idx: usize,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let state_key = (workspace_id, column_idx);
+        if let Some(state) = self.column_states.get(&state_key) {
+            let mut window_changes = Vec::new();
+
+            let windows = self.get_column_windows(workspace_id, column_idx).await?;
+
+            for window in &windows {
+                if let Some(&original_height) = state.window_heights.get(&window.id) {
+                    let current_height = window.layout.window_size.1 as f64;
+
+                    if (current_height - original_height).abs() > 0.1 {
+                        window_changes.push(WindowChange {
+                            window_id: window.id,
+                            app_id: window.app_id.clone(),
+                            title: window.title.clone(),
+                            current_height,
+                            original_height,
+                            target_height: original_height,
+                            is_active: window.is_focused,
+                        });
+
+                        let change = SizeChange::SetFixed(original_height as i32);
+
+                        if self.verbosity.log_window_events() {
+                            eprintln!("Restoring window {} height to {}", window.id, original_height);
+                        }
+
+                        self.send_action(Action::SetWindowHeight {
+                            id: Some(window.id),
+                            change,
+                        })
+                        .await?;
+                    }
+                }
+            }
+
+            if !window_changes.is_empty() && self.verbosity.log_structured() {
+                log_structured_change(&LongcatChange {
+                    workspace_id,
+                    column_idx,
+                    active_window_id: 0,
+                    action: "Restoring original heights".to_string(),
+                    window_changes,
+                    active_proportion: self.config.active_height_proportion,
+                    other_proportion: self.config.other_height_proportion,
+                });
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct WindowChange {
+    window_id: u64,
+    app_id: Option<String>,
+    title: Option<String>,
+    current_height: f64,
+    original_height: f64,
+    target_height: f64,
+    is_active: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct LongcatChange {
+    workspace_id: u64,
+    column_idx: usize,
+    active_window_id: u64,
+    action: String,
+    window_changes: Vec<WindowChange>,
+    active_proportion: f64,
+    other_proportion: f64,
+}
+
+fn log_structured_change(change: &LongcatChange) {
+    eprintln!(
+        "╔═══════════════════════════════════════════════════════════════════════════╗"
+    );
+    eprintln!("║ Longcat: {}                                                 ║", change.action);
+    eprintln!(
+        "╠═══════════════════════════════════════════════════════════════════════════╣"
+    );
+    eprintln!("║ Workspace: {}, Column: {}                                      ║",
+        change.workspace_id, change.column_idx
+    );
+    eprintln!("║ Active window: {}                                              ║",
+        change.active_window_id
+    );
+    eprintln!("║ Proportions: active={:.2}, other={:.2}                           ║",
+        change.active_proportion, change.other_proportion
+    );
+    eprintln!(
+        "╠═══════════════════════════════════════════════════════════════════════════╣"
+    );
+    eprintln!("║ Window Changes:                                                   ║");
+    eprintln!("╠───────────────────────────────────────────────────────────────────────╣");
+    eprintln!("║ {:6} │ {:8} │ {:8} │ {:8} │ {:6} ║",
+        "ID", "Current", "Target", "Original", "Active");
+    eprintln!("╠───────────────────────────────────────────────────────────────────────╣");
+    for wc in &change.window_changes {
+        eprintln!(
+            "║ {:6} │ {:8.1} │ {:8.1} │ {:8.1} │ {:6} ║",
+            wc.window_id, wc.current_height, wc.target_height, wc.original_height, wc.is_active
+        );
+    }
+    eprintln!(
+        "╚═══════════════════════════════════════════════════════════════════════════╝"
+    );
 }
 
 pub async fn run_longcat(
