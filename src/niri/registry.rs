@@ -2,7 +2,6 @@ use crate::config::Verbosity;
 use niri_ipc::socket::Socket;
 use niri_ipc::{Event, Request, Response};
 use std::sync::Arc;
-use tokio::sync::broadcast;
 use tokio::sync::mpsc;
 use tokio::sync::RwLock;
 use tokio_stream::{Stream, StreamExt, wrappers::UnboundedReceiverStream};
@@ -15,8 +14,6 @@ pub struct NiriRegistry {
     event_rx: Option<mpsc::UnboundedReceiver<NiriEvent>>,
     verbosity: Verbosity,
     query_socket_pool: Arc<RwLock<Option<Socket>>>,
-    shutdown_tx: Option<broadcast::Sender<()>>,
-    shutdown_rx: Option<broadcast::Receiver<()>>,
 }
 
 impl NiriRegistry {
@@ -34,15 +31,12 @@ impl NiriRegistry {
         }
 
         let (event_tx, event_rx) = mpsc::unbounded_channel();
-        let (shutdown_tx, shutdown_rx) = broadcast::channel(1);
         let mut registry = Self {
             socket: Some(socket),
             event_tx,
             event_rx: Some(event_rx),
             verbosity,
             query_socket_pool: Arc::new(RwLock::new(None)),
-            shutdown_tx: Some(shutdown_tx),
-            shutdown_rx: Some(shutdown_rx),
         };
 
         registry.start_event_listener().await;
@@ -87,16 +81,6 @@ impl NiriRegistry {
         F: Fn(NiriEvent) -> Option<R> + Send + Sync,
     {
         self.into_events().filter_map(f)
-    }
-
-    pub fn shutdown_rx(&mut self) -> Option<broadcast::Receiver<()>> {
-        self.shutdown_rx.take()
-    }
-
-    pub fn shutdown(&self) {
-        if let Some(ref tx) = self.shutdown_tx {
-            let _ = tx.send(());
-        }
     }
 
     async fn get_socket(&self) -> Result<Socket, Box<dyn std::error::Error>> {
