@@ -312,6 +312,7 @@ impl Longcat {
             if (current_height - target_height).abs() > 0.1 {
                 has_changes = true;
                 window_changes.push(WindowInfo {
+                    id: window.id,
                     original: original_height,
                     current: current_height,
                     target: target_height,
@@ -363,6 +364,7 @@ impl Longcat {
 
                     if (current_height - original_height).abs() > 0.1 {
                         window_changes.push(WindowInfo {
+                            id: window.id,
                             original: original_height,
                             current: current_height,
                             target: original_height,
@@ -400,6 +402,7 @@ impl Longcat {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct WindowInfo {
+    id: u64,
     original: f64,
     current: f64,
     target: f64,
