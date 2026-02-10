@@ -188,7 +188,7 @@ impl Longcat {
             let state_key = (workspace_id, column_idx);
             let mut active_col = self.active_column.write().await;
 
-            let is_new_column = active_col
+            let _is_new_column = active_col
                 .as_ref()
                 .map(|ac| ac.workspace_id != workspace_id || ac.column_idx != column_idx)
                 .unwrap_or(true);
@@ -249,7 +249,7 @@ impl Longcat {
         Ok(())
     }
 
-    pub async fn handle_window_layout_changed(
+    pub async fn _handle_window_layout_changed(
         &self,
         window_id: u64,
     ) -> Result<(), Box<dyn std::error::Error>> {
@@ -292,6 +292,22 @@ impl Longcat {
 
         let state = self.column_states.get(&state_key).unwrap();
 
+        let total_original_height: f64 = state.window_heights.values().sum();
+        let total_active_height = total_original_height * self.config.active_height_proportion;
+        let total_other_height = total_original_height * self.config.other_height_proportion;
+
+        let active_original_sum: f64 = windows
+            .iter()
+            .filter(|w| w.id == active_window_id)
+            .filter_map(|w| state.window_heights.get(&w.id).copied())
+            .sum();
+
+        let other_original_sum: f64 = windows
+            .iter()
+            .filter(|w| w.id != active_window_id)
+            .filter_map(|w| state.window_heights.get(&w.id).copied())
+            .sum();
+
         let mut window_changes = Vec::new();
         let mut has_changes = false;
 
@@ -301,9 +317,17 @@ impl Longcat {
             let current_height = window.layout.window_size.1 as f64;
 
             let target_height = if is_active {
-                original_height * self.config.active_height_proportion
+                if active_original_sum > 0.0 {
+                    (original_height / active_original_sum) * total_active_height
+                } else {
+                    original_height
+                }
             } else {
-                original_height * self.config.other_height_proportion
+                if other_original_sum > 0.0 {
+                    (original_height / other_original_sum) * total_other_height
+                } else {
+                    original_height
+                }
             };
 
             let change = SizeChange::SetFixed(target_height as i32);
