@@ -1,9 +1,8 @@
 use crate::config::{LongcatConfig, Verbosity};
 use crate::niri::registry::NiriRegistry;
 use dashmap::DashMap;
-use niri_ipc::{Action, Request, Response, SizeChange};
-use serde::{Deserialize, Serialize};
-use serde_json;
+use niri_ipc::{Action, Request, Response, SizeChange, Window};
+use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
@@ -311,13 +310,7 @@ impl Longcat {
 
             if (current_height - target_height).abs() > 0.1 {
                 has_changes = true;
-                window_changes.push(WindowInfo {
-                    id: window.id,
-                    original: original_height,
-                    current: current_height,
-                    target: target_height,
-                    title: window.title.clone(),
-                });
+                window_changes.push((window, original_height, target_height));
 
                 if self.verbosity.log_window_events() {
                     eprintln!(
@@ -335,13 +328,13 @@ impl Longcat {
         }
 
         if has_changes && self.verbosity.log_structured() {
-            log_structured_change(&LongcatChange {
-                workspace: workspace_id,
-                column: column_idx,
-                active: active_window_id,
-                current_proportion: self.config.active_height_proportion,
-                windows: window_changes,
-            });
+            log_structured_change(
+                workspace_id,
+                column_idx,
+                active_window_id,
+                self.config.active_height_proportion,
+                &window_changes,
+            );
         }
 
         Ok(())
@@ -363,13 +356,7 @@ impl Longcat {
                     let current_height = window.layout.window_size.1 as f64;
 
                     if (current_height - original_height).abs() > 0.1 {
-                        window_changes.push(WindowInfo {
-                            id: window.id,
-                            original: original_height,
-                            current: current_height,
-                            target: original_height,
-                            title: window.title.clone(),
-                        });
+                        window_changes.push((window, original_height, original_height));
 
                         let change = SizeChange::SetFixed(original_height as i32);
 
@@ -387,40 +374,45 @@ impl Longcat {
             }
 
             if !window_changes.is_empty() && self.verbosity.log_structured() {
-                log_structured_change(&LongcatChange {
-                    workspace: workspace_id,
-                    column: column_idx,
-                    active: 0,
-                    current_proportion: 1.0,
-                    windows: window_changes,
-                });
+                log_structured_change(
+                    workspace_id,
+                    column_idx,
+                    0,
+                    1.0,
+                    &window_changes,
+                );
             }
         }
         Ok(())
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct WindowInfo {
-    id: u64,
-    original: f64,
-    current: f64,
-    target: f64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    title: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct LongcatChange {
+fn log_structured_change(
     workspace: u64,
     column: usize,
     active: u64,
     current_proportion: f64,
-    windows: Vec<WindowInfo>,
-}
-
-fn log_structured_change(change: &LongcatChange) {
-    eprintln!("{}", serde_json::to_string(change).unwrap());
+    window_changes: &[(&Window, f64, f64)],
+) {
+    let json = json!({
+        "workspace": workspace,
+        "column": column,
+        "active": active,
+        "current_proportion": current_proportion,
+        "windows": window_changes.iter().map(|(window, original, target)| {
+            let mut obj = json!({
+                "id": window.id,
+                "original": original,
+                "current": window.layout.window_size.1,
+                "target": target,
+            });
+            if let Some(ref title) = window.title {
+                obj["title"] = json!(title);
+            }
+            obj
+        }).collect::<Vec<_>>()
+    });
+    eprintln!("{}", json);
 }
 
 pub async fn run_longcat(
