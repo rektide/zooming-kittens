@@ -308,6 +308,26 @@ impl Longcat {
         Ok(())
     }
 
+    pub async fn shutdown(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let mut active_col = self.active_column.write().await;
+
+        if let Some(ref ac) = *active_col {
+            if self.verbosity.log_window_events() {
+                eprintln!(
+                    "Shutting down: restoring original heights for column {}:{}",
+                    ac.workspace_id, ac.column_idx
+                );
+            }
+
+            self.restore_original_heights(ac.workspace_id, ac.column_idx)
+                .await?;
+            self.clear_column_state(ac.workspace_id, ac.column_idx).await;
+            *active_col = None;
+        }
+
+        Ok(())
+    }
+
     pub async fn _handle_window_layout_changed(
         &self,
         window_id: u64,
@@ -514,22 +534,36 @@ pub async fn run_longcat(
     }
 
     let niri_registry = NiriRegistry::new_with_verbosity(verbosity).await?;
-    let longcat = Longcat::new(config, verbosity);
+    let longcat = Arc::new(Longcat::new(config, verbosity));
     let mut events = niri_registry.into_events();
 
-    while let Some(event) = events.next().await {
-        match event {
-            crate::niri::types::NiriEvent::Focus { window_id, .. } => {
-                if let Err(e) = longcat.handle_focus_gained(window_id).await {
-                    eprintln!("Error handling focus gained: {}", e);
+    loop {
+        tokio::select! {
+            event_opt = events.next() => {
+                match event_opt {
+                    Some(event) => match event {
+                        crate::niri::types::NiriEvent::Focus { window_id, .. } => {
+                            if let Err(e) = longcat.handle_focus_gained(window_id).await {
+                                eprintln!("Error handling focus gained: {}", e);
+                            }
+                        }
+                        crate::niri::types::NiriEvent::Blur { window_id, .. } => {
+                            if let Err(e) = longcat.handle_focus_lost(window_id).await {
+                                eprintln!("Error handling focus lost: {}", e);
+                            }
+                        }
+                        _ => {}
+                    },
+                    None => break,
                 }
             }
-            crate::niri::types::NiriEvent::Blur { window_id, .. } => {
-                if let Err(e) = longcat.handle_focus_lost(window_id).await {
-                    eprintln!("Error handling focus lost: {}", e);
+            _ = tokio::signal::ctrl_c() => {
+                if verbosity.log_window_events() {
+                    eprintln!("Received Ctrl-C, shutting down...");
                 }
+                longcat.shutdown().await?;
+                break;
             }
-            _ => {}
         }
     }
 
