@@ -391,13 +391,11 @@ impl Longcat {
             .filter_map(|w| state.window_heights.get(&w.id).copied())
             .sum();
 
-        let mut window_changes = Vec::new();
-        let mut has_changes = false;
+        let mut target_heights: std::collections::HashMap<u64, f64> = std::collections::HashMap::new();
 
         for window in &windows {
             let is_active = window.id == active_window_id;
             let original_height = state.window_heights.get(&window.id).copied().unwrap_or(0.0);
-            let current_height = window.layout.window_size.1 as f64;
 
             let target_height = if is_active {
                 if active_original_sum > 0.0 {
@@ -412,6 +410,72 @@ impl Longcat {
                     original_height
                 }
             };
+
+            target_heights.insert(window.id, target_height);
+        }
+
+        let min_height = config.minimum_height as f64;
+
+        let windows_at_min: Vec<u64> = target_heights
+            .iter()
+            .filter(|&(_, height)| *height < min_height)
+            .map(|(&id, _)| id)
+            .collect();
+
+        if !windows_at_min.is_empty() {
+            let mut remaining_active_height = total_active_height;
+            let mut remaining_other_height = total_other_height;
+            let mut remaining_active_original_sum = active_original_sum;
+            let mut remaining_other_original_sum = other_original_sum;
+
+            for &window_id in &windows_at_min {
+                let is_active = window_id == active_window_id;
+                let original_height = state.window_heights.get(&window_id).copied().unwrap_or(0.0);
+
+                if is_active {
+                    remaining_active_height -= min_height;
+                    remaining_active_original_sum -= original_height;
+                } else {
+                    remaining_other_height -= min_height;
+                    remaining_other_original_sum -= original_height;
+                }
+            }
+
+            for window in &windows {
+                let window_id = window.id;
+                let is_active = window_id == active_window_id;
+                let original_height = state.window_heights.get(&window_id).copied().unwrap_or(0.0);
+
+                if windows_at_min.contains(&window_id) {
+                    target_heights.insert(window_id, min_height);
+                } else {
+                    let target = if is_active {
+                        if remaining_active_original_sum > 0.0 {
+                            (original_height / remaining_active_original_sum) * remaining_active_height
+                        } else {
+                            original_height
+                        }
+                    } else {
+                        if remaining_other_original_sum > 0.0 {
+                            (original_height / remaining_other_original_sum) * remaining_other_height
+                        } else {
+                            original_height
+                        }
+                    };
+
+                    target_heights.insert(window_id, target);
+                }
+            }
+        }
+
+        let mut window_changes = Vec::new();
+        let mut has_changes = false;
+
+        for window in &windows {
+            let current_height = window.layout.window_size.1 as f64;
+            let target_height = *target_heights.get(&window.id).unwrap_or(&current_height);
+            let is_active = window.id == active_window_id;
+            let original_height = state.window_heights.get(&window.id).copied().unwrap_or(0.0);
 
             let change = SizeChange::SetFixed(target_height as i32);
 
@@ -533,7 +597,7 @@ pub async fn run_longcat(
         eprintln!("Resize debounce: {}ms", config.resize_debounce_ms);
     }
 
-    let mut niri_registry = NiriRegistry::new_with_verbosity(verbosity).await?;
+    let niri_registry = NiriRegistry::new_with_verbosity(verbosity).await?;
     let longcat = Arc::new(Longcat::new(config, verbosity));
     let mut events = niri_registry.into_events();
 

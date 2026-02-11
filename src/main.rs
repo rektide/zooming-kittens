@@ -267,6 +267,7 @@ async fn main() -> std::io::Result<()> {
         verbose_count,
         active_height_proportion,
         other_height_proportion,
+        minimum_height,
         resize_debounce_ms,
     }) = args.command
     {
@@ -278,6 +279,7 @@ async fn main() -> std::io::Result<()> {
         let longcat_config = LongcatConfig {
             active_height_proportion,
             other_height_proportion,
+            minimum_height,
             resize_debounce_ms,
         };
         run_longcat(verbosity, longcat_config)
