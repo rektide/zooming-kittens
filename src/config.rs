@@ -111,6 +111,10 @@ pub struct LongcatConfig {
     #[serde(default = "default_other_height_proportion")]
     pub other_height_proportion: f64,
 
+    /// Minimum height for any window in pixels (default: 60)
+    #[serde(default = "default_minimum_height")]
+    pub minimum_height: i32,
+
     /// Debounce time in ms before detecting manual resize (default: 500)
     #[serde(default = "default_resize_debounce_ms")]
     pub resize_debounce_ms: u64,
@@ -121,6 +125,7 @@ impl Default for LongcatConfig {
         Self {
             active_height_proportion: default_active_height_proportion(),
             other_height_proportion: default_other_height_proportion(),
+            minimum_height: default_minimum_height(),
             resize_debounce_ms: default_resize_debounce_ms(),
         }
     }
@@ -132,6 +137,10 @@ fn default_active_height_proportion() -> f64 {
 
 fn default_other_height_proportion() -> f64 {
     0.3
+}
+
+fn default_minimum_height() -> i32 {
+    60
 }
 
 fn default_resize_debounce_ms() -> u64 {

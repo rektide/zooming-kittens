@@ -101,6 +101,14 @@ enum CliSubcommand {
 
         #[arg(
             long,
+            value_name = "PIXELS",
+            default_value = "60",
+            help = "Minimum height for any window in pixels"
+        )]
+        minimum_height: i32,
+
+        #[arg(
+            long,
             value_name = "MS",
             default_value = "500",
             help = "Debounce time in ms before detecting manual resize"
