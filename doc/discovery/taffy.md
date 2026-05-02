@@ -374,3 +374,88 @@ Continue current approach but refine:
 2. Benchmark layout computation time
 3. Decide on tree management strategy
 4. Write migration plan from current `ColumnState`
+
+---
+
+# Appendix A — Refinement Prompt
+
+Use the following prompt to drive the next design session. It assumes the reader has this document and the current `longcat.rs` source.
+
+---
+
+You are designing the integration of taffy's flexbox layout engine into zooming-kittens' longcat command. The goal: replace the flat `ColumnState` HashMap with a `TaffyTree<WindowMeta>` that models the full workspace → column → window hierarchy, enabling unified state, cross-column coordination, and structured status output.
+
+The existing discovery work is in `doc/discovery/taffy.md`. The current implementation is in `src/commands/longcat.rs`. The niri event registry is in `src/niri/registry.rs` and event types in `src/niri/types.rs`.
+
+Answer the following questions with concrete decisions and code sketches where helpful:
+
+## Tree Lifecycle
+
+The current longcat fetches all windows from niri IPC on every focus event (`get_windows()` at longcat.rs:68). The `TaffyTree` needs to stay in sync with niri's actual window state.
+
+- Do we build the tree once from an initial `Request::Windows` snapshot, then mutate it on events? Or rebuild from IPC on every event?
+- The niri registry already emits `NiriEvent::Create`, `NiriEvent::Destroy`, and receives `Event::WindowsChanged` (registry.rs:163). Which events should drive tree mutations?
+- What happens if events arrive out of order or are missed? Do we need periodic reconciliation?
+
+## WindowMeta Context
+
+`TaffyTree<T>` stores a generic context per node. What fields does `WindowMeta` need?
+
+- Minimum: `window_id: u64, original_height: f64`
+- Do we need `app_id: String`? (for zk-status-json structured output)
+- Do we need `is_focused: bool`? Or do we track the focused node id separately?
+- Do workspace and column nodes need their own context type, or share `WindowMeta` with unused fields?
+- Consider: taffy node context is `Option<T>` — nodes can have no context. We could use `()` for the root, a workspace struct for workspaces, and a window struct for windows.
+
+## Flex Grow Strategy
+
+The current code uses `active_height_proportion` (0.7) and `other_height_proportion` (0.3) as a two-group model. Taffy gives us `flex_grow`, `flex_shrink`, `flex_basis`, `min_size`, `max_size`.
+
+- How do we achieve the 70/30 split with flex properties? Concrete: if 3 windows with original heights [400, 300, 200] and the first is focused, what `flex_grow` values produce 70% of 900=630 for window 1 and 30% of 900=270 shared between windows 2-3?
+- Do we set `flex_basis` to original height and use `flex_grow`/`flex_shrink` for the redistribution? Or do we use `flex_grow` alone with `flex_basis: auto`?
+- The current code clamps to `minimum_height` with manual redistribution logic. Does taffy's `min_size` handle this correctly, or do we still need post-computation adjustment?
+- What happens when the user manually resizes a window? The current code detects this via debounced height comparison and updates proportions. How does this work with taffy — do we update `flex_basis`? `flex_grow`? The node context's `original_height`?
+
+## Column Height Source
+
+Taffy needs a fixed container height for the column node. The current longcat never explicitly knows the column height.
+
+- Can we get screen/monitor height from niri IPC? Check `niri_ipc` types for monitor config.
+- Or compute it as the sum of all window heights in the column at rest (before longcat adjustment)?
+- Does niri report the column height or total available space anywhere in the `Window` struct's `layout` fields?
+
+## Event Integration
+
+The longcat event loop at longcat.rs:604-632 only handles `Focus` and `Blur`. But `NiriEvent` also defines `Create` and `Destroy`. The niri registry receives `Event::WindowsChanged` but only uses it for initial focus detection.
+
+- Which events do we need to handle to keep the taffy tree in sync?
+- `Create` → add node to tree? What if we don't know which column yet?
+- `Destroy` → remove node from tree?
+- `Focus`/`Blur` → update flex properties + recompute?
+- `Event::WindowsChanged` → full reconciliation? Or ignore since we track individual events?
+- The `_handle_window_layout_changed` method at longcat.rs:331 is unused. What niri event should trigger it? Does niri fire a specific event when a window moves between columns?
+
+## Migration Path
+
+Can we introduce taffy incrementally, or does it need to replace ColumnState entirely in one shot?
+
+- Option: keep ColumnState for original height tracking, use taffy only for layout computation. This is the "hybrid" approach from the options above.
+- Option: replace ColumnState entirely with the taffy tree + WindowMeta context.
+- What's the smallest change that lets us start using taffy for the active window height computation?
+
+## Structured Status Output
+
+Ticket zk-status-json wants structured JSON for focus events. The taffy tree would be the query source.
+
+- Walk the tree and serialize all nodes' `Layout` + `WindowMeta`?
+- Or just the focused column's windows?
+- What's the schema? Can we derive it from the tree walk?
+
+## Thread Safety
+
+`TaffyTree` is `!Sync` (uses `&mut self` for most operations). The current longcat uses `DashMap` for concurrent access.
+
+- The longcat event loop is single-threaded (one `tokio::select!` loop). Do we actually need concurrent access?
+- If yes (e.g., status queries from another task), what's the right wrapping? `Arc<Mutex<TaffyTree>>`? `Arc<RwLock<TaffyTree>>`?
+
+---
