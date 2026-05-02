@@ -1,67 +1,99 @@
-# kitty-focus-tracker
+# zooming-kittens
 
-> Monitor kitty terminal window focus events via niri IPC
+> Niri window manager toolkit for dynamic terminal sizing and focus-driven automation
 
-## Table of Contents
+Zooming-kittens connects to the [niri](https://github.com/YaLTeR/niri) scrollable-tiling Wayland compositor via IPC and reacts to window focus changes. Currently it ships integrations for [kitty](https://sw.kovidgoyal.net/kitty/) terminal; support for additional terminals is planned.
 
-- [Install](#install)
-- [Usage](#usage)
-- [Contributing](#contributing)
-- [License](#license)
+## Features
+
+### Zoomer
+
+Automatically adjusts terminal font size when a window gains or loses focus. Three zoom strategies:
+
+| Mode | Flag | Behavior |
+|------|------|----------|
+| **Additive** | `--zoom-additive 6` | +6pt on focus, -6pt on blur |
+| **Multiplicative** | `--zoom-multiplicative 1.5` | 1.5x on focus, /1.5 on blur |
+| **Absolute** | `--zoom-absolute 18` | Set to 18pt on focus, restore on blur |
+
+Use `--zoom-step-size` to break large adjustments into smaller increments for smoother transitions.
+
+```bash
+# Additive zoom: +6pt on focus, -6pt on blur
+kitty-focus-tracker --zoom-additive 6
+
+# Absolute: always use 18pt for the focused terminal
+kitty-focus-tracker zoomer --zoom-absolute 18
+
+# Multiplicative with stepped transitions
+kitty-focus-tracker zoomer --zoom-multiplicative 1.5 --zoom-step-size 2
+```
+
+### Longcat
+
+Manages window heights within niri columns. When a window in a multi-window column gains focus, the active window expands and others contract. Original heights are restored when focus leaves the column. Manual resizes are detected and adapted to after a configurable debounce period.
+
+```bash
+kitty-focus-tracker longcat
+kitty-focus-tracker longcat --active-height-proportion 0.7 --other-height-proportion 0.3
+```
+
+### Font control
+
+Direct font size manipulation for running kitty instances:
+
+```bash
+kitty-focus-tracker font inc          # increase font size
+kitty-focus-tracker font dec --count 3  # decrease by 3 steps
+kitty-focus-tracker font set 14       # set absolute size
+kitty-focus-tracker font list         # show running kitty instances
+```
+
+### Utilities
+
+- **conf-size** -- read the configured font size from `kitty.conf`
+- **generate-systemd** -- produce a systemd user service file for auto-startup
+- **cleanup** -- reap dead connections from the connection pool
 
 ## Install
 
 ### From source
 
 ```bash
-cargo install --path kitty-focus-tracker
+cargo install --path .
 ```
 
-## Usage
+## Configuration
 
-### CLI
+Configuration is loaded via [figment2](https://docs.rs/figment2) from multiple sources, highest priority wins:
 
-Run the tracker to monitor kitty terminal focus events:
+1. **CLI arguments**
+2. **Environment variables** (prefixed `ZK_`, e.g. `ZK_APP_ID`, `ZK_ZOOM__ADDITIVE`)
+3. **Config file** -- `$XDG_CONFIG_HOME/kitty-focus-tracker/config.toml`
+4. **Defaults**
+
+See [`config.example.toml`](config.example.toml) for a full annotated sample.
+
+## Running as a systemd service
 
 ```bash
-kitty-focus-tracker
+# Generate a service file
+kitty-focus-tracker generate-systemd --output > ~/.config/systemd/user/kitty-focus-tracker.service
+
+# Or use the helper script
+./run.sh
+./journal.sh   # tail logs
 ```
 
-With verbose output:
+## Architecture
 
-```bash
-kitty-focus-tracker --verbose
-```
+The application uses an async stream architecture built on tokio:
 
-Track a different app ID:
+- **NiriRegistry** connects to niri IPC and produces event streams (focus, blur, create, destroy)
+- **KittyResizer** consumes filtered streams and adjusts font sizes through kitty's remote control socket
+- **KittyRegistry** manages pooled connections with retry logic, idle reaping, and PID-based socket discovery
 
-```bash
-kitty-focus-tracker --app-id "my-terminal"
-```
-
-Show help:
-
-```bash
-kitty-focus-tracker --help
-```
-
-### Output
-
-The program prints focus events as JSON lines to stdout:
-
-```json
-{"event":"focus_gained","window_id":12345,"app_id":"kitty"}
-```
-
-```json
-{"event":"focus_lost"}
-```
-
-## Contributing
-
-PRs accepted.
-
-Please open an issue for questions.
+See [`ARCHITECTURE.md`](ARCHITECTURE.md) for details.
 
 ## License
 
