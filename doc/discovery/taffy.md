@@ -459,3 +459,29 @@ Ticket zk-status-json wants structured JSON for focus events. The taffy tree wou
 - If yes (e.g., status queries from another task), what's the right wrapping? `Arc<Mutex<TaffyTree>>`? `Arc<RwLock<TaffyTree>>`?
 
 ---
+
+# Appendix B — Ticket Relationships
+
+## zk-longcat-user-layout-changes
+
+"Handle user layout modifications in longcat (window moves, etc.)"
+
+Directly addressed by taffy tree's `add_child`/`remove_child` API. When a window moves between columns (detected via `WindowsChanged` or `Create`/`Destroy` events), the tree is restructured and `compute_layout` produces new heights for both the source and destination columns. The current `_handle_window_layout_changed` (longcat.rs:331) was a first attempt at this — taffy gives us the structural foundation it lacked.
+
+Depends on: tree lifecycle decisions (Appendix A), event wiring.
+
+## zk-status-json
+
+"Enhance zooming status JSON output with structured data"
+
+The taffy tree serves as the query source for structured output. Walking the tree gives `Layout` (computed heights, positions) + `WindowMeta` (ids, app-ids, original heights) for any subset of nodes. The JSON schema derives from the tree walk rather than being hand-assembled from separate IPC calls.
+
+Depends on: `WindowMeta` context definition (Appendix A), structured output schema decisions.
+
+## Cross-column height coordination (no ticket yet)
+
+"Multiple columns changing height simultaneously"
+
+A single `TaffyTree` representing all workspaces and columns enables one `compute_layout` call to produce heights for every column. This lets longcat reason about height changes across columns — e.g., when a window moves from column A to column B, both columns' heights are recomputed in a single pass. Currently each column is independent (`DashMap<(u64, usize), ColumnState>`), which makes coordination impossible.
+
+Needs a new ticket. Depends on: unified tree architecture, column height source.
