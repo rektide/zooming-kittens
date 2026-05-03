@@ -1,10 +1,10 @@
 [package]
-name = "kitty-focus-tracker"
+name = "zooming-kittens"
 version = "0.1.0"
 edition = "2024"
 
 [[bin]]
-name = "kitty-focus-tracker"
+name = "zk"
 path = "src/main.rs"
 
 [dependencies]
