@@ -8,6 +8,7 @@ pub fn collect_snapshot_records(
     windows: Vec<niri_ipc::Window>,
     workspaces: Vec<niri_ipc::Workspace>,
     outputs: HashMap<String, niri_ipc::Output>,
+    casts: Vec<niri_ipc::Cast>,
     filters: &[ExportFilter],
     output_mode: ExportOutputMode,
 ) -> Vec<ExportRecord> {
@@ -25,6 +26,7 @@ pub fn collect_snapshot_records(
     records.extend(outputs.into_iter().map(|output| ExportRecord::Output {
         data: output_mode.project(output),
     }));
+    records.extend(casts.into_iter().map(|cast| ExportRecord::Cast { data: cast }));
 
     records
         .into_iter()

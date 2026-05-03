@@ -18,6 +18,10 @@ pub enum ExportRecord {
         #[serde(flatten)]
         data: ExportOutputData,
     },
+    Cast {
+        #[serde(flatten)]
+        data: niri_ipc::Cast,
+    },
     WorkspacesChanged {
         stream_event_id: u64,
         workspaces: Vec<niri_ipc::Workspace>,
@@ -87,6 +91,18 @@ pub enum ExportRecord {
         stream_event_id: u64,
         path: Option<String>,
     },
+    CastsChanged {
+        stream_event_id: u64,
+        casts: Vec<niri_ipc::Cast>,
+    },
+    CastStartedOrChanged {
+        stream_event_id: u64,
+        cast: niri_ipc::Cast,
+    },
+    CastStopped {
+        stream_event_id: u64,
+        stream_id: u64,
+    },
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -122,6 +138,7 @@ impl ExportRecord {
             Self::Window { .. } => "window",
             Self::Workspace { .. } => "workspace",
             Self::Output { .. } => "output",
+            Self::Cast { .. } => "cast",
             Self::WorkspacesChanged { .. } => "workspaces_changed",
             Self::WorkspaceUrgencyChanged { .. } => "workspace_urgency_changed",
             Self::WorkspaceActivated { .. } => "workspace_activated",
@@ -138,6 +155,9 @@ impl ExportRecord {
             Self::OverviewOpenedOrClosed { .. } => "overview_opened_or_closed",
             Self::ConfigLoaded { .. } => "config_loaded",
             Self::ScreenshotCaptured { .. } => "screenshot_captured",
+            Self::CastsChanged { .. } => "casts_changed",
+            Self::CastStartedOrChanged { .. } => "cast_started_or_changed",
+            Self::CastStopped { .. } => "cast_stopped",
         }
     }
 
@@ -146,6 +166,7 @@ impl ExportRecord {
             Self::Window { data } => vec![ExportRecordId::Window(data.id)],
             Self::Workspace { data } => vec![ExportRecordId::Workspace(data.id)],
             Self::Output { data } => vec![ExportRecordId::Output(data.name().to_owned())],
+            Self::Cast { data } => vec![ExportRecordId::Cast(data.stream_id)],
             Self::WorkspacesChanged { workspaces, .. } => workspaces
                 .iter()
                 .map(|workspace| ExportRecordId::Workspace(workspace.id))
@@ -183,6 +204,12 @@ impl ExportRecord {
             | Self::OverviewOpenedOrClosed { .. }
             | Self::ConfigLoaded { .. }
             | Self::ScreenshotCaptured { .. } => Vec::new(),
+            Self::CastsChanged { casts, .. } => casts
+                .iter()
+                .map(|cast| ExportRecordId::Cast(cast.stream_id))
+                .collect(),
+            Self::CastStartedOrChanged { cast, .. } => vec![ExportRecordId::Cast(cast.stream_id)],
+            Self::CastStopped { stream_id, .. } => vec![ExportRecordId::Cast(*stream_id)],
         }
     }
 

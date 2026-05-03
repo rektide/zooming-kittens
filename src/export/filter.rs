@@ -8,6 +8,7 @@ pub enum ExportRecordKind {
     Window,
     Workspace,
     Output,
+    Cast,
 }
 
 impl ExportRecordKind {
@@ -16,6 +17,7 @@ impl ExportRecordKind {
             Self::Window => "window",
             Self::Workspace => "workspace",
             Self::Output => "output",
+            Self::Cast => "cast",
         }
     }
 }
@@ -34,6 +36,7 @@ impl FromStr for ExportRecordKind {
             "window" | "windows" => Ok(Self::Window),
             "workspace" | "workspaces" => Ok(Self::Workspace),
             "output" | "outputs" => Ok(Self::Output),
+            "cast" | "casts" => Ok(Self::Cast),
             other => Err(FilterParseError::UnknownKind(other.to_owned())),
         }
     }
@@ -44,6 +47,7 @@ pub enum ExportRecordId {
     Window(u64),
     Workspace(u64),
     Output(String),
+    Cast(u64),
 }
 
 impl ExportRecordId {
@@ -52,6 +56,7 @@ impl ExportRecordId {
             Self::Window(_) => ExportRecordKind::Window,
             Self::Workspace(_) => ExportRecordKind::Workspace,
             Self::Output(_) => ExportRecordKind::Output,
+            Self::Cast(_) => ExportRecordKind::Cast,
         }
     }
 }
@@ -147,6 +152,13 @@ fn parse_id_filter(
                 value: value.to_owned(),
             }),
         ExportRecordKind::Output => Ok(ExportRecordId::Output(value.to_owned())),
+        ExportRecordKind::Cast => value
+            .parse::<u64>()
+            .map(ExportRecordId::Cast)
+            .map_err(|_| FilterParseError::InvalidId {
+                kind,
+                value: value.to_owned(),
+            }),
     }
 }
 

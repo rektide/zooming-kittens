@@ -116,10 +116,17 @@ fn read_snapshot_records(
         Err(error) => return Err(format!("failed to request outputs: {error}").into()),
     };
 
+    let casts = match socket.send(Request::Casts)? {
+        Ok(Response::Casts(casts)) => casts,
+        Ok(other) => return Err(format!("unexpected casts response: {other:?}").into()),
+        Err(error) => return Err(format!("failed to request casts: {error}").into()),
+    };
+
     Ok(collect_snapshot_records(
         windows,
         workspaces,
         outputs,
+        casts,
         filters,
         output_mode,
     ))

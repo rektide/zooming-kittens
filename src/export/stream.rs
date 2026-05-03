@@ -90,6 +90,18 @@ pub fn event_to_record(event: niri_ipc::Event, stream_event_id: u64) -> ExportRe
             stream_event_id,
             path,
         },
+        niri_ipc::Event::CastsChanged { casts } => ExportRecord::CastsChanged {
+            stream_event_id,
+            casts,
+        },
+        niri_ipc::Event::CastStartedOrChanged { cast } => ExportRecord::CastStartedOrChanged {
+            stream_event_id,
+            cast,
+        },
+        niri_ipc::Event::CastStopped { stream_id } => ExportRecord::CastStopped {
+            stream_event_id,
+            stream_id,
+        },
     }
 }
 
