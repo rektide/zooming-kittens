@@ -6,6 +6,7 @@ use serde::Serialize;
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ExportRecord {
+    Version { version: String },
     Window {
         #[serde(flatten)]
         data: niri_ipc::Window,
@@ -135,6 +136,7 @@ pub enum ExportOutputMode {
 impl ExportRecord {
     pub fn record_type(&self) -> &'static str {
         match self {
+            Self::Version { .. } => "version",
             Self::Window { .. } => "window",
             Self::Workspace { .. } => "workspace",
             Self::Output { .. } => "output",
@@ -163,6 +165,7 @@ impl ExportRecord {
 
     pub fn record_ids(&self) -> Vec<ExportRecordId> {
         match self {
+            Self::Version { .. } => Vec::new(),
             Self::Window { data } => vec![ExportRecordId::Window(data.id)],
             Self::Workspace { data } => vec![ExportRecordId::Workspace(data.id)],
             Self::Output { data } => vec![ExportRecordId::Output(data.name().to_owned())],

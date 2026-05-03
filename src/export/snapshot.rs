@@ -5,6 +5,7 @@ use crate::export::record::{ExportOutputMode, ExportRecord};
 use std::collections::HashMap;
 
 pub fn collect_snapshot_records(
+    version: String,
     windows: Vec<niri_ipc::Window>,
     workspaces: Vec<niri_ipc::Workspace>,
     outputs: HashMap<String, niri_ipc::Output>,
@@ -14,6 +15,7 @@ pub fn collect_snapshot_records(
 ) -> Vec<ExportRecord> {
     let mut records = Vec::new();
 
+    records.push(ExportRecord::Version { version });
     records.extend(windows.into_iter().map(|window| ExportRecord::Window { data: window }));
     records.extend(
         workspaces

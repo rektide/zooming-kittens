@@ -98,6 +98,12 @@ fn read_snapshot_records(
 ) -> Result<Vec<crate::export::record::ExportRecord>, Box<dyn std::error::Error>> {
     let mut socket = niri_ipc::socket::Socket::connect()?;
 
+    let version = match socket.send(Request::Version)? {
+        Ok(Response::Version(version)) => version,
+        Ok(other) => return Err(format!("unexpected version response: {other:?}").into()),
+        Err(error) => return Err(format!("failed to request version: {error}").into()),
+    };
+
     let windows = match socket.send(Request::Windows)? {
         Ok(Response::Windows(windows)) => windows,
         Ok(other) => return Err(format!("unexpected windows response: {other:?}").into()),
@@ -123,6 +129,7 @@ fn read_snapshot_records(
     };
 
     Ok(collect_snapshot_records(
+        version,
         windows,
         workspaces,
         outputs,

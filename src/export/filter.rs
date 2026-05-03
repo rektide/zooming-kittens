@@ -5,6 +5,7 @@ use std::str::FromStr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExportRecordKind {
+    Version,
     Window,
     Workspace,
     Output,
@@ -14,6 +15,7 @@ pub enum ExportRecordKind {
 impl ExportRecordKind {
     fn as_str(self) -> &'static str {
         match self {
+            Self::Version => "version",
             Self::Window => "window",
             Self::Workspace => "workspace",
             Self::Output => "output",
@@ -33,6 +35,7 @@ impl FromStr for ExportRecordKind {
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value {
+            "version" => Ok(Self::Version),
             "window" | "windows" => Ok(Self::Window),
             "workspace" | "workspaces" => Ok(Self::Workspace),
             "output" | "outputs" => Ok(Self::Output),
@@ -137,6 +140,10 @@ fn parse_id_filter(
     value: &str,
 ) -> Result<ExportRecordId, FilterParseError> {
     match kind {
+        ExportRecordKind::Version => Err(FilterParseError::InvalidId {
+            kind,
+            value: value.to_owned(),
+        }),
         ExportRecordKind::Window => value
             .parse::<u64>()
             .map(ExportRecordId::Window)
@@ -177,11 +184,12 @@ mod tests {
 
     #[test]
     fn parses_valueless_filters_as_wildcards() {
-        let filters = parse_filter_expression("window,output").expect("filters parse");
+        let filters = parse_filter_expression("version,window,output").expect("filters parse");
 
         assert_eq!(
             filters,
             vec![
+                ExportFilter::All(ExportRecordKind::Version),
                 ExportFilter::All(ExportRecordKind::Window),
                 ExportFilter::All(ExportRecordKind::Output),
             ]
