@@ -1,7 +1,7 @@
 // pattern: Imperative Shell
 
 use crate::export::filter::{ExportFilter, parse_filter_expression};
-use crate::export::record::collect_export_records;
+use crate::export::record::{ExportOutputMode, collect_export_records};
 use crate::export::serde_json::{ExportFormat, write_records};
 use clap::Args;
 use niri_ipc::{Request, Response};
@@ -22,6 +22,12 @@ pub struct ExportCommand {
         help = "Comma-separated filters like window=2,window=4,output. Omit to export all records"
     )]
     pub filter: Option<String>,
+
+    #[arg(
+        long,
+        help = "For output records, replace the full modes list/current_mode index with the current mode object"
+    )]
+    pub current_mode: bool,
 }
 
 pub async fn run_export(command: ExportCommand) -> Result<(), Box<dyn std::error::Error>> {
@@ -46,7 +52,12 @@ pub async fn run_export(command: ExportCommand) -> Result<(), Box<dyn std::error
         Err(error) => return Err(format!("failed to request outputs: {error}").into()),
     };
 
-    let records = collect_export_records(windows, workspaces, outputs, &filters);
+    let output_mode = if command.current_mode {
+        ExportOutputMode::CurrentMode
+    } else {
+        ExportOutputMode::Full
+    };
+    let records = collect_export_records(windows, workspaces, outputs, &filters, output_mode);
     let stdout = std::io::stdout();
     let handle = stdout.lock();
     write_records(handle, &records, command.format)?;
