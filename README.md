@@ -38,6 +38,26 @@ kitty-focus-tracker longcat
 kitty-focus-tracker longcat --active-height-proportion 0.7 --other-height-proportion 0.3
 ```
 
+### Export
+
+Exports raw niri state and event records as JSON or JSON Lines. By default, `export` prints a snapshot first, then continues with the niri event stream.
+
+```bash
+kitty-focus-tracker export
+kitty-focus-tracker export --snapshot --format json
+kitty-focus-tracker export --stream --filter type=window_layouts_changed
+kitty-focus-tracker export --filter output --current-mode
+```
+
+Records use a flat `type` field, for example `window`, `workspace`, `output`, `cast`, or `window_layouts_changed`. Use `--filter` to select record kinds, IDs, or event types:
+
+```bash
+kitty-focus-tracker export --filter window=4,workspace=9,output=DP-3
+kitty-focus-tracker export --stream --filter type=cast_started_or_changed
+```
+
+See [`doc/export.md`](doc/export.md) for record shapes, filter rules, stream IDs, and output format details.
+
 ### Font control
 
 Direct font size manipulation for running kitty instances:
@@ -52,6 +72,7 @@ kitty-focus-tracker font list         # show running kitty instances
 ### Utilities
 
 - **conf-size** -- read the configured font size from `kitty.conf`
+- **export** -- print raw niri snapshot and stream records
 - **generate-systemd** -- produce a systemd user service file for auto-startup
 - **cleanup** -- reap dead connections from the connection pool
 

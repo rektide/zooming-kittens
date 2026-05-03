@@ -375,6 +375,20 @@ Continue current approach but refine:
 3. Decide on tree management strategy
 4. Write migration plan from current `ColumnState`
 
+## Update - Raw Niri Export as Discovery Tool
+
+The `export` command now provides a raw niri snapshot and event stream as typed JSON/JSONL records. This is useful before longcat reconstruction because it lets us inspect the actual workspace, output, window, cast, and layout event data without routing through longcat's current state model.
+
+Useful examples:
+
+```bash
+kitty-focus-tracker export --snapshot --format json
+kitty-focus-tracker export --stream --filter type=window_layouts_changed
+kitty-focus-tracker export --filter output --current-mode
+```
+
+For longcat planning, the important relationship remains raw and explicit: windows point to workspaces with `workspace_id`, workspaces point to outputs with `output`, and columns are derived from `window.layout.pos_in_scrolling_layout`.
+
 ---
 
 # Appendix A — Refinement Prompt
