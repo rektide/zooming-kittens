@@ -1,8 +1,9 @@
 // pattern: Imperative Shell
 
 use crate::export::filter::{ExportFilter, parse_filter_expression};
-use crate::export::record::{ExportOutputMode, collect_export_records};
+use crate::export::record::ExportOutputMode;
 use crate::export::serde_json::{ExportFormat, write_records};
+use crate::export::snapshot::collect_snapshot_records;
 use clap::Args;
 use niri_ipc::{Request, Response};
 
@@ -57,7 +58,7 @@ pub async fn run_export(command: ExportCommand) -> Result<(), Box<dyn std::error
     } else {
         ExportOutputMode::Full
     };
-    let records = collect_export_records(windows, workspaces, outputs, &filters, output_mode);
+    let records = collect_snapshot_records(windows, workspaces, outputs, &filters, output_mode);
     let stdout = std::io::stdout();
     let handle = stdout.lock();
     write_records(handle, &records, command.format)?;
