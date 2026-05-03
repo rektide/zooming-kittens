@@ -7,9 +7,18 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ExportRecord {
-    Window { id: u64, data: niri_ipc::Window },
-    Workspace { id: u64, data: niri_ipc::Workspace },
-    Output { id: String, data: ExportOutputData },
+    Window {
+        #[serde(flatten)]
+        data: niri_ipc::Window,
+    },
+    Workspace {
+        #[serde(flatten)]
+        data: niri_ipc::Workspace,
+    },
+    Output {
+        #[serde(flatten)]
+        data: ExportOutputData,
+    },
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -36,9 +45,18 @@ pub struct OutputCurrentMode {
 impl ExportRecord {
     pub fn record_id(&self) -> ExportRecordId {
         match self {
-            Self::Window { id, .. } => ExportRecordId::Window(*id),
-            Self::Workspace { id, .. } => ExportRecordId::Workspace(*id),
-            Self::Output { id, .. } => ExportRecordId::Output(id.clone()),
+            Self::Window { data } => ExportRecordId::Window(data.id),
+            Self::Workspace { data } => ExportRecordId::Workspace(data.id),
+            Self::Output { data } => ExportRecordId::Output(data.name().to_owned()),
+        }
+    }
+}
+
+impl ExportOutputData {
+    fn name(&self) -> &str {
+        match self {
+            Self::Full(output) => &output.name,
+            Self::CurrentMode(output) => &output.name,
         }
     }
 }
@@ -52,19 +70,16 @@ pub fn collect_export_records(
 ) -> Vec<ExportRecord> {
     let mut records = Vec::new();
 
-    records.extend(windows.into_iter().map(|window| ExportRecord::Window {
-        id: window.id,
-        data: window,
-    }));
-    records.extend(workspaces.into_iter().map(|workspace| ExportRecord::Workspace {
-        id: workspace.id,
-        data: workspace,
-    }));
+    records.extend(windows.into_iter().map(|window| ExportRecord::Window { data: window }));
+    records.extend(
+        workspaces
+            .into_iter()
+            .map(|workspace| ExportRecord::Workspace { data: workspace }),
+    );
 
     let mut outputs = outputs.into_values().collect::<Vec<_>>();
     outputs.sort_by(|left, right| left.name.cmp(&right.name));
     records.extend(outputs.into_iter().map(|output| ExportRecord::Output {
-        id: output.name.clone(),
         data: output_mode.project(output),
     }));
 
