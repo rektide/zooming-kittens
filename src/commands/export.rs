@@ -49,8 +49,9 @@ pub struct ExportCommand {
 
 pub async fn run_export(command: ExportCommand) -> Result<(), Box<dyn std::error::Error>> {
     let filters = parse_filters(command.filter.as_deref())?;
-    let export_snapshot = command.snapshot || !command.stream;
-    let export_stream = command.stream;
+    let no_mode_selected = !command.snapshot && !command.stream;
+    let export_snapshot = command.snapshot || no_mode_selected;
+    let export_stream = command.stream || no_mode_selected;
     let format = resolve_format(command.format, export_stream);
 
     if export_stream && format == ExportFormat::Json && command.limit.is_none() {
