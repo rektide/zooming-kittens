@@ -1,6 +1,8 @@
 use clap::{Parser, Subcommand};
 use commands::ConfSizeCommand;
 use commands::conf_size::handle_conf_size_command;
+use commands::ExportCommand;
+use commands::export::run_export;
 use commands::FontCommand;
 use commands::fonts::handle_font_command;
 use commands::longcat::run_longcat;
@@ -13,6 +15,7 @@ use niri::registry::NiriRegistry;
 
 mod commands;
 mod config;
+mod export;
 mod kitty;
 mod niri;
 
@@ -36,6 +39,11 @@ enum CliSubcommand {
         about = "Clean up dead connections in connection pool"
     )]
     Cleanup,
+    #[command(
+        name = "export",
+        about = "Export raw niri state records as JSON or JSONL"
+    )]
+    Export(ExportCommand),
     #[command(
         name = "zoomer",
         about = "Run focus tracking for a specific app with configurable font adjustments"
@@ -229,6 +237,13 @@ async fn main() -> std::io::Result<()> {
         let registry = KittyRegistry::new(config.to_registry_config());
         registry.cleanup_dead_connections().await;
         eprintln!("Cleanup complete");
+        return Ok(());
+    }
+
+    if let Some(CliSubcommand::Export(export_cmd)) = args.command {
+        run_export(export_cmd)
+            .await
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
         return Ok(());
     }
 
