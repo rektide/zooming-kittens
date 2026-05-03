@@ -60,6 +60,12 @@ impl ExportRecordId {
 pub enum ExportFilter {
     All(ExportRecordKind),
     Id(ExportRecordId),
+    Type(String),
+}
+
+pub struct ExportRecordMatch<'a> {
+    pub record_type: &'a str,
+    pub ids: &'a [ExportRecordId],
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -103,15 +109,21 @@ fn parse_filter_part(part: &str) -> Result<ExportFilter, FilterParseError> {
         return Ok(ExportFilter::All(ExportRecordKind::from_str(part)?));
     };
 
-    let kind = ExportRecordKind::from_str(kind.trim())?;
+    let kind = kind.trim();
     let value = value.trim();
     if value.is_empty() {
+        let kind = ExportRecordKind::from_str(kind)?;
         return Err(FilterParseError::InvalidId {
             kind,
             value: value.to_owned(),
         });
     }
 
+    if kind == "type" {
+        return Ok(ExportFilter::Type(value.to_owned()));
+    }
+
+    let kind = ExportRecordKind::from_str(kind)?;
     parse_id_filter(kind, value).map(ExportFilter::Id)
 }
 
@@ -138,11 +150,12 @@ fn parse_id_filter(
     }
 }
 
-pub fn matches_filters(record_id: &ExportRecordId, filters: &[ExportFilter]) -> bool {
+pub fn matches_record(record: ExportRecordMatch<'_>, filters: &[ExportFilter]) -> bool {
     filters.is_empty()
         || filters.iter().any(|filter| match filter {
-            ExportFilter::All(kind) => record_id.kind() == *kind,
-            ExportFilter::Id(id) => record_id == id,
+            ExportFilter::All(kind) => record.ids.iter().any(|id| id.kind() == *kind),
+            ExportFilter::Id(id) => record.ids.iter().any(|record_id| record_id == id),
+            ExportFilter::Type(record_type) => record.record_type == record_type,
         })
 }
 
@@ -180,6 +193,16 @@ mod tests {
     }
 
     #[test]
+    fn parses_type_filter() {
+        let filters = parse_filter_expression("type=window_layouts_changed").expect("filters parse");
+
+        assert_eq!(
+            filters,
+            vec![ExportFilter::Type(String::from("window_layouts_changed"))]
+        );
+    }
+
+    #[test]
     fn rejects_unknown_filter_kind() {
         let error = parse_filter_expression("monitor").expect_err("unknown kind fails");
 
@@ -200,16 +223,64 @@ mod tests {
     }
 
     #[test]
-    fn matches_any_filter() {
-        let filters = parse_filter_expression("window=2,workspace").expect("filters parse");
+    fn type_filter_matches_record_type() {
+        let filters = parse_filter_expression("type=window_closed").expect("filters parse");
+        let ids = vec![ExportRecordId::Window(4)];
 
-        assert!(matches_filters(&ExportRecordId::Window(2), &filters));
-        assert!(!matches_filters(&ExportRecordId::Window(3), &filters));
-        assert!(matches_filters(&ExportRecordId::Workspace(9), &filters));
+        assert!(matches_record(
+            ExportRecordMatch {
+                record_type: "window_closed",
+                ids: &ids,
+            },
+            &filters
+        ));
+        assert!(!matches_record(
+            ExportRecordMatch {
+                record_type: "window_focus_changed",
+                ids: &ids,
+            },
+            &filters
+        ));
+    }
+
+    #[test]
+    fn id_and_kind_filters_match_record_ids() {
+        let filters = parse_filter_expression("window=2,workspace").expect("filters parse");
+        let window_ids = vec![ExportRecordId::Window(2)];
+        let other_window_ids = vec![ExportRecordId::Window(3)];
+        let workspace_ids = vec![ExportRecordId::Workspace(9)];
+
+        assert!(matches_record(
+            ExportRecordMatch {
+                record_type: "window_closed",
+                ids: &window_ids,
+            },
+            &filters
+        ));
+        assert!(!matches_record(
+            ExportRecordMatch {
+                record_type: "window_closed",
+                ids: &other_window_ids,
+            },
+            &filters
+        ));
+        assert!(matches_record(
+            ExportRecordMatch {
+                record_type: "workspace_activated",
+                ids: &workspace_ids,
+            },
+            &filters
+        ));
     }
 
     #[test]
     fn empty_filters_match_everything() {
-        assert!(matches_filters(&ExportRecordId::Window(1), &[]));
+        assert!(matches_record(
+            ExportRecordMatch {
+                record_type: "window",
+                ids: &[ExportRecordId::Window(1)],
+            },
+            &[]
+        ));
     }
 }

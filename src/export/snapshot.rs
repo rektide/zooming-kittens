@@ -1,6 +1,6 @@
 // pattern: Functional Core
 
-use crate::export::filter::{ExportFilter, matches_filters};
+use crate::export::filter::ExportFilter;
 use crate::export::record::{ExportOutputMode, ExportRecord};
 use std::collections::HashMap;
 
@@ -28,6 +28,6 @@ pub fn collect_snapshot_records(
 
     records
         .into_iter()
-        .filter(|record| matches_filters(&record.record_id(), filters))
+        .filter(|record| record.matches_filters(filters))
         .collect()
 }
