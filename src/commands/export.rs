@@ -123,10 +123,28 @@ fn read_snapshot_records(
         Err(error) => return Err(format!("failed to request outputs: {error}").into()),
     };
 
+    let layers = match socket.send(Request::Layers)? {
+        Ok(Response::Layers(layers)) => layers,
+        Ok(other) => return Err(format!("unexpected layers response: {other:?}").into()),
+        Err(error) => return Err(format!("failed to request layers: {error}").into()),
+    };
+
     let casts = match socket.send(Request::Casts)? {
         Ok(Response::Casts(casts)) => casts,
         Ok(other) => return Err(format!("unexpected casts response: {other:?}").into()),
         Err(error) => return Err(format!("failed to request casts: {error}").into()),
+    };
+
+    let keyboard_layouts = match socket.send(Request::KeyboardLayouts)? {
+        Ok(Response::KeyboardLayouts(keyboard_layouts)) => keyboard_layouts,
+        Ok(other) => return Err(format!("unexpected keyboard layouts response: {other:?}").into()),
+        Err(error) => return Err(format!("failed to request keyboard layouts: {error}").into()),
+    };
+
+    let overview = match socket.send(Request::OverviewState)? {
+        Ok(Response::OverviewState(overview)) => overview,
+        Ok(other) => return Err(format!("unexpected overview response: {other:?}").into()),
+        Err(error) => return Err(format!("failed to request overview: {error}").into()),
     };
 
     Ok(collect_snapshot_records(
@@ -134,7 +152,10 @@ fn read_snapshot_records(
         windows,
         workspaces,
         outputs,
+        layers,
         casts,
+        keyboard_layouts,
+        overview,
         filters,
         output_mode,
     ))

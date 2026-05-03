@@ -9,7 +9,10 @@ pub enum ExportRecordKind {
     Window,
     Workspace,
     Output,
+    Layer,
     Cast,
+    KeyboardLayouts,
+    Overview,
 }
 
 impl ExportRecordKind {
@@ -19,7 +22,10 @@ impl ExportRecordKind {
             Self::Window => "window",
             Self::Workspace => "workspace",
             Self::Output => "output",
+            Self::Layer => "layer",
             Self::Cast => "cast",
+            Self::KeyboardLayouts => "keyboard_layouts",
+            Self::Overview => "overview",
         }
     }
 }
@@ -39,7 +45,10 @@ impl FromStr for ExportRecordKind {
             "window" | "windows" => Ok(Self::Window),
             "workspace" | "workspaces" => Ok(Self::Workspace),
             "output" | "outputs" => Ok(Self::Output),
+            "layer" | "layers" => Ok(Self::Layer),
             "cast" | "casts" => Ok(Self::Cast),
+            "keyboard_layouts" | "keyboard-layouts" => Ok(Self::KeyboardLayouts),
+            "overview" | "overview_state" | "overview-state" => Ok(Self::Overview),
             other => Err(FilterParseError::UnknownKind(other.to_owned())),
         }
     }
@@ -47,19 +56,27 @@ impl FromStr for ExportRecordKind {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExportRecordId {
+    Version,
     Window(u64),
     Workspace(u64),
     Output(String),
+    Layer(String),
     Cast(u64),
+    KeyboardLayouts,
+    Overview,
 }
 
 impl ExportRecordId {
     pub fn kind(&self) -> ExportRecordKind {
         match self {
+            Self::Version => ExportRecordKind::Version,
             Self::Window(_) => ExportRecordKind::Window,
             Self::Workspace(_) => ExportRecordKind::Workspace,
             Self::Output(_) => ExportRecordKind::Output,
+            Self::Layer(_) => ExportRecordKind::Layer,
             Self::Cast(_) => ExportRecordKind::Cast,
+            Self::KeyboardLayouts => ExportRecordKind::KeyboardLayouts,
+            Self::Overview => ExportRecordKind::Overview,
         }
     }
 }
@@ -140,7 +157,9 @@ fn parse_id_filter(
     value: &str,
 ) -> Result<ExportRecordId, FilterParseError> {
     match kind {
-        ExportRecordKind::Version => Err(FilterParseError::InvalidId {
+        ExportRecordKind::Version
+        | ExportRecordKind::KeyboardLayouts
+        | ExportRecordKind::Overview => Err(FilterParseError::InvalidId {
             kind,
             value: value.to_owned(),
         }),
@@ -159,6 +178,7 @@ fn parse_id_filter(
                 value: value.to_owned(),
             }),
         ExportRecordKind::Output => Ok(ExportRecordId::Output(value.to_owned())),
+        ExportRecordKind::Layer => Ok(ExportRecordId::Layer(value.to_owned())),
         ExportRecordKind::Cast => value
             .parse::<u64>()
             .map(ExportRecordId::Cast)
@@ -184,7 +204,8 @@ mod tests {
 
     #[test]
     fn parses_valueless_filters_as_wildcards() {
-        let filters = parse_filter_expression("version,window,output").expect("filters parse");
+        let filters = parse_filter_expression("version,window,output,layer,keyboard_layouts,overview")
+            .expect("filters parse");
 
         assert_eq!(
             filters,
@@ -192,6 +213,9 @@ mod tests {
                 ExportFilter::All(ExportRecordKind::Version),
                 ExportFilter::All(ExportRecordKind::Window),
                 ExportFilter::All(ExportRecordKind::Output),
+                ExportFilter::All(ExportRecordKind::Layer),
+                ExportFilter::All(ExportRecordKind::KeyboardLayouts),
+                ExportFilter::All(ExportRecordKind::Overview),
             ]
         );
     }

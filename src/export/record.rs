@@ -19,9 +19,21 @@ pub enum ExportRecord {
         #[serde(flatten)]
         data: ExportOutputData,
     },
+    Layer {
+        #[serde(flatten)]
+        data: niri_ipc::LayerSurface,
+    },
     Cast {
         #[serde(flatten)]
         data: niri_ipc::Cast,
+    },
+    KeyboardLayouts {
+        #[serde(flatten)]
+        data: niri_ipc::KeyboardLayouts,
+    },
+    Overview {
+        #[serde(flatten)]
+        data: niri_ipc::Overview,
     },
     WorkspacesChanged {
         stream_event_id: u64,
@@ -140,7 +152,10 @@ impl ExportRecord {
             Self::Window { .. } => "window",
             Self::Workspace { .. } => "workspace",
             Self::Output { .. } => "output",
+            Self::Layer { .. } => "layer",
             Self::Cast { .. } => "cast",
+            Self::KeyboardLayouts { .. } => "keyboard_layouts",
+            Self::Overview { .. } => "overview",
             Self::WorkspacesChanged { .. } => "workspaces_changed",
             Self::WorkspaceUrgencyChanged { .. } => "workspace_urgency_changed",
             Self::WorkspaceActivated { .. } => "workspace_activated",
@@ -165,11 +180,14 @@ impl ExportRecord {
 
     pub fn record_ids(&self) -> Vec<ExportRecordId> {
         match self {
-            Self::Version { .. } => Vec::new(),
+            Self::Version { .. } => vec![ExportRecordId::Version],
             Self::Window { data } => vec![ExportRecordId::Window(data.id)],
             Self::Workspace { data } => vec![ExportRecordId::Workspace(data.id)],
             Self::Output { data } => vec![ExportRecordId::Output(data.name().to_owned())],
+            Self::Layer { data } => vec![ExportRecordId::Layer(data.namespace.clone())],
             Self::Cast { data } => vec![ExportRecordId::Cast(data.stream_id)],
+            Self::KeyboardLayouts { .. } => vec![ExportRecordId::KeyboardLayouts],
+            Self::Overview { .. } => vec![ExportRecordId::Overview],
             Self::WorkspacesChanged { workspaces, .. } => workspaces
                 .iter()
                 .map(|workspace| ExportRecordId::Workspace(workspace.id))
@@ -202,10 +220,11 @@ impl ExportRecord {
                 .iter()
                 .map(|(id, _)| ExportRecordId::Window(*id))
                 .collect(),
-            Self::KeyboardLayoutsChanged { .. }
-            | Self::KeyboardLayoutSwitched { .. }
-            | Self::OverviewOpenedOrClosed { .. }
-            | Self::ConfigLoaded { .. }
+            Self::KeyboardLayoutsChanged { .. } | Self::KeyboardLayoutSwitched { .. } => {
+                vec![ExportRecordId::KeyboardLayouts]
+            }
+            Self::OverviewOpenedOrClosed { .. } => vec![ExportRecordId::Overview],
+            Self::ConfigLoaded { .. }
             | Self::ScreenshotCaptured { .. } => Vec::new(),
             Self::CastsChanged { casts, .. } => casts
                 .iter()
