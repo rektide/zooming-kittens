@@ -1,3 +1,13 @@
+---
+type: Project
+title: zooming-kittens
+description: Compositor-driven window sizing and terminal font automation.
+resource: README.md
+sources:
+  - resource: opencode://ses_ec3316eefffejmDBXbZ28spBd7
+    title: Add navigation to the proposed multi-crate Longcat and Umbriel remake
+---
+
 # zooming-kittens
 
 > Niri window manager toolkit for dynamic terminal sizing and focus-driven automation
@@ -115,6 +125,11 @@ The application uses an async stream architecture built on tokio:
 - **KittyRegistry** manages pooled connections with retry logic, idle reaping, and PID-based socket discovery
 
 See [`ARCHITECTURE.md`](ARCHITECTURE.md) for details.
+
+The proposed [Longcat remake](design/remake/README.md) develops a domain-grouped
+Rust workspace, niri/Umbriel backends, and separate observation, layout-policy,
+and execution contracts. It includes the streaming and protocol feasibility
+assessment; this is design work, not implemented Umbriel support.
 
 ## License
 
