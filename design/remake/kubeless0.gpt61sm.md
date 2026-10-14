@@ -9,7 +9,7 @@ generated:
   at: 2026-10-14
 sources:
   - resource: opencode://ses_ec331458affeezVLOh5qkIN8Ag
-    title: Independent Kubeless investigation for Longcat, native-source comparison, targeted mechanism tests, and proposed adoption boundaries
+    title: Independent Kubeless investigation, targeted tests, and integration clarification of transitive versus direct dependencies and optional upstream lifts
   - resource: /src/commands/longcat.rs
     title: Current state, manual resize inference, action loop, and restoration
   - resource: /src/niri/registry.rs
@@ -58,6 +58,12 @@ sources:
     title: Existing native inventory, continuity, change receipts and Kubeless integration
   - resource: file:///home/rektide/src/umbriel-rs/crates/umbriel-state/src/inventory.rs
     title: Native stamps, health, immutable capture interface and actual WindowChanges type
+  - resource: file:///home/rektide/src/umbriel-rs/crates/umbriel-state/Cargo.toml
+    title: Actual normal dependency on the narrow Kubeless memory leaf
+  - resource: file:///home/rektide/src/umbriel-rs/crates/umbriel-client/Cargo.toml
+    title: Impact and state are example dev-dependencies, not normal client dependencies
+  - resource: file:///home/rektide/src/kubeless/view/memory/Cargo.toml
+    title: Transitive view-change dependency beneath the memory leaf
   - resource: file:///home/rektide/src/umbriel-rs/README.md
     title: Current capture and inferred-layout capabilities and explicit missing protocol facts
 verification:
@@ -80,6 +86,23 @@ Use Kubeless as **selected mechanisms underneath native compositor adapters and 
 Start smaller than the whole controller stack. Umbriel already has a native Kubeless-backed inventory; reuse it rather than wrapping it in a second reflector. Longcat must still own its baseline, geometry interpretation, policy, command dependencies, and uncertainty about effects.
 
 Both sibling projects are changeable. The most valuable Kubeless change exposed by this use case is **bounded ingress turns in the stream Scheduler**; this is a concrete gap, unlike independent lagging publication, which already exists.
+
+**No Kubeless upstream change identified here is a prerequisite for the remake.** The existing direct APIs support observation → pure policy/solver → native execution. There is no proposed generic transport framework. Scheduler fairness is an optional convenience lift because bounded caller-driven intake into direct `Schedule` already avoids its greedy stream adapter.
+
+### Dependency ownership: what arrives and what zk selects
+
+The package manifests establish a narrower boundary than “Umbriel uses Kubeless” might suggest:
+
+| Piece | Already arrives through Umbriel? | Recommended zk ownership |
+| --- | --- | --- |
+| `kubeless-view-memory`, with `kubeless-view-change` beneath it | **Yes, through `umbriel-state`**, not through the normal `umbriel-client` dependency graph alone. State privately owns its Reader/Writer and returns native `WindowChanges` receipts. | Consume `Inventory::install_windows_changes` and the native receipt on the Umbriel path. Add a direct memory dependency to the **niri observation crate** if it selects the same map/receipt mechanics; do not duplicate Umbriel state or add memory to the pure solver just for symmetry. |
+| `kubeless-view-impact` | **No.** It is only an `umbriel-client` dev-dependency for examples, including `window_changes`; it is not a normal `umbriel-state` dependency. | Direct dependency in zk's impact/planning assembly where it projects native before/after receipts into both former and current affected regions. Reuse the demonstrated API, not an imagined built-in subscription-to-work pipeline. |
+| `kubeless-work-schedule` | No. | Direct dependency in zk's app-owned control runner if selecting keyed timed admission. Drive direct `Schedule` with bounded ingress; its debounce/coalescing policy stays outside transport and the pure allocation solver. |
+| `kubeless-work-schedule-policy` | No through Umbriel; schedule reexports its public timing types/functions. | A direct dependency only for a standalone clock-injected policy consumer. If the runner already uses schedule's reexports, no extra direct dependency is needed solely for `BatchWait`/`RequestTiming`. It is an alternative lower entrance, not a second timer system. |
+| `kubeless-work-execute` / `kubeless-work-ready` | No. | Optional direct runner dependencies when keyed execution or a custom ReadyWork producer is actually useful. An initially serialized native execution owner need not adopt them. Declare ready directly if zk imports its crate path; Rust transitivity does not authorize direct imports. |
+| Session, reflection, compact relation, publication, settlement, retained-action host | No. | **Not baseline dependencies.** Their conditional opportunities are described below; adopt individually only for an actual requirement. Native `Endpoint::subscribe` already supplies Umbriel transport/delivery ownership. |
+
+Thus a small selected composition is native `umbriel-client` + `umbriel-state` in the Umbriel adapter, direct memory in the niri adapter if useful, and direct impact + schedule in app/control assembly. Even these direct mechanism choices are design recommendations, not requirements to wrap every stage in Kubeless. In particular, no new Kubeless publication layer is needed between `Endpoint::subscribe` and `Inventory`.
 
 ## Situation and current failure pressures
 
@@ -170,6 +193,8 @@ Do not put synchronous niri socket work on the async polling thread. Select a na
 **Durable restoration.** All these mechanisms are volatile. Preserve baseline state across disposable local passes, but do not blindly restore old heights after session loss or changed topology. A baseline should retain window/session identity and the context in which it was captured; restoration is an explicit plan over still-valid targets, not garbage collection.
 
 ## Worthwhile changes to Kubeless
+
+All proposals in this section are **optional lifts**, not blockers for the native observation/policy/execution architecture. The bounded direct Schedule workaround is sufficient now; the consumer probe and documentation changes improve reuse evidence and discoverability. Neither a multi-key executor nor retained-action host work is required to land a serialized first implementation.
 
 ### 1. Bounded Scheduler ingress — strongest concrete upstream request
 
