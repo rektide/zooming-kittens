@@ -7,7 +7,7 @@ status: draft
 generated: { at: 2026-10-14, by: 'model:openai/gpt-6-astra#medium' }
 sources:
   - resource: opencode://ses_ec3316eefffejmDBXbZ28spBd7
-    title: Commission, source-grounded architecture and research integration
+    title: Commission, source-grounded architecture, research integration and concrete Kubeless adoption/upstream agenda
   - resource: kubeless0.gpt61sm.md
     title: Independent reuse assessment integrated into the architecture proposal
 ---
@@ -19,6 +19,10 @@ sources:
 - [Architecture and landing sequence](architecture0.gpt6a.md): domain-grouped
   crates, observation/policy/execution contracts, Taffy's role, and the split
   between library improvements and compositor protocol work.
+- [Kubeless adoption and upstream asks](kubeless-asks0.gpt6a.md): recommended
+  first dependencies, fair scheduler work, an executable composition example,
+  discovery improvements, and conditional settlement/capacity ideas. Includes
+  the full path from native observations through Taffy to observed effects.
 
 ## Independent reuse research
 

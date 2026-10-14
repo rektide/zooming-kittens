@@ -296,6 +296,15 @@ current `Longcat` struct behind a backend trait.
 
 ### Kubeless: selected mechanisms, with native state ownership retained
 
+The follow-up [adoption and upstream agenda](kubeless-asks0.gpt6a.md) sharpens
+these choices: use memory for niri (reuse Umbriel's existing owner), direct
+impact and direct scheduling in the first implementation. Improve stream
+scheduler fairness alongside the consumer. Add independent derived-status
+publication when it gains consumers; fit-test settlement against retained
+episode ownership before adopting its future-based helper. The agenda records
+the human invitation to improve Kubeless while it is still young and connects
+those changes to the Taffy-driven control path.
+
 The [independent assessment](kubeless0.gpt61sm.md) agrees with the three-way
 boundary and adds concrete dependency and timing choices. Parent inspection
 confirmed the impact API, manifests, and the stream Scheduler's intake loop.
