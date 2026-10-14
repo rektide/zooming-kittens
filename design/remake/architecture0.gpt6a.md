@@ -38,6 +38,18 @@ sources:
     title: Focus-targeted height mutation
   - resource: file:///home/rektide/archive/DioxusLabs/taffy/examples/basic.rs
     title: Taffy computes a supplied tree rather than discovering compositor state
+  - resource: kubeless0.gpt61sm.md
+    title: Independent Sol assessment, dependency ownership, scheduler fairness and selected test results
+  - resource: file:///home/rektide/src/kubeless/work/schedule/src/lib.rs
+    title: Parent confirmation of greedy stream intake before readiness servicing
+  - resource: file:///home/rektide/src/kubeless/view/impact/src/lib.rs
+    title: Parent confirmation of former/current relation traversal semantics
+  - resource: file:///home/rektide/src/umbriel-rs/crates/umbriel-state/Cargo.toml
+    title: Parent confirmation of the existing memory dependency
+  - resource: file:///home/rektide/src/umbriel-rs/crates/umbriel-client/Cargo.toml
+    title: Parent confirmation that state and impact are example dev-dependencies
+  - resource: file:///home/rektide/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/niri-ipc-26.4.0/src/socket.rs
+    title: Blocking helper consumes the event socket without a public shutdown handle
 verification:
   method: Source inspection; proposed interfaces and landing checks below are not implemented or tested.
   limits: No live compositor mutation or new stream capture in this session.
@@ -184,7 +196,12 @@ keeps draining while commands and policy work wait. Use bounded delivery with
 explicit loss; do not repeat today's blocking `Socket::read_events()` inside
 `tokio::spawn` or the unbounded focus channel. Niri's synchronous API can live
 on an owned blocking worker with a defined stop mechanism, or a native async
-adapter; choose after verifying the socket shutdown API.
+adapter. Inspection of `niri-ipc` 26.4.0's `socket.rs` favors the async adapter:
+the helper hides its stream, and `read_events(self)` consumes it into a blocking
+closure without a public shutdown handle. Merely aborting a blocking task will
+not interrupt its read. Reuse niri's request/event types with an owned Tokio Unix
+stream, bounded line framing and explicit shutdown; an upstream socket-access
+API would be an alternative if keeping the blocking helper is important.
 
 One controller owns Longcat state; message passing replaces its DashMap and
 many RwLocks. Pending effects are state, so awaiting a command must not prevent
@@ -277,6 +294,49 @@ current `Longcat` struct behind a backend trait.
 
 ## Improve the owners as we go
 
+### Kubeless: selected mechanisms, with native state ownership retained
+
+The [independent assessment](kubeless0.gpt61sm.md) agrees with the three-way
+boundary and adds concrete dependency and timing choices. Parent inspection
+confirmed the impact API, manifests, and the stream Scheduler's intake loop.
+
+| Mechanism | Selected placement |
+|---|---|
+| `kubeless-view-memory` / change receipts | Already beneath `umbriel-state`; optionally direct in `desktop/niri` for its reducer. No second Umbriel inventory. |
+| `kubeless-view-impact` | Direct dependency for runner impact projection: both former and current groups/workspaces on move/delete. Umbriel's example uses it only as a dev-dependency. |
+| `kubeless-work-schedule` | Direct dependency in an app-owned runner module for keyed reconsideration and real timer-driven batching. Use direct `Schedule` with bounded intake. |
+| Executor / ReadyWork | Later option if keyed concurrent effects become worthwhile; initial serialization already provides the needed exclusion. |
+| Session / reflection / publication / retained-action host | Not baseline dependencies. Native subscriptions already own delivery and loss; introduce these only for a concrete additional consumer contract. |
+
+Keep the runner as an `app/zk` module initially; extract `control/runner` if
+shared runtime consumers justify it. Scheduling state is neither layout policy
+nor socket state. Merge dirty reasons, then calculate from the latest capture
+when work is admitted; don't queue obsolete resize plans for replay.
+
+Filter native receipts by layout-relevant changes: full replacements can include
+equal rows, and equal membership can still hide important geometry/focus changes.
+Preserve before/after captures when deriving group impact; a moved window's old
+group cannot be recovered from current state alone. Group identity remains our
+adapter's responsibility, not a fact supplied by `affected_roots`.
+
+Focus response remains immediate initially, matching present intent. Resize
+quiet batching is separate; a maximum batch delay is not proof that a drag ended
+and must not authorize baseline learning. An actual timer must fire even if no
+further window event arrives. Clock-injected policy tests cover that case.
+
+**Upstream opportunity:** bound `Scheduler::poll_ready` stream-intake turns so a
+permanently-ready input cannot starve due work. Its current loop drains until
+Pending/EOF before polling the schedule. Direct caller-budgeted `Schedule`
+already avoids this, so no Kubeless upstream change blocks the first port.
+Also improve entrance documentation for existing independent lagging publication
+and add a non-resumable desktop composition example, as Sol recommends.
+
+Sol ran selected existing Kubeless tests: **159 passed, one skipped** across two
+nextest runs. These support mechanism reuse, not the unbuilt Longcat integration.
+The assessment records commands and the inspected sibling revision; use explicit
+development paths or pinned reviewed revisions rather than assuming unpublished
+`0.1.0` packages are interchangeable.
+
 ### umbriel-rs: useful library improvements
 
 1. Lift the example's typed observation/install composition into a reusable,
@@ -337,8 +397,9 @@ backends have homes in this architecture but are separate implementation work.
 
 ## Connections and next decisions
 
-- [Remake reading map](README.md) groups this proposal and independent Kubeless
-  assessment. Kubeless integration decisions are finalized there after review.
+- [Remake reading map](README.md) groups this proposal and the independent
+  [Kubeless assessment](kubeless0.gpt61sm.md), whose selected mechanisms are
+  integrated above. The assessment preserves the wider alternatives and test evidence.
 - [Earlier Umbriel investigation](../umbriel/investigation0.glm53max.md) supplies
   restoration algebra and focus-race reasoning. Its “no Rust library” and
   “build a thin client next” statements describe its earlier date; umbriel-rs now

@@ -8,6 +8,8 @@ generated: { at: 2026-10-14, by: 'model:openai/gpt-6-astra#medium' }
 sources:
   - resource: opencode://ses_ec3316eefffejmDBXbZ28spBd7
     title: Commission, source-grounded architecture and research integration
+  - resource: kubeless0.gpt61sm.md
+    title: Independent reuse assessment integrated into the architecture proposal
 ---
 
 # Longcat remake
@@ -17,6 +19,14 @@ sources:
 - [Architecture and landing sequence](architecture0.gpt6a.md): domain-grouped
   crates, observation/policy/execution contracts, Taffy's role, and the split
   between library improvements and compositor protocol work.
+
+## Independent reuse research
+
+- [Kubeless mechanisms](kubeless0.gpt61sm.md), Sol Medium: native inventories,
+  before/after impact and timed reconsideration; direct versus transitive
+  dependencies; optional scheduler fairness improvement. Selected existing
+  mechanism tests: 159 passed, one skipped. The architecture proposal integrates
+  the recommendations while keeping the detailed alternatives here.
 
 ## Predecessors and current owners
 
