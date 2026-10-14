@@ -251,6 +251,30 @@ share strategy may express focus emphasis better than translating every computed
 pixel back into an approximate fraction. Declare strategy/capability differences;
 do not promise pixel-identical output across both compositors.
 
+### Current defects that should become replay cases
+
+These are source-level findings, not reproduced live failures:
+
+- `handle_focus_lost` tests a focused window's column index without also testing
+  its workspace. Equal positional indices on different workspaces can look like
+  staying in the same column. Replay a cross-workspace focus transition with
+  both columns numbered zero.
+- The registry clears its remembered focus on `WindowFocusChanged { id: None }`
+  without emitting blur. Replay window-to-layer/empty focus and require an
+  explicit active-window transition to none.
+- `_handle_window_layout_changed` is not wired into the Longcat loop, which
+  ignores lifecycle/layout events. Replay a moved/closed member while an apply
+  is pending; neither the baseline nor the pending plan may follow an old index.
+- Original height totals include retained entries, while current windows are
+  fetched again for applying. Replay deletion between baseline and allocation;
+  removed members must not donate fictional space to the remaining group.
+- The current minimum-height pass does one redistribution, which can leave a
+  previously unconstrained member below minimum or exhaust a group's budget.
+  Test cascading bounds and infeasible sums, not only the happy-path 70/30 split.
+
+These justify replacing the control state model rather than merely moving the
+current `Longcat` struct behind a backend trait.
+
 ## Improve the owners as we go
 
 ### umbriel-rs: useful library improvements
@@ -302,7 +326,7 @@ Stages 2 and protocol design can proceed independently after initial extraction;
 stage 3 can run from fixtures before native mutation is possible. Stage 5 lands
 only against a named compatible compositor/library revision pair. Each prefix
 must compile and tell the truth about available capabilities. Avoid a giant
-foundation merge followed by the first real consumer months later.
+foundation merge that postpones the first real consumer until the end.
 
 Retain `font`, `conf-size`, systemd generation and kitty process/connection
 behavior during extraction. Existing native JSON/JSONL export and optional Facet
