@@ -379,6 +379,10 @@ No Kubeless or Taffy improvement can manufacture those native facts.
 
 ## Connections
 
+- [Umbriel-side layout-control needs](file:///home/rektide/src/umbriel-rs/design/layout-control/longcat-needs0.gpt6a.md)
+  carries the native topology, targeted writes and restoration requirements into
+  umbriel-rs, with observation-first and conditional-control compositions using
+  the mechanisms and implementation findings recorded here.
 - [Architecture](architecture0.gpt6a.md) owns crate boundaries and the staged
   build; this document sharpens its Kubeless adoption and upstream agenda.
 - [Sol's research](kubeless0.gpt61sm.md) preserves API alternatives, source

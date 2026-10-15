@@ -7,7 +7,7 @@ status: draft
 generated: { at: 2026-10-14, by: 'model:openai/gpt-6-astra#medium' }
 sources:
   - resource: opencode://ses_ec3316eefffejmDBXbZ28spBd7
-    title: Commission, source-grounded architecture, research integration and concrete Kubeless adoption/upstream agenda
+    title: Commission, implementation integration, Kubeless return and navigation to the Umbriel-side native control requirements
   - resource: kubeless0.gpt61sm.md
     title: Independent reuse assessment integrated into the architecture proposal
 ---
@@ -25,6 +25,10 @@ sources:
 
 ## Proposed direction
 
+- [Umbriel-side layout-control needs](file:///home/rektide/src/umbriel-rs/design/layout-control/longcat-needs0.gpt6a.md):
+  native topology, targeted/conditional sizing and restoration requirements;
+  Rust-library opportunities and alternative compositions with Kubeless. This is
+  the continuation home for the Umbriel protocol gap exposed by our consumer.
 - [Architecture and landing sequence](architecture0.gpt6a.md): domain-grouped
   crates, observation/policy/execution contracts, Taffy's role, and the split
   between library improvements and compositor protocol work.
