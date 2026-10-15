@@ -19,9 +19,18 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 tokio = "1.49.0"
 tokio-stream = "0.1"
+zk-desktop = { path = "../../desktop/model" }
+zk-niri = { path = "../../desktop/niri" }
+zk-umbriel = { path = "../../desktop/umbriel" }
+zk-longcat = { path = "../../layout/longcat" }
+kubeless-work-schedule = { path = "../../../kubeless/work/schedule" }
 zk-kitty = { path = "../../terminal/kitty" }
 zk-zoomer = { path = "../../terminal/zoomer" }
 zk-export = { path = "../../inspection/export" }
 
 [features]
 export-facet = ["zk-export/export-facet"]
+
+[dev-dependencies]
+tempfile = "3.16"
+tokio = { version = "1.49.0", features = ["test-util"] }

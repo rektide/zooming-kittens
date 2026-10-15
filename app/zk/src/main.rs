@@ -8,7 +8,7 @@ use commands::fonts::handle_font_command;
 use commands::longcat::run_longcat;
 use commands::systemd::generate_systemd_service;
 use commands::zoomer::run_zoomer;
-use config::{CliArgs, CliZoomArgs, Config, LongcatConfig, Verbosity};
+use config::{CliArgs, CliZoomArgs, Config, Verbosity};
 use kitty::KittyRegistry;
 use niri::registry::NiriRegistry;
 use zk_zoomer::KittyResizer;
@@ -17,6 +17,7 @@ mod commands;
 mod config;
 use zk_kitty as kitty;
 mod niri;
+mod runner;
 
 #[derive(Subcommand, Debug)]
 enum CliSubcommand {
@@ -90,50 +91,7 @@ enum CliSubcommand {
         name = "longcat",
         about = "Manage window heights in niri columns based on focus"
     )]
-    Longcat {
-        #[arg(short, long, help = "Quiet mode (suppress all output)")]
-        quiet: bool,
-
-        #[arg(
-            short,
-            long = "verbose",
-            action = clap::ArgAction::Count,
-            help = "Increase verbosity level (use -v, -vv, -vvv, -vvvv)"
-        )]
-        verbose_count: u8,
-
-        #[arg(
-            long,
-            value_name = "PROPORTION",
-            default_value = "0.7",
-            help = "Height proportion for active window"
-        )]
-        active_height_proportion: f64,
-
-        #[arg(
-            long,
-            value_name = "PROPORTION",
-            default_value = "0.3",
-            help = "Height proportion for other windows"
-        )]
-        other_height_proportion: f64,
-
-        #[arg(
-            long,
-            value_name = "PIXELS",
-            default_value = "60",
-            help = "Minimum height for any window in pixels"
-        )]
-        minimum_height: i32,
-
-        #[arg(
-            long,
-            value_name = "MS",
-            default_value = "500",
-            help = "Debounce time in ms before detecting manual resize"
-        )]
-        resize_debounce_ms: u64,
-    },
+    Longcat(commands::longcat::LongcatCommand),
 }
 
 #[derive(Parser, Debug)]
@@ -301,29 +259,8 @@ async fn main() -> std::io::Result<()> {
         return Ok(());
     }
 
-    if let Some(CliSubcommand::Longcat {
-        quiet,
-        verbose_count,
-        active_height_proportion,
-        other_height_proportion,
-        minimum_height,
-        resize_debounce_ms,
-    }) = args.command
-    {
-        let verbosity = if quiet {
-            Verbosity::Quiet
-        } else {
-            Verbosity::from_count(verbose_count)
-        };
-        let longcat_config = LongcatConfig {
-            active_height_proportion,
-            other_height_proportion,
-            minimum_height,
-            resize_debounce_ms,
-        };
-        run_longcat(verbosity, longcat_config)
-            .await
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+    if let Some(CliSubcommand::Longcat(command)) = args.command {
+        run_longcat(command).await?;
         return Ok(());
     }
 
