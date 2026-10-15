@@ -1,6 +1,6 @@
-use crate::config::{RegistryConfig, Verbosity};
-use crate::kitty::types::{KittyConnectionStatus, ZoomingResult};
-use crate::kitty::util::{get_kitty_password, get_kitty_socket_path, is_process_alive};
+use crate::config::RegistryConfig;
+use crate::types::{KittyConnectionStatus, ZoomingResult};
+use crate::util::{get_kitty_password, get_kitty_socket_path, is_process_alive};
 use dashmap::DashMap;
 use kitty_rc::Kitty;
 use kitty_rc::commands::SetFontSizeCommand;
@@ -21,7 +21,6 @@ pub struct KittyRegistry {
     statuses: Arc<Mutex<HashMap<i32, KittyConnectionStatus>>>,
     pid_cache: Arc<DashMap<i32, i32>>,
     config: RegistryConfig,
-    verbosity: Verbosity,
 }
 
 impl KittyRegistry {
@@ -31,26 +30,11 @@ impl KittyRegistry {
             statuses: Arc::new(Mutex::new(HashMap::new())),
             pid_cache: Arc::new(DashMap::new()),
             config,
-            verbosity: Verbosity::Info,
         }
     }
 
     pub fn with_defaults() -> Self {
         Self::new(RegistryConfig::default())
-    }
-
-    pub fn with_verbosity(config: RegistryConfig, verbosity: Verbosity) -> Self {
-        Self {
-            connections: Arc::new(Mutex::new(HashMap::new())),
-            statuses: Arc::new(Mutex::new(HashMap::new())),
-            pid_cache: Arc::new(DashMap::new()),
-            config,
-            verbosity,
-        }
-    }
-
-    pub fn verbosity(&self) -> Verbosity {
-        self.verbosity
     }
 
     pub async fn start_reaper(&self) {
@@ -182,7 +166,7 @@ impl KittyRegistry {
         let kitty_pid = if let Some(cached) = self.pid_cache.get(&pid) {
             *cached
         } else {
-            match crate::kitty::process::find_kitty_master_pid(pid) {
+            match crate::process::find_kitty_master_pid(pid) {
                 Some(kpid) => {
                     self.pid_cache.insert(pid, kpid);
                     kpid
@@ -323,7 +307,7 @@ impl KittyRegistry {
         let kitty_pid = if let Some(cached) = self.pid_cache.get(&pid) {
             *cached
         } else {
-            match crate::kitty::process::find_kitty_master_pid(pid) {
+            match crate::process::find_kitty_master_pid(pid) {
                 Some(kpid) => {
                     self.pid_cache.insert(pid, kpid);
                     kpid

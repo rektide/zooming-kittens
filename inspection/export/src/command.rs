@@ -1,10 +1,10 @@
 // pattern: Imperative Shell
 
-use crate::export::filter::{ExportFilter, parse_filter_expression};
-use crate::export::record::ExportOutputMode;
-use crate::export::serde_json::{ExportFormat, write_records};
-use crate::export::snapshot::collect_snapshot_records;
-use crate::export::stream::{event_to_record, filter_stream_record};
+use crate::filter::{ExportFilter, parse_filter_expression};
+use crate::record::ExportOutputMode;
+use crate::serde_json::{ExportFormat, write_records};
+use crate::snapshot::collect_snapshot_records;
+use crate::stream::{event_to_record, filter_stream_record};
 use clap::Args;
 use niri_ipc::{Request, Response};
 
@@ -96,7 +96,7 @@ pub async fn run_export(command: ExportCommand) -> Result<(), Box<dyn std::error
 fn read_snapshot_records(
     filters: &[ExportFilter],
     output_mode: ExportOutputMode,
-) -> Result<Vec<crate::export::record::ExportRecord>, Box<dyn std::error::Error>> {
+) -> Result<Vec<crate::record::ExportRecord>, Box<dyn std::error::Error>> {
     let mut socket = niri_ipc::socket::Socket::connect()?;
 
     let version = match socket.send(Request::Version)? {
@@ -180,7 +180,7 @@ fn read_stream_records(
     filters: &[ExportFilter],
     starting_id: u64,
     limit: Option<usize>,
-) -> Result<Vec<crate::export::record::ExportRecord>, Box<dyn std::error::Error>> {
+) -> Result<Vec<crate::record::ExportRecord>, Box<dyn std::error::Error>> {
     let mut records = Vec::new();
     read_stream(filters, starting_id, limit, |record| {
         records.push(record);
@@ -208,7 +208,7 @@ fn read_stream<F>(
     mut emit: F,
 ) -> Result<(), Box<dyn std::error::Error>>
 where
-    F: FnMut(crate::export::record::ExportRecord) -> Result<(), Box<dyn std::error::Error>>,
+    F: FnMut(crate::record::ExportRecord) -> Result<(), Box<dyn std::error::Error>>,
 {
     let mut socket = niri_ipc::socket::Socket::connect()?;
     match socket.send(Request::EventStream)? {

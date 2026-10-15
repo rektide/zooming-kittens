@@ -5,6 +5,8 @@ use figment2::{
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::time::Duration;
+pub use zk_kitty::RegistryConfig;
+pub use zk_zoomer::{ZoomConfig, ZoomType};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub enum Verbosity {
@@ -83,22 +85,6 @@ fn default_reap_interval() -> u64 {
     300 // 5 minutes
 }
 
-fn default_step_size() -> f64 {
-    1.0
-}
-
-/// Zoom type: absolute, additive, or multiplicative
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ZoomType {
-    /// Set to an absolute font size
-    Absolute,
-    /// Add to current font size (+N)
-    Additive,
-    /// Multiply current font size (*N)
-    Multiplicative,
-}
-
 /// Longcat configuration for managing window heights in columns
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -145,96 +131,6 @@ fn default_minimum_height() -> i32 {
 
 fn default_resize_debounce_ms() -> u64 {
     500
-}
-
-/// Zoom configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub struct ZoomConfig {
-    /// Absolute font size to set on focus
-    pub absolute: Option<f64>,
-
-    /// Additive amount (e.g., 6 means +6 on focus, -6 on blur)
-    pub additive: Option<f64>,
-
-    /// Multiplicative factor (e.g., 1.5 means *1.5 on focus, /1.5 on blur)
-    pub multiplicative: Option<f64>,
-
-    /// Number of steps to apply at once
-    #[serde(default = "default_step_size")]
-    pub step_size: f64,
-}
-
-impl Default for ZoomConfig {
-    fn default() -> Self {
-        Self {
-            absolute: None,
-            additive: None,
-            multiplicative: None,
-            step_size: default_step_size(),
-        }
-    }
-}
-
-impl ZoomConfig {
-    /// Validate that only one zoom type is configured
-    /// Returns an error if multiple zoom types are set
-    pub fn validate(&self) -> Result<(), String> {
-        let set_types = [
-            self.absolute.is_some(),
-            self.additive.is_some(),
-            self.multiplicative.is_some(),
-        ];
-
-        let count = set_types.iter().filter(|&&x| x).count();
-
-        if count > 1 {
-            let mut types = Vec::new();
-            if self.absolute.is_some() {
-                types.push("absolute");
-            }
-            if self.additive.is_some() {
-                types.push("additive");
-            }
-            if self.multiplicative.is_some() {
-                types.push("multiplicative");
-            }
-            return Err(format!(
-                "Multiple zoom types configured: {}. Only one zoom type may be set.",
-                types.join(", ")
-            ));
-        }
-
-        Ok(())
-    }
-
-    /// Get the active zoom type
-    pub fn active_type(&self) -> Option<ZoomType> {
-        if self.absolute.is_some() {
-            Some(ZoomType::Absolute)
-        } else if self.additive.is_some() {
-            Some(ZoomType::Additive)
-        } else if self.multiplicative.is_some() {
-            Some(ZoomType::Multiplicative)
-        } else {
-            None
-        }
-    }
-
-    /// Get the zoom value for the active type
-    pub fn value(&self) -> Option<f64> {
-        match self.active_type() {
-            Some(ZoomType::Absolute) => self.absolute,
-            Some(ZoomType::Additive) => self.additive,
-            Some(ZoomType::Multiplicative) => self.multiplicative,
-            None => None,
-        }
-    }
-
-    /// Check if this config has any zoom type set
-    pub fn is_configured(&self) -> bool {
-        self.active_type().is_some()
-    }
 }
 
 /// CLI arguments subset for zoom configuration
@@ -398,30 +294,6 @@ impl Config {
             idle_timeout: Duration::from_secs(self.idle_timeout_secs),
             reap_interval: Duration::from_secs(self.reap_interval_secs),
             verbose: self.verbose || self.verbosity >= Verbosity::Debug,
-        }
-    }
-}
-
-// Re-export RegistryConfig for kitty module
-#[derive(Debug, Clone)]
-pub struct RegistryConfig {
-    pub socket_timeout: Duration,
-    pub max_retries: u32,
-    pub max_connections: usize,
-    pub idle_timeout: Duration,
-    pub reap_interval: Duration,
-    pub verbose: bool,
-}
-
-impl Default for RegistryConfig {
-    fn default() -> Self {
-        Self {
-            socket_timeout: Duration::from_secs(default_socket_timeout()),
-            max_retries: default_max_retries(),
-            max_connections: default_max_connections(),
-            idle_timeout: Duration::from_secs(default_idle_timeout()),
-            reap_interval: Duration::from_secs(default_reap_interval()),
-            verbose: default_verbose(),
         }
     }
 }

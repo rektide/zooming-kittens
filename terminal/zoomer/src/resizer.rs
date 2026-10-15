@@ -1,7 +1,7 @@
 use crate::config::{ZoomConfig, ZoomType};
-use crate::kitty::KittyRegistry;
-use crate::kitty::conf_parser::get_baseline_font_size;
-use crate::niri::types::NiriEvent;
+use zk_kitty::KittyRegistry;
+use zk_kitty::conf_parser::get_baseline_font_size;
+use crate::FocusEvent;
 use dashmap::DashMap;
 use futures::{Stream, StreamExt};
 
@@ -12,13 +12,6 @@ struct WindowState {
 }
 
 impl WindowState {
-    fn new() -> Self {
-        Self {
-            current_font_size: None,
-            current_zoom_factor: 1.0,
-        }
-    }
-
     fn with_baseline() -> Self {
         Self {
             current_font_size: get_baseline_font_size(),
@@ -49,13 +42,13 @@ impl KittyResizer {
 
     pub async fn process_events(
         &mut self,
-        mut events: impl Stream<Item = NiriEvent> + std::marker::Send + std::marker::Unpin,
+        mut events: impl Stream<Item = FocusEvent> + std::marker::Send + std::marker::Unpin,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let window_states: DashMap<i32, WindowState> = DashMap::new();
 
         while let Some(event) = events.next().await {
             match event {
-                NiriEvent::Focus { window, .. } => {
+                FocusEvent::Focus { window } => {
                     if let Some(pid) = window.pid {
                         if let Some(zoom_type) = self.zoom_config.active_type() {
                             let step_size = self.zoom_config.step_size;
@@ -164,7 +157,7 @@ impl KittyResizer {
                         }
                     }
                 }
-                NiriEvent::Blur { window, .. } => {
+                FocusEvent::Blur { window } => {
                     if let Some(pid) = window.pid {
                         if let Some(zoom_type) = self.zoom_config.active_type() {
                             let step_size = self.zoom_config.step_size;
@@ -272,7 +265,6 @@ impl KittyResizer {
                         }
                     }
                 }
-                _ => {}
             }
         }
 

@@ -10,13 +10,12 @@ use commands::systemd::generate_systemd_service;
 use commands::zoomer::run_zoomer;
 use config::{CliArgs, CliZoomArgs, Config, LongcatConfig, Verbosity};
 use kitty::KittyRegistry;
-use kitty::resizer::KittyResizer;
+use zk_zoomer::KittyResizer;
 use niri::registry::NiriRegistry;
 
 mod commands;
 mod config;
-mod export;
-mod kitty;
+use zk_kitty as kitty;
 mod niri;
 
 #[derive(Subcommand, Debug)]
@@ -330,7 +329,7 @@ async fn main() -> std::io::Result<()> {
     let kitty_events =
         niri_registry.windows_matching(|window| window.app_id.as_deref() == Some(&app_id));
 
-    let _ = kitty_resizer.process_events(kitty_events).await;
+    let _ = kitty_resizer.process_events(niri::focus_events(kitty_events)).await;
 
     Ok(())
 }

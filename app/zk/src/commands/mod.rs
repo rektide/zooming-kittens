@@ -1,5 +1,5 @@
 pub mod conf_size;
-pub mod export;
+pub use zk_export::command as export;
 pub mod fonts;
 pub mod longcat;
 pub mod systemd;

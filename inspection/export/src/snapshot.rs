@@ -1,7 +1,7 @@
 // pattern: Functional Core
 
-use crate::export::filter::ExportFilter;
-use crate::export::record::{ExportOutputMode, ExportRecord};
+use crate::filter::ExportFilter;
+use crate::record::{ExportOutputMode, ExportRecord};
 use std::collections::HashMap;
 
 pub fn collect_snapshot_records(

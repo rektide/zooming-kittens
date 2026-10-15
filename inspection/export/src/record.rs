@@ -1,6 +1,6 @@
 // pattern: Functional Core
 
-use crate::export::filter::{ExportFilter, ExportRecordId, ExportRecordMatch, matches_record};
+use crate::filter::{ExportFilter, ExportRecordId, ExportRecordMatch, matches_record};
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]

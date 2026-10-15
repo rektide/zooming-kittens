@@ -1,7 +1,7 @@
 // pattern: Functional Core
 
-use crate::export::filter::ExportFilter;
-use crate::export::record::ExportRecord;
+use crate::filter::ExportFilter;
+use crate::record::ExportRecord;
 
 pub fn event_to_record(event: niri_ipc::Event, stream_event_id: u64) -> ExportRecord {
     match event {
@@ -112,7 +112,7 @@ pub fn filter_stream_record(record: ExportRecord, filters: &[ExportFilter]) -> O
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::export::filter::parse_filter_expression;
+    use crate::filter::parse_filter_expression;
 
     #[test]
     fn window_closed_event_matches_window_id_filter() {

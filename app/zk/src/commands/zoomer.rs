@@ -1,5 +1,5 @@
-use crate::config::{Config, RegistryConfig, Verbosity};
-use crate::kitty::resizer::KittyResizer;
+use crate::config::{Config, Verbosity};
+use zk_zoomer::KittyResizer;
 use crate::niri::registry::NiriRegistry;
 
 /// Run focus tracking for a specific app with configurable font adjustments
@@ -29,7 +29,7 @@ pub async fn run_zoomer(
     }
 
     let registry_config = config.to_registry_config();
-    let kitty_registry = crate::kitty::KittyRegistry::with_verbosity(registry_config, verbosity);
+    let kitty_registry = crate::kitty::KittyRegistry::new(registry_config);
     kitty_registry.start_reaper().await;
 
     let niri_registry = NiriRegistry::new_with_verbosity(verbosity).await?;
@@ -38,7 +38,7 @@ pub async fn run_zoomer(
     let kitty_events =
         niri_registry.windows_matching(|window| window.app_id.as_deref() == Some(&app_id));
 
-    zoomer.process_events(kitty_events).await?;
+    zoomer.process_events(crate::niri::focus_events(kitty_events)).await?;
 
     Ok(())
 }

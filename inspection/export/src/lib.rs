@@ -1,3 +1,4 @@
+pub mod command;
 pub mod filter;
 #[cfg(feature = "export-facet")]
 pub mod facet_json;
