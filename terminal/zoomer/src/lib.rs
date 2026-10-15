@@ -6,7 +6,7 @@ pub mod resizer;
 
 pub use config::{ZoomConfig, ZoomType};
 pub use plan::{
-    AppliedEffect, FontAdjustment, FontOp, PlanEvent, WindowState, ZoomPlan, MAX_PLAN_STEPS,
+    AppliedEffect, FontAdjustment, FontOp, MAX_PLAN_STEPS, PlanEvent, WindowState, ZoomPlan,
 };
 pub use resizer::{FontPort, KittyResizer, ZoomResizer};
 

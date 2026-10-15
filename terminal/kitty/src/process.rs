@@ -14,11 +14,11 @@ pub fn find_kitty_master_pid(shell_pid: i32) -> Option<i32> {
                 if comm_clean == "kitty" {
                     return Some(pid);
                 }
-                if let Some(ppid_str) = parts.get(3) {
-                    if let Ok(ppid) = ppid_str.parse::<i32>() {
-                        pid = ppid;
-                        continue;
-                    }
+                if let Some(ppid_str) = parts.get(3)
+                    && let Ok(ppid) = ppid_str.parse::<i32>()
+                {
+                    pid = ppid;
+                    continue;
                 }
             }
         }

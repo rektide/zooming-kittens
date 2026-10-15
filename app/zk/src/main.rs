@@ -98,7 +98,6 @@ struct Args {
         short,
         long,
         default_value = "kitty",
-        long,
         help = "Application ID to track when running in default mode"
     )]
     app_id: String,
@@ -106,21 +105,15 @@ struct Args {
     #[arg(short, long = "verbose", action = clap::ArgAction::Count, help = "Increase verbosity level (use -v, -vv, -vvv, -vvvv)")]
     verbose_count: u8,
 
-    #[arg(long, default_value = "5", long, help = "Socket timeout in seconds")]
+    #[arg(long, default_value = "5", help = "Socket timeout in seconds")]
     socket_timeout: u64,
 
-    #[arg(
-        long,
-        default_value = "3",
-        long,
-        help = "Maximum connection retry attempts"
-    )]
+    #[arg(long, default_value = "3", help = "Maximum connection retry attempts")]
     max_retries: u32,
 
     #[arg(
         long,
         default_value = "30",
-        long,
         help = "Maximum number of concurrent connections"
     )]
     max_connections: usize,
@@ -128,7 +121,6 @@ struct Args {
     #[arg(
         long,
         default_value = "1800",
-        long,
         help = "Idle connection timeout in seconds"
     )]
     idle_timeout: u64,
@@ -136,7 +128,6 @@ struct Args {
     #[arg(
         long,
         default_value = "300",
-        long,
         help = "Connection pool reaping interval in seconds"
     )]
     reap_interval: u64,
@@ -190,7 +181,7 @@ impl Args {
             absolute: self.zoom_absolute,
             additive: self.zoom_additive,
             multiplicative: self.zoom_multiplicative,
-            step_size: Some(self.zoom_step_size.into()),
+            step_size: Some(self.zoom_step_size),
         }
     }
 }
@@ -222,7 +213,7 @@ async fn main() -> std::io::Result<()> {
     if let Some(CliSubcommand::Export(export_cmd)) = args.command {
         run_export(export_cmd)
             .await
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| std::io::Error::other(e.to_string()))?;
         return Ok(());
     }
 
@@ -245,14 +236,14 @@ async fn main() -> std::io::Result<()> {
         let verbosity = Verbosity::from_count(args.verbose_count + verbose_count);
         run_zoomer(zoomer_app_id, verbosity, config)
             .await
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| std::io::Error::other(e.to_string()))?;
         return Ok(());
     }
 
     if let Some(CliSubcommand::Font(font_cmd)) = args.command {
         handle_font_command(font_cmd)
             .await
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| std::io::Error::other(e.to_string()))?;
         return Ok(());
     }
 

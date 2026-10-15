@@ -111,12 +111,7 @@ impl<E: FontPort> ZoomResizer<E> {
                         };
                         eprintln!(
                             "Kitty window {} (PID {}) {} focus, font {} -> {} in {} command(s)",
-                            window.id,
-                            pid,
-                            verb,
-                            from,
-                            target,
-                            applied
+                            window.id, pid, verb, from, target, applied
                         );
                     } else if applied > 0 {
                         // Partially applied: commit only the acknowledged
@@ -125,7 +120,11 @@ impl<E: FontPort> ZoomResizer<E> {
                             Some(effect) => {
                                 eprintln!(
                                     "Kitty window {} (PID {}): transition interrupted after {} of {} command(s), font tracked at {}",
-                                    window.id, pid, applied, commands.len(), effect.font
+                                    window.id,
+                                    pid,
+                                    applied,
+                                    commands.len(),
+                                    effect.font
                                 );
                                 window_state.font = Some(effect.font);
                                 window_state.factor = effect.factor;
@@ -133,7 +132,10 @@ impl<E: FontPort> ZoomResizer<E> {
                             None => {
                                 eprintln!(
                                     "Kitty window {} (PID {}): transition interrupted after {} of {} command(s); keeping previous tracked size",
-                                    window.id, pid, applied, commands.len()
+                                    window.id,
+                                    pid,
+                                    applied,
+                                    commands.len()
                                 );
                             }
                         }

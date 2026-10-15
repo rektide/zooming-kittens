@@ -3,7 +3,7 @@
 use crate::filter::{ExportFilter, parse_filter_expression};
 use crate::record::ExportOutputMode;
 use crate::serde_json::{ExportFormat, write_records};
-use crate::snapshot::collect_snapshot_records;
+use crate::snapshot::{Snapshot, collect_snapshot_records};
 use crate::stream::{event_to_record, filter_stream_record};
 use clap::Args;
 use niri_ipc::{Request, Response};
@@ -152,14 +152,16 @@ fn read_snapshot_records(
     };
 
     Ok(collect_snapshot_records(
-        version,
-        windows,
-        workspaces,
-        outputs,
-        layers,
-        casts,
-        keyboard_layouts,
-        overview,
+        Snapshot {
+            version,
+            windows,
+            workspaces,
+            outputs,
+            layers,
+            casts,
+            keyboard_layouts,
+            overview,
+        },
         filters,
         output_mode,
     ))

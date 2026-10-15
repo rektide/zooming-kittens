@@ -79,18 +79,19 @@ fn find_kitty_instances() -> Vec<(i32, PathBuf)> {
 
     if let Ok(entries) = std::fs::read_dir(&runtime_dir) {
         for entry in entries.flatten() {
-            if let Ok(name) = entry.file_name().into_string() {
-                if name.starts_with("kitty-") && name.ends_with(".sock") {
-                    let pid_str = name
-                        .strip_prefix("kitty-")
-                        .and_then(|s| s.strip_suffix(".sock"));
-                    if let Some(pid_str) = pid_str {
-                        if let Ok(pid) = pid_str.parse::<i32>() {
-                            let socket_path = entry.path();
-                            if std::path::Path::new(&format!("/proc/{}", pid)).exists() {
-                                instances.push((pid, socket_path));
-                            }
-                        }
+            if let Ok(name) = entry.file_name().into_string()
+                && name.starts_with("kitty-")
+                && name.ends_with(".sock")
+            {
+                let pid_str = name
+                    .strip_prefix("kitty-")
+                    .and_then(|s| s.strip_suffix(".sock"));
+                if let Some(pid_str) = pid_str
+                    && let Ok(pid) = pid_str.parse::<i32>()
+                {
+                    let socket_path = entry.path();
+                    if std::path::Path::new(&format!("/proc/{}", pid)).exists() {
+                        instances.push((pid, socket_path));
                     }
                 }
             }
@@ -270,7 +271,7 @@ pub async fn handle_font_command(cmd: FontCommand) -> Result<(), Box<dyn std::er
                     };
 
                     let cmd = SetFontSizeCommand::builder()
-                        .size(size as f64)
+                        .size(size)
                         .build()
                         .to_message()?;
                     let result = kitty.execute(&cmd).await?;
@@ -310,7 +311,7 @@ pub async fn handle_font_command(cmd: FontCommand) -> Result<(), Box<dyn std::er
                 };
 
                 let cmd = SetFontSizeCommand::builder()
-                    .size(size as f64)
+                    .size(size)
                     .build()
                     .to_message()?;
                 let result = kitty.execute(&cmd).await?;

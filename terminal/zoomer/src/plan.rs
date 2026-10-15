@@ -66,10 +66,11 @@ impl FontOp {
 
 impl FontAdjustment {
     pub fn new(op: FontOp, amount: f64) -> Option<Self> {
-        amount.is_finite().then_some(amount).filter(|a| *a > 0.0).map(|amount| Self {
-            op,
-            amount,
-        })
+        amount
+            .is_finite()
+            .then_some(amount)
+            .filter(|a| *a > 0.0)
+            .map(|amount| Self { op, amount })
     }
 }
 
@@ -225,7 +226,12 @@ fn plan_absolute(
         PlanEvent::Blur => baseline,
     };
 
-    additive_transition(effective_font(state, baseline), target, config.step_size, None)
+    additive_transition(
+        effective_font(state, baseline),
+        target,
+        config.step_size,
+        None,
+    )
 }
 
 fn plan_additive(
@@ -260,9 +266,7 @@ fn plan_multiplicative(
     };
     let current_factor = state.factor;
     if !current_factor.is_finite() || current_factor <= 0.0 {
-        return ZoomPlan::Invalid(format!(
-            "tracked zoom factor {current_factor} is unusable"
-        ));
+        return ZoomPlan::Invalid(format!("tracked zoom factor {current_factor} is unusable"));
     }
     if (target_factor - current_factor).abs() <= FACTOR_EPSILON {
         return ZoomPlan::Noop;
@@ -271,7 +275,12 @@ fn plan_multiplicative(
     let from_font = effective_font(state, baseline);
     let commands = factor_commands(current_factor, target_factor, config.step_size);
     // The inherited policy records the font target as baseline * factor.
-    finish_transition(from_font, commands, baseline * target_factor, Some(target_factor))
+    finish_transition(
+        from_font,
+        commands,
+        baseline * target_factor,
+        Some(target_factor),
+    )
 }
 
 /// Split `target - current` into stepped additive commands with an exact sum.
@@ -289,7 +298,11 @@ fn additive_transition(
         return ZoomPlan::Noop;
     }
 
-    let op = if delta > 0.0 { FontOp::Add } else { FontOp::Sub };
+    let op = if delta > 0.0 {
+        FontOp::Add
+    } else {
+        FontOp::Sub
+    };
     let commands = linear_commands(delta.abs(), step, op);
     finish_transition(current, commands, target, target_factor)
 }
@@ -304,7 +317,10 @@ fn finish_transition(
     if commands.is_empty() {
         return ZoomPlan::Noop;
     }
-    if commands.iter().any(|c| !c.amount.is_finite() || c.amount <= 0.0) {
+    if commands
+        .iter()
+        .any(|c| !c.amount.is_finite() || c.amount <= 0.0)
+    {
         return ZoomPlan::Invalid("planned a nonfinite or non-positive command".into());
     }
     if !target.is_finite() {
@@ -325,7 +341,10 @@ fn linear_commands(total: f64, step: f64, op: FontOp) -> Vec<FontAdjustment> {
         let mut commands = vec![FontAdjustment { op, amount: step }; full as usize];
         let remainder = total - full * step;
         if remainder > 0.0 {
-            commands.push(FontAdjustment { op, amount: remainder });
+            commands.push(FontAdjustment {
+                op,
+                amount: remainder,
+            });
         }
         return commands;
     }
@@ -344,26 +363,39 @@ fn factor_commands(from: f64, to: f64, step: f64) -> Vec<FontAdjustment> {
     // previously looped forever on `*1.0`).
     if !(step.is_finite() && step > 1.0) {
         let amount = if growing { to / from } else { from / to };
-        return vec![FontAdjustment { op: step_op, amount }];
+        return vec![FontAdjustment {
+            op: step_op,
+            amount,
+        }];
     }
 
     let mut commands = Vec::new();
     let mut current = from;
     // Bound the geometric walk; the remainder command stays exact.
     for _ in 0..MAX_PLAN_STEPS {
-        let next = if growing { current * step } else { current / step };
+        let next = if growing {
+            current * step
+        } else {
+            current / step
+        };
         let overshoots = if growing { next > to } else { next < to };
         if overshoots {
             break;
         }
-        commands.push(FontAdjustment { op: step_op, amount: step });
+        commands.push(FontAdjustment {
+            op: step_op,
+            amount: step,
+        });
         current = next;
         if (current - to).abs() <= f64::EPSILON {
             return commands;
         }
     }
     let remainder = if growing { to / current } else { current / to };
-    commands.push(FontAdjustment { op: step_op, amount: remainder });
+    commands.push(FontAdjustment {
+        op: step_op,
+        amount: remainder,
+    });
     commands
 }
 
@@ -412,13 +444,11 @@ mod tests {
     }
 
     fn command_factor(commands: &[FontAdjustment]) -> f64 {
-        commands
-            .iter()
-            .fold(1.0, |acc, c| match c.op {
-                FontOp::Add | FontOp::Sub => acc,
-                FontOp::Mul => acc * c.amount,
-                FontOp::Div => acc / c.amount,
-            })
+        commands.iter().fold(1.0, |acc, c| match c.op {
+            FontOp::Add | FontOp::Sub => acc,
+            FontOp::Mul => acc * c.amount,
+            FontOp::Div => acc / c.amount,
+        })
     }
 
     fn transition(plan: ZoomPlan) -> (Vec<FontAdjustment>, f64) {
@@ -433,12 +463,7 @@ mod tests {
     #[test]
     fn additive_focus_steps_by_one_with_default_step() {
         let config = config_with(6.0);
-        let plan = plan_transition(
-            &config,
-            PlanEvent::Focus,
-            &state(12.0),
-            Some(12.0),
-        );
+        let plan = plan_transition(&config, PlanEvent::Focus, &state(12.0), Some(12.0));
 
         let (commands, target) = transition(plan);
         assert_eq!(commands, vec![adjust(FontOp::Add, 1.0); 6]);
@@ -470,7 +495,11 @@ mod tests {
         let (commands, target) = transition(plan);
         assert_eq!(
             commands,
-            vec![adjust(FontOp::Add, 2.0), adjust(FontOp::Add, 2.0), adjust(FontOp::Add, 1.0)]
+            vec![
+                adjust(FontOp::Add, 2.0),
+                adjust(FontOp::Add, 2.0),
+                adjust(FontOp::Add, 1.0)
+            ]
         );
         assert_eq!(target, 17.0);
     }
@@ -602,7 +631,12 @@ mod tests {
 
     #[test]
     fn unconfigured_zoom_is_noop() {
-        let plan = plan_transition(&ZoomConfig::default(), PlanEvent::Focus, &state(12.0), Some(12.0));
+        let plan = plan_transition(
+            &ZoomConfig::default(),
+            PlanEvent::Focus,
+            &state(12.0),
+            Some(12.0),
+        );
         assert_eq!(plan, ZoomPlan::Noop);
     }
 
@@ -649,12 +683,8 @@ mod tests {
             font: Some(f64::NAN),
             factor: 1.0,
         };
-        let (commands, target) = transition(plan_transition(
-            &config,
-            PlanEvent::Focus,
-            &bad,
-            Some(12.0),
-        ));
+        let (commands, target) =
+            transition(plan_transition(&config, PlanEvent::Focus, &bad, Some(12.0)));
         assert!((command_sum(&commands) - 6.0).abs() < 1e-12);
         assert_eq!(target, 18.0);
     }

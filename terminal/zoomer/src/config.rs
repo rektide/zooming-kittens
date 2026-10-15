@@ -65,8 +65,12 @@ impl ZoomConfig {
                 "absolute zoom target must be a finite positive font size, got {absolute}"
             ));
         }
-        if let Some(additive) = self.additive && !additive.is_finite() {
-            return Err(format!("additive zoom amount must be finite, got {additive}"));
+        if let Some(additive) = self.additive
+            && !additive.is_finite()
+        {
+            return Err(format!(
+                "additive zoom amount must be finite, got {additive}"
+            ));
         }
         if let Some(multiplicative) = self.multiplicative
             && (!multiplicative.is_finite() || multiplicative <= 0.0)

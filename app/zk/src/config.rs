@@ -32,16 +32,8 @@ impl Verbosity {
         }
     }
 
-    pub fn log_all_events(&self) -> bool {
-        *self >= Self::Trace
-    }
-
     pub fn log_window_events(&self) -> bool {
         *self >= Self::Debug
-    }
-
-    pub fn log_structured(&self) -> bool {
-        *self > Self::Quiet
     }
 }
 
@@ -214,12 +206,11 @@ impl Config {
         let mut figment = Figment::new();
 
         // Add config file if it exists
-        if let Some(config_path) = Self::config_path() {
-            if config_path.exists() {
-                if let Some(path_str) = config_path.to_str() {
-                    figment = figment.merge(Toml::file(path_str));
-                }
-            }
+        if let Some(config_path) = Self::config_path()
+            && config_path.exists()
+            && let Some(path_str) = config_path.to_str()
+        {
+            figment = figment.merge(Toml::file(path_str));
         }
 
         // Add environment variables with ZK_ prefix
@@ -266,8 +257,8 @@ impl Config {
                 config.zoom.absolute = None;
                 config.zoom.additive = None;
             }
-            if zoom.step_size.is_some() {
-                config.zoom.step_size = zoom.step_size.unwrap();
+            if let Some(step_size) = zoom.step_size {
+                config.zoom.step_size = step_size;
             }
 
             // Validate after CLI overrides
@@ -304,8 +295,10 @@ mod tests {
 
     #[test]
     fn test_zoom_config_validate_single_type() {
-        let mut config = ZoomConfig::default();
-        config.additive = Some(6.0);
+        let config = ZoomConfig {
+            additive: Some(6.0),
+            ..ZoomConfig::default()
+        };
         assert!(config.validate().is_ok());
         assert_eq!(config.active_type(), Some(ZoomType::Additive));
         assert_eq!(config.value(), Some(6.0));
@@ -313,16 +306,20 @@ mod tests {
 
     #[test]
     fn test_zoom_config_validate_multiple_types_error() {
-        let mut config = ZoomConfig::default();
-        config.additive = Some(6.0);
-        config.multiplicative = Some(1.5);
+        let config = ZoomConfig {
+            additive: Some(6.0),
+            multiplicative: Some(1.5),
+            ..ZoomConfig::default()
+        };
         assert!(config.validate().is_err());
     }
 
     #[test]
     fn test_zoom_config_validate_absolute() {
-        let mut config = ZoomConfig::default();
-        config.absolute = Some(18.0);
+        let config = ZoomConfig {
+            absolute: Some(18.0),
+            ..ZoomConfig::default()
+        };
         assert!(config.validate().is_ok());
         assert_eq!(config.active_type(), Some(ZoomType::Absolute));
         assert_eq!(config.value(), Some(18.0));
@@ -330,8 +327,10 @@ mod tests {
 
     #[test]
     fn test_zoom_config_validate_multiplicative() {
-        let mut config = ZoomConfig::default();
-        config.multiplicative = Some(1.5);
+        let config = ZoomConfig {
+            multiplicative: Some(1.5),
+            ..ZoomConfig::default()
+        };
         assert!(config.validate().is_ok());
         assert_eq!(config.active_type(), Some(ZoomType::Multiplicative));
         assert_eq!(config.value(), Some(1.5));

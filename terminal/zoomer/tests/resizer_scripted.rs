@@ -10,7 +10,9 @@ use futures::executor::block_on;
 use futures::stream::iter;
 use zk_kitty::ZoomingResult;
 use zk_kitty::conf_parser::set_baseline_font_size;
-use zk_zoomer::{FocusEvent, FocusTarget, FontAdjustment, FontOp, FontPort, ZoomConfig, ZoomResizer};
+use zk_zoomer::{
+    FocusEvent, FocusTarget, FontAdjustment, FontOp, FontPort, ZoomConfig, ZoomResizer,
+};
 
 /// Records every command and replies with scripted results; when the script
 /// runs dry it answers `NotConfigured`.
@@ -104,12 +106,16 @@ fn additive_focus_and_blur_apply_exact_symmetric_totals() {
 
     let calls = port.calls();
     assert_eq!(calls.len(), 12, "focus +6 and blur -6 with unit steps");
-    assert!(calls[..6]
-        .iter()
-        .all(|(pid, adj)| *pid == 7 && adj.op == FontOp::Add && adj.amount == 1.0));
-    assert!(calls[6..]
-        .iter()
-        .all(|(pid, adj)| *pid == 7 && adj.op == FontOp::Sub && adj.amount == 1.0));
+    assert!(
+        calls[..6]
+            .iter()
+            .all(|(pid, adj)| *pid == 7 && adj.op == FontOp::Add && adj.amount == 1.0)
+    );
+    assert!(
+        calls[6..]
+            .iter()
+            .all(|(pid, adj)| *pid == 7 && adj.op == FontOp::Sub && adj.amount == 1.0)
+    );
 }
 
 #[test]
@@ -149,12 +155,16 @@ fn failed_command_stops_the_plan_and_advances_state_by_the_applied_portion() {
         6,
         "3rd focus command refused (still recorded), blur replans from 16"
     );
-    assert!(calls[..3]
-        .iter()
-        .all(|(_, adj)| adj.op == FontOp::Add && adj.amount == 2.0));
-    assert!(calls[3..]
-        .iter()
-        .all(|(_, adj)| adj.op == FontOp::Sub && adj.amount == 2.0));
+    assert!(
+        calls[..3]
+            .iter()
+            .all(|(_, adj)| adj.op == FontOp::Add && adj.amount == 2.0)
+    );
+    assert!(
+        calls[3..]
+            .iter()
+            .all(|(_, adj)| adj.op == FontOp::Sub && adj.amount == 2.0)
+    );
 }
 
 #[test]
@@ -187,10 +197,16 @@ fn not_configured_first_command_leaves_state_untouched() {
     .unwrap();
 
     let calls = port.calls();
-    assert_eq!(calls.len(), 7, "first focus sends one command, retry sends six");
-    assert!(calls[1..]
-        .iter()
-        .all(|(_, adj)| adj.op == FontOp::Add && adj.amount == 1.0));
+    assert_eq!(
+        calls.len(),
+        7,
+        "first focus sends one command, retry sends six"
+    );
+    assert!(
+        calls[1..]
+            .iter()
+            .all(|(_, adj)| adj.op == FontOp::Add && adj.amount == 1.0)
+    );
 }
 
 #[test]
@@ -215,8 +231,26 @@ fn multiplicative_default_step_terminates_in_single_commands() {
 
     let calls = port.calls();
     assert_eq!(calls.len(), 2);
-    assert_eq!(calls[0], (4, FontAdjustment { op: FontOp::Mul, amount: 1.5 }));
-    assert_eq!(calls[1], (4, FontAdjustment { op: FontOp::Div, amount: 1.5 }));
+    assert_eq!(
+        calls[0],
+        (
+            4,
+            FontAdjustment {
+                op: FontOp::Mul,
+                amount: 1.5
+            }
+        )
+    );
+    assert_eq!(
+        calls[1],
+        (
+            4,
+            FontAdjustment {
+                op: FontOp::Div,
+                amount: 1.5
+            }
+        )
+    );
 }
 
 #[test]

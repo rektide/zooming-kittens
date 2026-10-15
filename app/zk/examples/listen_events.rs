@@ -9,10 +9,7 @@ fn main() -> std::io::Result<()> {
 
     if !matches!(reply, Ok(Response::Handled)) {
         eprintln!("Failed to get event stream: {:?}", reply);
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "Failed to get event stream",
-        ));
+        return Err(std::io::Error::other("Failed to get event stream"));
     }
 
     println!("Listening for events...");

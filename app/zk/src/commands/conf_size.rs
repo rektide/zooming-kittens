@@ -8,7 +8,7 @@ pub struct ConfSizeCommand {
 }
 
 pub fn handle_conf_size_command(cmd: ConfSizeCommand) -> std::io::Result<()> {
-    let config_path = cmd.config_path.map(|p| std::path::PathBuf::from(p));
+    let config_path = cmd.config_path.map(std::path::PathBuf::from);
 
     match conf_parser::parse_font_size(config_path) {
         Ok(size) => {

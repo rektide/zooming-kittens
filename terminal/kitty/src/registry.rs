@@ -201,10 +201,9 @@ impl KittyRegistry {
         amount: f64,
     ) -> Result<ZoomingResult, Box<dyn std::error::Error>> {
         if !matches!(op, "+" | "-" | "*" | "/") {
-            return Err(format!(
-                "invalid font increment op {op:?}: expected one of +, -, *, /"
-            )
-            .into());
+            return Err(
+                format!("invalid font increment op {op:?}: expected one of +, -, *, /").into(),
+            );
         }
         if !amount.is_finite() || amount <= 0.0 {
             return Err(format!(
