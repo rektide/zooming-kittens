@@ -19,7 +19,11 @@ pub fn collect_snapshot_records(
     let mut records = Vec::new();
 
     records.push(ExportRecord::Version { version });
-    records.extend(windows.into_iter().map(|window| ExportRecord::Window { data: window }));
+    records.extend(
+        windows
+            .into_iter()
+            .map(|window| ExportRecord::Window { data: window }),
+    );
     records.extend(
         workspaces
             .into_iter()
@@ -31,8 +35,16 @@ pub fn collect_snapshot_records(
     records.extend(outputs.into_iter().map(|output| ExportRecord::Output {
         data: output_mode.project(output),
     }));
-    records.extend(layers.into_iter().map(|layer| ExportRecord::Layer { data: layer }));
-    records.extend(casts.into_iter().map(|cast| ExportRecord::Cast { data: cast }));
+    records.extend(
+        layers
+            .into_iter()
+            .map(|layer| ExportRecord::Layer { data: layer }),
+    );
+    records.extend(
+        casts
+            .into_iter()
+            .map(|cast| ExportRecord::Cast { data: cast }),
+    );
     records.push(ExportRecord::KeyboardLayouts {
         data: keyboard_layouts,
     });

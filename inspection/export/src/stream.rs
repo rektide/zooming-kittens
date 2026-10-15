@@ -33,12 +33,10 @@ pub fn event_to_record(event: niri_ipc::Event, stream_event_id: u64) -> ExportRe
             stream_event_id,
             windows,
         },
-        niri_ipc::Event::WindowOpenedOrChanged { window } => {
-            ExportRecord::WindowOpenedOrChanged {
-                stream_event_id,
-                window,
-            }
-        }
+        niri_ipc::Event::WindowOpenedOrChanged { window } => ExportRecord::WindowOpenedOrChanged {
+            stream_event_id,
+            window,
+        },
         niri_ipc::Event::WindowClosed { id } => ExportRecord::WindowClosed {
             stream_event_id,
             id,
@@ -105,7 +103,10 @@ pub fn event_to_record(event: niri_ipc::Event, stream_event_id: u64) -> ExportRe
     }
 }
 
-pub fn filter_stream_record(record: ExportRecord, filters: &[ExportFilter]) -> Option<ExportRecord> {
+pub fn filter_stream_record(
+    record: ExportRecord,
+    filters: &[ExportFilter],
+) -> Option<ExportRecord> {
     record.matches_filters(filters).then_some(record)
 }
 

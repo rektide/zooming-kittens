@@ -163,29 +163,32 @@ fn parse_id_filter(
             kind,
             value: value.to_owned(),
         }),
-        ExportRecordKind::Window => value
-            .parse::<u64>()
-            .map(ExportRecordId::Window)
-            .map_err(|_| FilterParseError::InvalidId {
-                kind,
-                value: value.to_owned(),
-            }),
-        ExportRecordKind::Workspace => value
-            .parse::<u64>()
-            .map(ExportRecordId::Workspace)
-            .map_err(|_| FilterParseError::InvalidId {
-                kind,
-                value: value.to_owned(),
-            }),
+        ExportRecordKind::Window => {
+            value
+                .parse::<u64>()
+                .map(ExportRecordId::Window)
+                .map_err(|_| FilterParseError::InvalidId {
+                    kind,
+                    value: value.to_owned(),
+                })
+        }
+        ExportRecordKind::Workspace => {
+            value
+                .parse::<u64>()
+                .map(ExportRecordId::Workspace)
+                .map_err(|_| FilterParseError::InvalidId {
+                    kind,
+                    value: value.to_owned(),
+                })
+        }
         ExportRecordKind::Output => Ok(ExportRecordId::Output(value.to_owned())),
         ExportRecordKind::Layer => Ok(ExportRecordId::Layer(value.to_owned())),
-        ExportRecordKind::Cast => value
-            .parse::<u64>()
-            .map(ExportRecordId::Cast)
-            .map_err(|_| FilterParseError::InvalidId {
+        ExportRecordKind::Cast => value.parse::<u64>().map(ExportRecordId::Cast).map_err(|_| {
+            FilterParseError::InvalidId {
                 kind,
                 value: value.to_owned(),
-            }),
+            }
+        }),
     }
 }
 
@@ -204,8 +207,9 @@ mod tests {
 
     #[test]
     fn parses_valueless_filters_as_wildcards() {
-        let filters = parse_filter_expression("version,window,output,layer,keyboard_layouts,overview")
-            .expect("filters parse");
+        let filters =
+            parse_filter_expression("version,window,output,layer,keyboard_layouts,overview")
+                .expect("filters parse");
 
         assert_eq!(
             filters,
@@ -238,7 +242,8 @@ mod tests {
 
     #[test]
     fn parses_type_filter() {
-        let filters = parse_filter_expression("type=window_layouts_changed").expect("filters parse");
+        let filters =
+            parse_filter_expression("type=window_layouts_changed").expect("filters parse");
 
         assert_eq!(
             filters,
@@ -250,7 +255,10 @@ mod tests {
     fn rejects_unknown_filter_kind() {
         let error = parse_filter_expression("monitor").expect_err("unknown kind fails");
 
-        assert_eq!(error, FilterParseError::UnknownKind(String::from("monitor")));
+        assert_eq!(
+            error,
+            FilterParseError::UnknownKind(String::from("monitor"))
+        );
     }
 
     #[test]

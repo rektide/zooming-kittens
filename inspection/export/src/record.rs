@@ -6,7 +6,9 @@ use serde::Serialize;
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ExportRecord {
-    Version { version: String },
+    Version {
+        version: String,
+    },
     Window {
         #[serde(flatten)]
         data: niri_ipc::Window,
@@ -192,8 +194,9 @@ impl ExportRecord {
                 .iter()
                 .map(|workspace| ExportRecordId::Workspace(workspace.id))
                 .collect(),
-            Self::WorkspaceUrgencyChanged { id, .. }
-            | Self::WorkspaceActivated { id, .. } => vec![ExportRecordId::Workspace(*id)],
+            Self::WorkspaceUrgencyChanged { id, .. } | Self::WorkspaceActivated { id, .. } => {
+                vec![ExportRecordId::Workspace(*id)]
+            }
             Self::WorkspaceActiveWindowChanged {
                 workspace_id,
                 active_window_id,
@@ -224,8 +227,7 @@ impl ExportRecord {
                 vec![ExportRecordId::KeyboardLayouts]
             }
             Self::OverviewOpenedOrClosed { .. } => vec![ExportRecordId::Overview],
-            Self::ConfigLoaded { .. }
-            | Self::ScreenshotCaptured { .. } => Vec::new(),
+            Self::ConfigLoaded { .. } | Self::ScreenshotCaptured { .. } => Vec::new(),
             Self::CastsChanged { casts, .. } => casts
                 .iter()
                 .map(|cast| ExportRecordId::Cast(cast.stream_id))
@@ -239,7 +241,7 @@ impl ExportRecord {
         let ids = self.record_ids();
         matches_record(
             ExportRecordMatch {
-            record_type: self.record_type(),
+                record_type: self.record_type(),
                 ids: &ids,
             },
             filters,

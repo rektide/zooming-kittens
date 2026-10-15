@@ -1,17 +1,17 @@
 use clap::{Parser, Subcommand};
 use commands::ConfSizeCommand;
-use commands::conf_size::handle_conf_size_command;
 use commands::ExportCommand;
-use commands::export::run_export;
 use commands::FontCommand;
+use commands::conf_size::handle_conf_size_command;
+use commands::export::run_export;
 use commands::fonts::handle_font_command;
 use commands::longcat::run_longcat;
 use commands::systemd::generate_systemd_service;
 use commands::zoomer::run_zoomer;
 use config::{CliArgs, CliZoomArgs, Config, LongcatConfig, Verbosity};
 use kitty::KittyRegistry;
-use zk_zoomer::KittyResizer;
 use niri::registry::NiriRegistry;
+use zk_zoomer::KittyResizer;
 
 mod commands;
 mod config;
@@ -62,13 +62,25 @@ enum CliSubcommand {
         #[arg(long, value_name = "SIZE", help = "Absolute font size to set on focus")]
         zoom_absolute: Option<f64>,
 
-        #[arg(long, value_name = "AMOUNT", help = "Additive zoom amount (e.g., 6 for +6 on focus, -6 on blur)")]
+        #[arg(
+            long,
+            value_name = "AMOUNT",
+            help = "Additive zoom amount (e.g., 6 for +6 on focus, -6 on blur)"
+        )]
         zoom_additive: Option<f64>,
 
-        #[arg(long, value_name = "FACTOR", help = "Multiplicative zoom factor (e.g., 1.5 for *1.5 on focus, /1.5 on blur)")]
+        #[arg(
+            long,
+            value_name = "FACTOR",
+            help = "Multiplicative zoom factor (e.g., 1.5 for *1.5 on focus, /1.5 on blur)"
+        )]
         zoom_multiplicative: Option<f64>,
 
-        #[arg(long, value_name = "N", help = "Step size for zoom operations (default: 1)")]
+        #[arg(
+            long,
+            value_name = "N",
+            help = "Step size for zoom operations (default: 1)"
+        )]
         zoom_step_size: Option<f64>,
     },
     #[command(subcommand)]
@@ -177,20 +189,33 @@ struct Args {
     #[arg(long, value_name = "SIZE", help = "Absolute font size to set on focus")]
     zoom_absolute: Option<f64>,
 
-    #[arg(long, value_name = "AMOUNT", help = "Additive zoom amount (e.g., 6 for +6 on focus, -6 on blur)")]
+    #[arg(
+        long,
+        value_name = "AMOUNT",
+        help = "Additive zoom amount (e.g., 6 for +6 on focus, -6 on blur)"
+    )]
     zoom_additive: Option<f64>,
 
-    #[arg(long, value_name = "FACTOR", help = "Multiplicative zoom factor (e.g., 1.5 for *1.5 on focus, /1.5 on blur)")]
+    #[arg(
+        long,
+        value_name = "FACTOR",
+        help = "Multiplicative zoom factor (e.g., 1.5 for *1.5 on focus, /1.5 on blur)"
+    )]
     zoom_multiplicative: Option<f64>,
 
-    #[arg(long, value_name = "N", default_value = "1", help = "Step size for zoom operations (default: 1)")]
+    #[arg(
+        long,
+        value_name = "N",
+        default_value = "1",
+        help = "Step size for zoom operations (default: 1)"
+    )]
     zoom_step_size: f64,
 
     #[command(subcommand)]
     command: Option<CliSubcommand>,
 }
 
- impl Args {
+impl Args {
     /// Convert to CliArgs for config loading
     fn to_cli_args(&self) -> CliArgs {
         CliArgs {
@@ -329,7 +354,9 @@ async fn main() -> std::io::Result<()> {
     let kitty_events =
         niri_registry.windows_matching(|window| window.app_id.as_deref() == Some(&app_id));
 
-    let _ = kitty_resizer.process_events(niri::focus_events(kitty_events)).await;
+    let _ = kitty_resizer
+        .process_events(niri::focus_events(kitty_events))
+        .await;
 
     Ok(())
 }

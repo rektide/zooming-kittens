@@ -70,7 +70,11 @@ pub async fn run_export(command: ExportCommand) -> Result<(), Box<dyn std::error
             records.extend(read_snapshot_records(&filters, output_mode)?);
         }
         if export_stream {
-            records.extend(read_stream_records(&filters, command.starting_id, command.limit)?);
+            records.extend(read_stream_records(
+                &filters,
+                command.starting_id,
+                command.limit,
+            )?);
         }
         let stdout = std::io::stdout();
         let handle = stdout.lock();
@@ -232,4 +236,65 @@ where
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    #[derive(Parser)]
+    struct Cli {
+        #[command(flatten)]
+        command: ExportCommand,
+    }
+
+    #[test]
+    fn default_command_preserves_combined_snapshot_stream_defaults() {
+        let command = Cli::try_parse_from(["export"]).unwrap().command;
+        assert!(!command.snapshot);
+        assert!(!command.stream);
+        assert_eq!(command.starting_id, 1);
+        assert_eq!(command.limit, None);
+        assert_eq!(command.filter, None);
+        assert_eq!(resolve_format(command.format, true), ExportFormat::Jsonl);
+    }
+
+    #[test]
+    fn snapshot_defaults_to_json() {
+        let command = Cli::try_parse_from(["export", "--snapshot"])
+            .unwrap()
+            .command;
+        assert!(command.snapshot);
+        assert!(!command.stream);
+        assert_eq!(
+            resolve_format(command.format, command.stream),
+            ExportFormat::Json
+        );
+    }
+
+    #[test]
+    fn explicit_stream_options_preserve_native_ids_and_filters() {
+        let command = Cli::try_parse_from([
+            "export",
+            "--stream",
+            "--format",
+            "json",
+            "--starting-id",
+            "42",
+            "--limit",
+            "3",
+            "--filter",
+            "window=2,output",
+            "--current-mode",
+        ])
+        .unwrap()
+        .command;
+        assert!(command.stream);
+        assert!(command.current_mode);
+        assert_eq!(command.starting_id, 42);
+        assert_eq!(command.limit, Some(3));
+        assert_eq!(resolve_format(command.format, true), ExportFormat::Json);
+        assert_eq!(parse_filters(command.filter.as_deref()).unwrap().len(), 2);
+    }
 }

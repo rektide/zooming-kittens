@@ -1,6 +1,6 @@
 use crate::config::{Config, Verbosity};
-use zk_zoomer::KittyResizer;
 use crate::niri::registry::NiriRegistry;
+use zk_zoomer::KittyResizer;
 
 /// Run focus tracking for a specific app with configurable font adjustments
 pub async fn run_zoomer(
@@ -13,13 +13,22 @@ pub async fn run_zoomer(
         if let Some(zoom_type) = config.zoom.active_type() {
             match zoom_type {
                 crate::config::ZoomType::Absolute => {
-                    eprintln!("Zoom type: Absolute (target: {})", config.zoom.value().unwrap());
+                    eprintln!(
+                        "Zoom type: Absolute (target: {})",
+                        config.zoom.value().unwrap()
+                    );
                 }
                 crate::config::ZoomType::Additive => {
-                    eprintln!("Zoom type: Additive (amount: {})", config.zoom.value().unwrap());
+                    eprintln!(
+                        "Zoom type: Additive (amount: {})",
+                        config.zoom.value().unwrap()
+                    );
                 }
                 crate::config::ZoomType::Multiplicative => {
-                    eprintln!("Zoom type: Multiplicative (factor: {})", config.zoom.value().unwrap());
+                    eprintln!(
+                        "Zoom type: Multiplicative (factor: {})",
+                        config.zoom.value().unwrap()
+                    );
                 }
             }
             eprintln!("Step size: {}", config.zoom.step_size);
@@ -38,7 +47,9 @@ pub async fn run_zoomer(
     let kitty_events =
         niri_registry.windows_matching(|window| window.app_id.as_deref() == Some(&app_id));
 
-    zoomer.process_events(crate::niri::focus_events(kitty_events)).await?;
+    zoomer
+        .process_events(crate::niri::focus_events(kitty_events))
+        .await?;
 
     Ok(())
 }

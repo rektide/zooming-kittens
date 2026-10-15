@@ -2,8 +2,8 @@ use crate::config::Verbosity;
 use niri_ipc::socket::Socket;
 use niri_ipc::{Event, Request, Response};
 use std::sync::Arc;
-use tokio::sync::mpsc;
 use tokio::sync::RwLock;
+use tokio::sync::mpsc;
 use tokio_stream::{Stream, StreamExt, wrappers::UnboundedReceiverStream};
 
 use crate::niri::types::{NiriEvent, WindowInfo};
@@ -117,7 +117,9 @@ impl NiriRegistry {
                             eprintln!("WindowFocusTimestampChanged: id={}", id);
                         }
 
-                        if let Some(window_info) = Self::get_window_info(&query_socket_pool, id).await {
+                        if let Some(window_info) =
+                            Self::get_window_info(&query_socket_pool, id).await
+                        {
                             if verbosity.log_window_events() {
                                 eprintln!(
                                     "Focus event: window_id={}, app_id={:?}, pid={:?}",
@@ -127,11 +129,15 @@ impl NiriRegistry {
 
                             if let Some(prev_id) = last_focused_window_id {
                                 if prev_id != id {
-                                    if let Some(prev_window_info) = Self::get_window_info(&query_socket_pool, prev_id).await {
+                                    if let Some(prev_window_info) =
+                                        Self::get_window_info(&query_socket_pool, prev_id).await
+                                    {
                                         if verbosity.log_window_events() {
                                             eprintln!(
                                                 "Blur event: window_id={}, app_id={:?}, pid={:?}",
-                                                prev_id, prev_window_info.app_id, prev_window_info.pid
+                                                prev_id,
+                                                prev_window_info.app_id,
+                                                prev_window_info.pid
                                             );
                                         }
                                         let niri_event = NiriEvent::Blur {
@@ -166,7 +172,9 @@ impl NiriRegistry {
                                 if verbosity.log_window_events() {
                                     eprintln!(
                                         "Initial focus detected: window_id={}, app_id={:?}, pid={:?}",
-                                        focused_window.id, focused_window.app_id, focused_window.pid
+                                        focused_window.id,
+                                        focused_window.app_id,
+                                        focused_window.pid
                                     );
                                 }
 

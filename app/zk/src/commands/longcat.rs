@@ -124,8 +124,7 @@ impl Longcat {
             );
         }
 
-        self.column_states
-            .insert((workspace_id, column_idx), state);
+        self.column_states.insert((workspace_id, column_idx), state);
         Ok(())
     }
 
@@ -159,10 +158,8 @@ impl Longcat {
                                     );
                                 }
 
-                                let total_height: f64 = windows
-                                    .iter()
-                                    .map(|w| w.layout.window_size.1 as f64)
-                                    .sum();
+                                let total_height: f64 =
+                                    windows.iter().map(|w| w.layout.window_size.1 as f64).sum();
 
                                 let resized_window_id = window.id;
                                 let resized_is_active = resized_window_id == active_window_id;
@@ -228,7 +225,10 @@ impl Longcat {
         }
     }
 
-    pub async fn handle_focus_gained(&self, window_id: u64) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn handle_focus_gained(
+        &self,
+        window_id: u64,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let windows = self.get_windows().await?;
         let focused_window = windows
             .iter()
@@ -255,7 +255,8 @@ impl Longcat {
                     config.other_height_proportion = new_other;
                 }
             } else if !self.column_states.contains_key(&state_key) {
-                self.store_original_heights(workspace_id, column_idx).await?;
+                self.store_original_heights(workspace_id, column_idx)
+                    .await?;
             }
 
             *active_col = Some(ActiveColumn {
@@ -270,7 +271,10 @@ impl Longcat {
         Ok(())
     }
 
-    pub async fn handle_focus_lost(&self, window_id: u64) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn handle_focus_lost(
+        &self,
+        window_id: u64,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let windows = self.get_windows().await?;
         let blurred_window = windows
             .iter()
@@ -321,7 +325,8 @@ impl Longcat {
 
             self.restore_original_heights(ac.workspace_id, ac.column_idx)
                 .await?;
-            self.clear_column_state(ac.workspace_id, ac.column_idx).await;
+            self.clear_column_state(ac.workspace_id, ac.column_idx)
+                .await;
             *active_col = None;
         }
 
@@ -362,14 +367,18 @@ impl Longcat {
 
         if windows.len() <= 1 {
             if self.verbosity.log_window_events() {
-                eprintln!("Column has {} windows, skipping longcat adjustment", windows.len());
+                eprintln!(
+                    "Column has {} windows, skipping longcat adjustment",
+                    windows.len()
+                );
             }
             return Ok(());
         }
 
         let state_key = (workspace_id, column_idx);
         if !self.column_states.contains_key(&state_key) {
-            self.store_original_heights(workspace_id, column_idx).await?;
+            self.store_original_heights(workspace_id, column_idx)
+                .await?;
         }
 
         let state = self.column_states.get(&state_key).unwrap();
@@ -391,7 +400,8 @@ impl Longcat {
             .filter_map(|w| state.window_heights.get(&w.id).copied())
             .sum();
 
-        let mut target_heights: std::collections::HashMap<u64, f64> = std::collections::HashMap::new();
+        let mut target_heights: std::collections::HashMap<u64, f64> =
+            std::collections::HashMap::new();
 
         for window in &windows {
             let is_active = window.id == active_window_id;
@@ -451,13 +461,15 @@ impl Longcat {
                 } else {
                     let target = if is_active {
                         if remaining_active_original_sum > 0.0 {
-                            (original_height / remaining_active_original_sum) * remaining_active_height
+                            (original_height / remaining_active_original_sum)
+                                * remaining_active_height
                         } else {
                             original_height
                         }
                     } else {
                         if remaining_other_original_sum > 0.0 {
-                            (original_height / remaining_other_original_sum) * remaining_other_height
+                            (original_height / remaining_other_original_sum)
+                                * remaining_other_height
                         } else {
                             original_height
                         }
@@ -532,7 +544,10 @@ impl Longcat {
                         let change = SizeChange::SetFixed(original_height as i32);
 
                         if self.verbosity.log_window_events() {
-                            eprintln!("Restoring window {} height to {}", window.id, original_height);
+                            eprintln!(
+                                "Restoring window {} height to {}",
+                                window.id, original_height
+                            );
                         }
 
                         self.send_action(Action::SetWindowHeight {
@@ -545,13 +560,7 @@ impl Longcat {
             }
 
             if !window_changes.is_empty() && self.verbosity.log_structured() {
-                log_structured_change(
-                    workspace_id,
-                    column_idx,
-                    0,
-                    1.0,
-                    &window_changes,
-                );
+                log_structured_change(workspace_id, column_idx, 0, 1.0, &window_changes);
             }
         }
         Ok(())
@@ -592,8 +601,14 @@ pub async fn run_longcat(
 ) -> Result<(), Box<dyn std::error::Error>> {
     if verbosity.log_window_events() {
         eprintln!("Starting longcat");
-        eprintln!("Active height proportion: {}", config.active_height_proportion);
-        eprintln!("Other height proportion: {}", config.other_height_proportion);
+        eprintln!(
+            "Active height proportion: {}",
+            config.active_height_proportion
+        );
+        eprintln!(
+            "Other height proportion: {}",
+            config.other_height_proportion
+        );
         eprintln!("Resize debounce: {}ms", config.resize_debounce_ms);
     }
 

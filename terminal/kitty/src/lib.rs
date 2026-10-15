@@ -5,6 +5,6 @@ pub mod registry;
 pub mod types;
 pub mod util;
 
-pub use registry::KittyRegistry;
 pub use config::RegistryConfig;
+pub use registry::KittyRegistry;
 pub use types::ZoomingResult;
