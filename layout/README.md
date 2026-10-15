@@ -8,6 +8,8 @@ generated:
   at: 2026-10-15
   by: model:openai/gpt-6.1-sol#xhigh
 sources:
+  - resource: opencode://ses_ec2fec1aaffe5IDnmC0nIJUQ04
+    title: Correct fractional baseline attribution before effects and verify integer restoration tracking
   - resource: opencode://ses_ec3149872ffe9daEmFbCXAaWBp
     title: Pure Taffy allocation and baseline-relative Longcat episode implementation
   - resource: ../design/remake/architecture0.gpt6a.md
@@ -20,7 +22,7 @@ sources:
     title: Taffy 0.10.1 feature selection for real Flexbox calculation
 verification:
   method: Scoped nextest, clippy with warnings denied, and rustfmt checks.
-  result: 42 tests passed across zk-layout and zk-longcat; clippy and formatting passed.
+  result: 46 tests passed across zk-layout and zk-longcat; clippy and formatting passed.
   limits: Pure fixtures only; no live compositor writes or adapter/runner integration checks.
 ---
 
@@ -83,6 +85,16 @@ observations and execution evidence implement `serde::Serialize`; input values
 also support deserialization for replay. The baseline is immutable. Restoration
 uses its conserving integer allocation, not a claim to recover hidden native
 weights or exact topology that the compositor did not report.
+
+Before any applied effect (including after a completely unsent initial attempt),
+geometry attribution compares with the original observed extents, retaining their
+fractional precision. Once an effect settles or restoration converges, attribution
+compares with that plan's requested integer targets instead. Integer restoration
+is a conserving representation, not pixel-exact recovery of fractional inputs.
+The declared available span determines the allocation budget; it is not inferred
+from member extents. To represent the original content span, the bridge must
+supply their initial sum with the declared gap treatment, not a larger free span
+that would proportionally reweight restoration.
 
 ### Dry-run call sequence
 

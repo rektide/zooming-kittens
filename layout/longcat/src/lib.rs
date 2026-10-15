@@ -447,16 +447,26 @@ impl Episode {
             }
         }
 
-        // Self-induced geometry is compared with the last requested effect,
-        // never mistaken for a change to the immutable baseline.
-        let expected = match self.phase {
-            Phase::Settled | Phase::Restored => self
-                .requested()
-                .map(|effect| effect.plan.targets.clone())
-                .expect("settled effect"),
-            _ => targets(&self.baseline.observation, &self.baseline.allocation),
+        // Before any effect, compare with the actual baseline, not its integer
+        // restoration representation (which has never been requested/applied).
+        // Settled/restored geometry instead follows the last requested effect.
+        let expected_geometry = match self.phase {
+            Phase::Settled | Phase::Restored => compatible(
+                &self.observed,
+                &self.requested().expect("settled effect").plan.targets,
+                self.policy.geometry_tolerance,
+            ),
+            _ => self
+                .observed
+                .members
+                .iter()
+                .zip(&self.baseline.observation.members)
+                .all(|(observed, baseline)| {
+                    (observed.extent - baseline.extent).abs()
+                        <= f64::from(self.policy.geometry_tolerance)
+                }),
         };
-        if !compatible(&self.observed, &expected, self.policy.geometry_tolerance) {
+        if !expected_geometry {
             return self.conflict(Suspension::UnattributedGeometry);
         }
         if self.observed.focus == Focus::Unknown && !self.restoration_requested {

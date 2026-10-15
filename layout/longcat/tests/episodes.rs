@@ -56,6 +56,26 @@ fn episode() -> Episode {
     .unwrap()
 }
 
+fn fractional_observation() -> Observation {
+    let mut current = observation();
+    current.available_extent = 900.7;
+    for (member, extent) in current.members.iter_mut().zip([400.6, 300.2, 199.9]) {
+        member.extent = extent;
+    }
+    current
+}
+
+fn fractional_episode() -> Episode {
+    Episode::new(
+        fractional_observation(),
+        Policy {
+            geometry_tolerance: 0,
+            ..Policy::default()
+        },
+    )
+    .unwrap()
+}
+
 fn plan(decision: Decision) -> Plan {
     match decision {
         Decision::Plan(plan) => *plan,
@@ -88,6 +108,108 @@ fn settle_first(episode: &mut Episode) -> (Plan, Observation) {
     );
     assert_eq!(episode.phase(), Phase::Settled);
     (first, current)
+}
+
+#[test]
+fn exact_tolerance_fractional_baseline_can_preview_and_plan() {
+    let mut episode = fractional_episode();
+    let initial = fractional_observation();
+    let preview = plan(episode.preview(initial.clone(), 10));
+    assert_eq!(episode.phase(), Phase::Ready);
+    assert!(episode.effects().is_empty());
+    assert_eq!(preview.basis, initial);
+    assert_eq!(plan(episode.decide(initial.clone(), 10)), preview);
+    assert_eq!(episode.baseline().observation, initial);
+    assert_eq!(extents(&preview).iter().sum::<u32>(), 900);
+}
+
+#[test]
+fn changed_fractional_baseline_geometry_conflicts_before_any_effect() {
+    let mut episode = fractional_episode();
+    let mut changed = fractional_observation();
+    changed.members[0].extent += 0.1;
+    assert_eq!(
+        episode.decide(changed, 10),
+        Decision::Suspend(Suspension::UnattributedGeometry)
+    );
+    assert_eq!(episode.phase(), Phase::Conflicted);
+    assert!(episode.effects().is_empty());
+}
+
+#[test]
+fn unsent_fractional_attempt_falls_back_to_raw_baseline_not_integer_restore() {
+    for changed in [false, true] {
+        let mut episode = fractional_episode();
+        let initial = fractional_observation();
+        let first = plan(episode.decide(initial.clone(), 10));
+        episode
+            .record_execution(first.id, vec![CommandOutcome::Unsent; 3])
+            .unwrap();
+        let mut current = initial;
+        if changed {
+            // Even the computed restore allocation is not an observed effect.
+            for (member, extent) in current
+                .members
+                .iter_mut()
+                .zip(&episode.baseline().allocation.extents)
+            {
+                member.extent = f64::from(*extent);
+            }
+        }
+        let decision = episode.decide(current.clone(), 20);
+        assert_eq!(episode.effects()[0].convergence, Convergence::NoEffect);
+        if changed {
+            assert_eq!(
+                decision,
+                Decision::Suspend(Suspension::UnattributedGeometry)
+            );
+            assert_eq!(episode.phase(), Phase::Conflicted);
+        } else {
+            assert_eq!(decision, Decision::Noop(Noop::NotSubmitted));
+            assert_eq!(episode.phase(), Phase::Ready);
+            current.version += 1;
+            let retry = plan(episode.decide(current, 30));
+            assert_eq!(extents(&retry), extents(&first));
+        }
+    }
+}
+
+#[test]
+fn fractional_baseline_restoration_tracks_requested_integer_geometry() {
+    let mut episode = fractional_episode();
+    let initial = fractional_observation();
+    let first = plan(episode.decide(initial.clone(), 10));
+    episode
+        .record_execution(first.id, vec![CommandOutcome::Handled; 3])
+        .unwrap();
+    let mut current = applied(&first, 2);
+    assert_eq!(
+        episode.decide(current.clone(), 20),
+        Decision::Noop(Noop::Stable)
+    );
+    current.focus = Focus::None;
+    current.version += 1;
+    let restore = plan(episode.decide(current, 30));
+    assert_eq!(restore.kind, PlanKind::Restore);
+    assert_eq!(extents(&restore), episode.baseline().allocation.extents);
+    episode
+        .record_execution(restore.id, vec![CommandOutcome::Handled; 3])
+        .unwrap();
+    let restored = applied(&restore, 4);
+    assert_eq!(
+        episode.decide(restored.clone(), 40),
+        Decision::Noop(Noop::Restored)
+    );
+    assert_eq!(episode.decide(restored, 50), Decision::Noop(Noop::Restored));
+    assert_eq!(episode.phase(), Phase::Restored);
+    assert_eq!(episode.baseline().observation, initial);
+    let mut original = initial;
+    original.version = 5;
+    original.focus = Focus::None;
+    assert_eq!(
+        episode.decide(original, 60),
+        Decision::Suspend(Suspension::UnattributedGeometry)
+    );
 }
 
 #[test]
