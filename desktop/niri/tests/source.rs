@@ -277,3 +277,67 @@ async fn drop_requests_idle_shutdown_and_stale_basis_is_unsent() {
     let _ = release.send(());
     peer.await.unwrap();
 }
+
+#[tokio::test]
+async fn pending_command_does_not_pause_observation_and_timeout_remains_uncertain() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("niri.sock");
+    let listener = UnixListener::bind(&path).unwrap();
+    let (release, wait) = oneshot::channel();
+    let peer = tokio::spawn(async move {
+        let mut events = accept(&listener).await;
+        seed(&mut events).await;
+        let (mut command, _) = listener.accept().await.unwrap();
+        let mut line = String::new();
+        BufReader::new(&mut command)
+            .read_line(&mut line)
+            .await
+            .unwrap();
+        assert!(line.contains("SetWindowHeight"));
+        send(&mut events, Event::WindowFocusChanged { id: None }).await;
+        let _ = wait.await;
+        // Intentionally no native reply: the request was read and may have acted.
+    });
+    let (source, mut observer) = subscribe(
+        &path,
+        source_id(),
+        Options {
+            io_timeout: Duration::from_millis(100),
+            ..Options::default()
+        },
+    )
+    .await
+    .unwrap();
+    let capture = ready(&mut observer).await;
+    let actuator = source.actuator();
+    let request = HeightRequest {
+        target: capture.active_window.clone().unwrap(),
+        basis: capture.version,
+        height: 630,
+    };
+    let sending = {
+        let actuator = actuator.clone();
+        let request = request.clone();
+        tokio::spawn(async move { actuator.set_height(request).await })
+    };
+    let blur = timeout(Duration::from_secs(2), observer.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(blur.impact.focus_changed);
+    assert!(blur.after.active_window.is_none());
+    let busy = actuator
+        .set_height(HeightRequest {
+            basis: blur.after.version,
+            ..request
+        })
+        .await;
+    assert_eq!(busy, Transmission::Unsent("actuator busy".into()));
+    assert!(matches!(
+        sending.await.unwrap(),
+        Transmission::PossiblySent(_)
+    ));
+    source.shutdown().await.unwrap();
+    let _ = release.send(());
+    peer.await.unwrap();
+}

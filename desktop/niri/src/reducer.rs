@@ -268,12 +268,17 @@ impl Reducer {
             _ => {}
         }
         self.project(&mut after);
-        let continuity =
-            if !self.current.windows_status.is_current() && after.windows_status.is_current() {
-                Continuity::Initial
-            } else {
-                Continuity::Continuous
-            };
+        let reacquired = [
+            (&self.current.windows_status, &after.windows_status),
+            (&self.current.workspaces_status, &after.workspaces_status),
+        ]
+        .into_iter()
+        .find(|(old, new)| !old.is_current() && new.is_current());
+        let continuity = match reacquired.map(|(old, _)| &old.health) {
+            Some(Health::Stale(reason)) => Continuity::Discontinuous(reason.clone()),
+            Some(_) => Continuity::Initial,
+            None => Continuity::Continuous,
+        };
         let mut update = self.commit_capture(after, continuity);
         if let Some(mut receipt) = receipt {
             // Filter native commit evidence by policy-relevant equality, not Arc identity.
@@ -392,6 +397,11 @@ impl Reducer {
             .map(|(key, mut rows)| {
                 rows.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
                 let unambiguous = rows.windows(2).all(|pair| pair[0].0 != pair[1].0);
+                let fully_located = !after.windows.values().any(|window| {
+                    window.workspace.as_ref() == Some(&key.workspace)
+                        && window.placement == Placement::Tiled
+                        && window.group.is_none()
+                });
                 let members: Vec<_> = rows.into_iter().map(|(_, id)| id).collect();
                 let bounds = group_bounds(members.iter().map(|id| &after.windows[id]));
                 (
@@ -400,13 +410,17 @@ impl Reducer {
                         key,
                         members,
                         secondary_axis: Axis::Vertical,
-                        membership: if unambiguous {
+                        membership: if unambiguous && fully_located {
                             Evidence::Reported
                         } else {
                             Evidence::Unavailable
                         },
                         bounds,
-                        geometry_evidence: Evidence::Inferred,
+                        geometry_evidence: if bounds.is_some() {
+                            Evidence::Inferred
+                        } else {
+                            Evidence::Unavailable
+                        },
                     },
                 )
             })
@@ -518,6 +532,12 @@ fn group_bounds<'a>(windows: impl Iterator<Item = &'a WindowView>) -> Option<Rec
     let top = boxes.iter().map(|(p, _)| p.y).reduce(f64::min)?;
     let right = boxes.iter().map(|(p, s)| p.x + s.width).reduce(f64::max)?;
     let bottom = boxes.iter().map(|(p, s)| p.y + s.height).reduce(f64::max)?;
+    if ![left, top, right, bottom, right - left, bottom - top]
+        .into_iter()
+        .all(f64::is_finite)
+    {
+        return None;
+    }
     Some(Rect {
         origin: Point { x: left, y: top },
         size: Size {

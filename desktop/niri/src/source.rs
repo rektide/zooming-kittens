@@ -66,8 +66,8 @@ pub async fn subscribe_env(source: SourceId, options: Options) -> io::Result<(So
     subscribe(path, source, options).await
 }
 
-/// No automatic reconnect. A fresh subscription must use a distinct source name,
-/// or callers replaying with Reducer must explicitly advance its epoch.
+/// No automatic reconnect. A fresh subscription must use a distinct source
+/// instance name or a strictly newer `Options::initial_epoch` for the same name.
 pub async fn subscribe(
     path: impl AsRef<Path>,
     source: SourceId,
@@ -121,6 +121,7 @@ pub async fn subscribe(
         serial: Arc::new(Semaphore::new(1)),
     };
     let task = tokio::spawn(async move {
+        let mut turn = 0;
         let reason = loop {
             let result = tokio::select! {
                 biased;
@@ -141,6 +142,11 @@ pub async fn subscribe(
             match reducer.apply(event) {
                 Ok(update) => publisher.publish(update),
                 Err(e) => break LossReason::Protocol(e.to_string()),
+            }
+            turn += 1;
+            if turn == 32 {
+                turn = 0;
+                tokio::task::yield_now().await;
             }
         };
         publisher.publish(reducer.loss(reason));
@@ -189,7 +195,8 @@ fn invalid_data(error: impl Into<Box<dyn std::error::Error + Send + Sync>>) -> i
 pub struct HeightRequest {
     pub target: WindowKey,
     pub basis: ObservationVersion,
-    /// Fixed committed content height requested from niri, not tile height.
+    /// Native fixed logical-pixel window-height request. This is not a promise
+    /// about the resulting committed content or decorated tile geometry.
     pub height: i32,
 }
 

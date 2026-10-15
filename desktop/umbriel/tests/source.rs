@@ -117,3 +117,52 @@ async fn eof_and_drop_are_observable_without_polling_native_socket() {
         peer.await.unwrap();
     }
 }
+
+#[tokio::test]
+async fn native_observer_byte_loss_is_not_silently_reacquired() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("umbriel.sock");
+    let listener = UnixListener::bind(&path).unwrap();
+    let (release, wait) = oneshot::channel();
+    let peer = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let mut line = String::new();
+        BufReader::new(&mut socket)
+            .read_line(&mut line)
+            .await
+            .unwrap();
+        socket
+            .write_all(b"{\"event\":\"windows\",\"data\":[]}\n")
+            .await
+            .unwrap();
+        let _ = wait.await;
+    });
+    let mut options = Options::default();
+    // Metadata fits, but no nonempty raw frame can fit this native observer.
+    options.native.observer_byte_capacity = std::mem::size_of::<umbriel_client::Observation>();
+    let (source, mut observer) = subscribe(
+        Endpoint::new(path),
+        SourceId::new(Backend::Umbriel, "script"),
+        options,
+    )
+    .await
+    .unwrap();
+    let loss = timeout(Duration::from_secs(2), async {
+        loop {
+            let update = observer.recv().await.unwrap();
+            if !update.after.connected {
+                break update;
+            }
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(
+        loss.continuity,
+        Continuity::Discontinuous(LossReason::ObserverLag)
+    );
+    assert!(!loss.after.is_ready());
+    source.shutdown().await.unwrap();
+    let _ = release.send(());
+    peer.await.unwrap();
+}

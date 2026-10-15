@@ -222,6 +222,10 @@ fn loss_retains_old_identity_but_requires_new_epoch_and_censuses() {
         })
         .unwrap();
     assert_ne!(fresh.after.windows.keys().next().unwrap(), &old);
+    assert_eq!(
+        fresh.continuity,
+        Continuity::Discontinuous(LossReason::EpochChanged)
+    );
     assert_eq!(fresh.impact.workspaces.len(), 2);
     assert!(!fresh.after.is_ready());
     r.apply(Event::WorkspacesChanged {
@@ -301,4 +305,22 @@ fn ambiguous_rows_do_not_claim_order_and_floating_windows_do_not_enter_groups() 
         Evidence::Unavailable
     );
     assert_eq!(capture.groups.values().next().unwrap().members.len(), 2);
+}
+
+#[test]
+fn unlocated_tiled_sibling_prevents_claiming_complete_group_membership() {
+    let mut r = reducer();
+    let mut unlocated = window(2, 10, 2, false);
+    unlocated.layout.pos_in_scrolling_layout = None;
+    unlocated.layout.tile_pos_in_workspace_view = None;
+    let capture = r
+        .apply(Event::WindowsChanged {
+            windows: vec![window(1, 10, 1, true), unlocated],
+        })
+        .unwrap()
+        .after;
+    assert_eq!(
+        capture.groups.values().next().unwrap().membership,
+        Evidence::Unavailable
+    );
 }
