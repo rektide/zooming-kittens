@@ -20,7 +20,7 @@ sources:
     title: Taffy 0.10.1 feature selection for real Flexbox calculation
 verification:
   method: Scoped nextest, clippy with warnings denied, and rustfmt checks.
-  result: 41 tests passed across zk-layout and zk-longcat; clippy and formatting passed.
+  result: 42 tests passed across zk-layout and zk-longcat; clippy and formatting passed.
   limits: Pure fixtures only; no live compositor writes or adapter/runner integration checks.
 ---
 
@@ -131,7 +131,10 @@ dry-run. A preview plan's IDs/deadlines are hypothetical, not executor work IDs.
 Focus changes while an effect is pending do not erase it. Once it converges,
 reconsider the latest focus using the original baseline. A completely unsent
 replacement can be reconsidered safely; it does not erase a prior settled
-effect's restore duty. Rejection, deadline mismatch or settled unexpected geometry
+effect's restore duty. An identical capture after a completely unsent attempt
+returns `Noop::NotSubmitted` instead of spinning on completion-driven retries;
+a fresh observation or changed focus can prompt a new decision. Rejection,
+deadline mismatch or settled unexpected geometry
 conflicts the episode without automatic replay, learning or restoration.
 `effects()` retains every sequence's evidence through focus changes and loss;
 the runner bounds episode lifetime/diagnostic retention rather than this core

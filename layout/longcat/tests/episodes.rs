@@ -501,11 +501,60 @@ fn entirely_unsent_initial_plan_can_be_recomputed_without_fabricating_an_effect(
     episode
         .record_execution(first.id, vec![CommandOutcome::Unsent; 3])
         .unwrap();
-    let second = plan(episode.decide(observation(), 20));
+    assert_eq!(
+        episode.decide(observation(), 20),
+        Decision::Noop(Noop::NotSubmitted)
+    );
+    let mut fresh = observation();
+    fresh.version += 1;
+    let second = plan(episode.decide(fresh, 30));
     assert_ne!(first.id, second.id);
     assert_eq!(extents(&first), extents(&second));
     assert_eq!(episode.effects()[0].convergence, Convergence::NoEffect);
     assert_eq!(episode.observed().members[0].extent, 400.0);
+}
+
+#[test]
+fn late_rejection_of_an_older_effect_cannot_hide_behind_an_unsent_replacement() {
+    let mut episode = episode();
+    let first = plan(episode.decide(observation(), 10));
+    episode
+        .record_execution(
+            first.id,
+            vec![
+                CommandOutcome::PossiblySent {
+                    message: "late reply".into()
+                };
+                3
+            ],
+        )
+        .unwrap();
+    let mut current = applied(&first, 2);
+    assert_eq!(
+        episode.decide(current.clone(), 20),
+        Decision::Noop(Noop::Stable)
+    );
+    current.focus = focus("b");
+    current.version += 1;
+    let replacement = plan(episode.decide(current.clone(), 30));
+    episode
+        .record_execution(replacement.id, vec![CommandOutcome::Unsent; 3])
+        .unwrap();
+    episode
+        .record_command(
+            first.id,
+            0,
+            CommandOutcome::Rejected {
+                message: "late refusal".into(),
+            },
+        )
+        .unwrap();
+    current.focus = Focus::None;
+    assert_eq!(
+        episode.decide(current, 40),
+        Decision::Suspend(Suspension::CommandRejected)
+    );
+    assert_eq!(episode.effects().len(), 2);
 }
 
 #[test]

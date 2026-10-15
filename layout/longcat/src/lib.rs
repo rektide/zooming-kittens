@@ -248,6 +248,9 @@ pub enum Noop {
     AwaitingConvergence,
     Stable,
     Restored,
+    /// A definitely-unsent attempt is not automatically replayed against the
+    /// identical capture. A fresh observation/focus can prompt reconsideration.
+    NotSubmitted,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -393,7 +396,7 @@ impl Episode {
         }
         self.observed = observation;
 
-        if self.requested().is_some_and(|effect| {
+        if self.effects.iter().any(|effect| {
             effect
                 .commands
                 .iter()
@@ -491,11 +494,17 @@ impl Episode {
             if compatible(&self.observed, &desired, self.policy.geometry_tolerance) {
                 return Decision::Noop(Noop::AlreadyCompatible);
             }
+            if self.unsent_same_capture() {
+                return Decision::Noop(Noop::NotSubmitted);
+            }
             self.plan(PlanKind::Emphasize, Some(window), desired, now_ms)
         } else if self.phase == Phase::Settled {
             // Restoration authority requires unchanged identity/context AND
             // observed compatibility with a possibly-sent requested effect.
             let desired = targets(&self.baseline.observation, &self.baseline.allocation);
+            if self.unsent_same_capture() {
+                return Decision::Noop(Noop::NotSubmitted);
+            }
             self.plan(PlanKind::Restore, None, desired, now_ms)
         } else if self.phase == Phase::Restored {
             Decision::Noop(Noop::Restored)
@@ -613,6 +622,12 @@ impl Episode {
         });
         self.current_effect = Some(self.effects.len() - 1);
         Decision::Plan(Box::new(plan))
+    }
+
+    fn unsent_same_capture(&self) -> bool {
+        self.effects.last().is_some_and(|effect| {
+            effect.convergence == Convergence::NoEffect && effect.plan.basis == self.observed
+        })
     }
 
     fn conflict(&mut self, reason: Suspension) -> Decision {
