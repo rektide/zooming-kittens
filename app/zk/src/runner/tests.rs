@@ -115,6 +115,118 @@ fn ready() -> zk_niri::Reducer {
     reducer
 }
 
+// Execute this helper in a subprocess: its stdout pipe is intentionally never
+// drained, so a Tokio blocking-pool regression cannot hang the test runner.
+#[test]
+fn stdout_pipe_child() {
+    let Ok(mode) = std::env::var("ZK_TEST_STDOUT_PIPE") else {
+        return;
+    };
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    runtime.block_on(async {
+        let (_publisher, observer) = Publisher::new(ready().capture(), 16);
+        let mut rows = Vec::new();
+        drive(
+            observer,
+            None,
+            &command(&["--dry-run", "--limit", "1"]),
+            &LongcatConfig::default(),
+            &mut |mut record: Value| {
+                // One synthetic diagnostic is larger than a Linux pipe. No
+                // compositor connection or native mutation occurs in this test.
+                record["synthetic_padding"] = Value::String("x".repeat(1024 * 1024));
+                let mut row = serde_json::to_vec(&record)?;
+                row.push(b'\n');
+                rows.push(row);
+                Ok(())
+            },
+            std::future::pending().boxed(),
+        )
+        .await
+        .unwrap();
+        if mode == "tokio" {
+            use tokio::io::AsyncWriteExt;
+            let mut stdout = tokio::io::stdout();
+            assert!(
+                tokio::time::timeout(Duration::from_millis(100), async {
+                    for row in &rows {
+                        stdout.write_all(row).await?;
+                    }
+                    stdout.flush().await
+                })
+                .await
+                .is_err()
+            );
+            eprintln!("tokio-write-timed-out");
+            // Dropping the runtime below still waits for the blocked write.
+        } else {
+            let output = output::Output::stdout().unwrap();
+            for row in rows {
+                output.rows.try_send(row).unwrap();
+            }
+            assert_eq!(
+                output.finish().await.unwrap_err().kind(),
+                io::ErrorKind::TimedOut
+            );
+            eprintln!("detached-writer-drain-timed-out");
+        }
+    });
+    drop(runtime);
+    // Avoid the test harness writing its own result line to the full pipe.
+    // The runtime has already shut down; process exit performs std cleanup.
+    std::process::exit(0);
+}
+
+#[test]
+fn unread_stdout_pipe_reproduces_tokio_hang_but_detached_writer_exits() {
+    use std::process::{Command, Stdio};
+    for (mode, bound, should_exit, marker) in [
+        (
+            "tokio",
+            Duration::from_secs(1),
+            false,
+            "tokio-write-timed-out",
+        ),
+        (
+            "detached",
+            Duration::from_secs(5),
+            true,
+            "detached-writer-drain-timed-out",
+        ),
+    ] {
+        let mut child = Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "runner::tests::stdout_pipe_child", "--nocapture"])
+            .env("ZK_TEST_STDOUT_PIPE", mode)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let deadline = std::time::Instant::now() + bound;
+        let exited = loop {
+            if let Some(status) = child.try_wait().unwrap() {
+                break Some(status);
+            }
+            if std::time::Instant::now() >= deadline {
+                break None;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        };
+        if exited.is_none() {
+            child.kill().unwrap();
+        }
+        let result = child.wait_with_output().unwrap();
+        assert!(
+            String::from_utf8_lossy(&result.stderr).contains(marker),
+            "{mode}: stderr={}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        assert_eq!(exited.is_some(), should_exit, "{mode}");
+        if should_exit {
+            assert!(result.status.success(), "{}", result.status);
+        }
+    }
+}
+
 #[test]
 fn bridge_keeps_baseline_budget_during_partial_native_application() {
     let mut reducer = ready();

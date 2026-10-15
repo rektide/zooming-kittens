@@ -6,6 +6,8 @@ resource: app/zk/src/runner/README.md
 status: implemented
 generated: { at: 2026-10-15, by: 'model:openai/gpt-6.1-sol#medium' }
 sources:
+  - resource: opencode://ses_ec2f9e1a4ffeOo3Z1LQUDdetQ5
+    title: Rust quality cleanup, observer-loss resynchronization and subprocess verification of bounded stdout shutdown
   - resource: opencode://ses_ec310f020ffe5d6kIV42ehdO2z
     title: Longcat application integration, scripted peers, configuration composition and continuity-admission correction
   - resource: ../../../../desktop/README.md
@@ -116,14 +118,27 @@ JSONL records contain native readiness/health, committed content/tile geometry,
 baseline, desired decision, preview flag and actual requested execution evidence.
 Observed window detail is capped at 128 rows with explicit truncation/count fields.
 Command receipts and final retained-effect summaries are separate records.
-The output queue holds 16 records, each at most 2 MiB, with a two-second write
-deadline. Overflow or broken output stops control rather than silently discarding
-diagnostics; final output may itself be unavailable after a consumer failure.
+The output queue holds 16 records, each at most 2 MiB, plus at most one row
+owned by the writer. Overflow or broken output stops control rather than silently
+discarding diagnostics; final output may itself be unavailable after a consumer
+failure. A plain OS thread writes a duplicated stdout descriptor, without holding
+the global stdout lock or using Tokio's blocking pool. It owns diagnostics only,
+never native command futures or receipts. Native cleanup still runs first (up to
+three seconds); total output drain then has a two-second deadline. This is **not**
+a per-write deadline or a two-second bound on the entire command lifetime.
+On drain timeout the writer remains detached, potentially blocked until process
+exit; it is neither joined nor cancelled. The CLI can exit without waiting for
+that ordinary thread. An idle source still requires SIGINT or another normal
+termination condition; a blocked row alone does not manufacture a shutdown signal.
 
 Runner replay/scripted-peer tests cover both backend acquisitions, by-ID native
 execution and conditional restoration, no-focus, cross-workspace moves, immutable
 partial-write budget, timer expiry in silence, dry-run non-submission, partial
 prefix cancellation, uncertain pending command on loss, queued loss followed by
-healthy latest state, and file/environment/CLI precedence. No live desktop
+healthy latest state, and file/environment/CLI precedence. An unread-pipe
+subprocess test uses padded diagnostics from a scripted read-only source: the
+former Tokio writer times out but hangs during runtime shutdown, whereas the
+detached writer reports drain timeout and exits within the test's five-second
+bound. No live desktop
 mutation was performed. Native handling/compatible geometry do not prove causal
 attribution or exact compositor-weight restoration.

@@ -2,6 +2,7 @@
 mod bridge;
 mod control;
 mod native;
+mod output;
 
 #[cfg(test)]
 mod tests;
@@ -15,7 +16,7 @@ use futures::{
 use kubeless_work_schedule::{ReadyWork, ScheduleOptions, ScheduleRequest, schedule};
 use serde_json::Value;
 use std::{io, sync::Arc, time::Duration};
-use tokio::{io::AsyncWriteExt, time::Instant};
+use tokio::time::Instant;
 use zk_desktop::{Continuity, ObserveError, Observer};
 use zk_longcat::CommandOutcome;
 
@@ -32,22 +33,7 @@ pub async fn run(command: LongcatCommand, config: LongcatConfig) -> io::Result<(
     });
     // Native I/O never awaits stdout. A slow/broken diagnostic consumer ends the
     // app rather than accumulating an unbounded backlog or silently losing rows.
-    let (output, mut rows) = tokio::sync::mpsc::channel::<Vec<u8>>(16);
-    let writer = tokio::spawn(async move {
-        let mut stdout = tokio::io::stdout();
-        while let Some(row) = rows.recv().await {
-            tokio::time::timeout(Duration::from_secs(2), stdout.write_all(&row))
-                .await
-                .map_err(|_| {
-                    io::Error::new(io::ErrorKind::TimedOut, "diagnostic stdout stalled")
-                })??;
-        }
-        tokio::time::timeout(Duration::from_secs(2), stdout.flush())
-            .await
-            .map_err(|_| {
-                io::Error::new(io::ErrorKind::TimedOut, "diagnostic stdout flush stalled")
-            })?
-    });
+    let output = output::Output::stdout()?;
     let quiet = command.quiet;
     let mut sink = |record: Value| -> io::Result<()> {
         if quiet {
@@ -58,7 +44,7 @@ pub async fn run(command: LongcatCommand, config: LongcatConfig) -> io::Result<(
             return Err(bridge::invalid("diagnostic record exceeds 2 MiB limit"));
         }
         bytes.push(b'\n');
-        output.try_send(bytes).map_err(|e| {
+        output.rows.try_send(bytes).map_err(|e| {
             io::Error::other(format!("diagnostic delivery failed (bounded queue): {e}"))
         })
     };
@@ -71,11 +57,11 @@ pub async fn run(command: LongcatCommand, config: LongcatConfig) -> io::Result<(
         async { tokio::signal::ctrl_c().await }.boxed(),
     )
     .await;
-    drop(output);
     let shutdown = tokio::time::timeout(Duration::from_secs(3), owner.shutdown())
         .await
-        .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "native source shutdown deadline"))?;
-    let written = writer.await.map_err(io::Error::other)?;
+        .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "native source shutdown deadline"))
+        .and_then(|result| result);
+    let written = output.finish().await;
     result.and(shutdown).and(written)
 }
 
@@ -244,6 +230,7 @@ async fn drive(
                                 control.stopping = true;
                                 failure = Some(io::Error::other(error));
                                 stopping_at.get_or_insert(Instant::now() + Duration::from_millis(command.shutdown_timeout_ms));
+                                processed = observer.current();
                                 false
                             }
                         };
@@ -289,6 +276,7 @@ async fn drive(
                             failure = Some(io::Error::other(error));
                             control.stopping = true;
                             stopping_at.get_or_insert(Instant::now() + Duration::from_millis(command.shutdown_timeout_ms));
+                            processed = observer.current();
                             if pending.is_none() && error == ObserveError::Closed { break; }
                         }
                     }
