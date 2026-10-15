@@ -115,6 +115,24 @@ impl KittyRegistry {
         self.execute_font_command(pid, false, amount).await
     }
 
+    /// Send one additive adjustment as a single remote command.
+    pub async fn add_font_size(
+        &self,
+        pid: i32,
+        amount: f64,
+    ) -> Result<ZoomingResult, Box<dyn std::error::Error>> {
+        self.execute_font_command_with_op(pid, "+", amount).await
+    }
+
+    /// Send one subtractive adjustment as a single remote command.
+    pub async fn subtract_font_size(
+        &self,
+        pid: i32,
+        amount: f64,
+    ) -> Result<ZoomingResult, Box<dyn std::error::Error>> {
+        self.execute_font_command_with_op(pid, "-", amount).await
+    }
+
     pub async fn multiply_font_size_by(
         &self,
         pid: i32,
@@ -157,153 +175,44 @@ impl KittyRegistry {
         }
     }
 
+    /// Legacy integer-increment entry points. A whole-number adjustment is one
+    /// remote command carrying the exact total; the old one-command-per-point
+    /// loop is not needed because kitty applies `old <op> size` atomically.
     async fn execute_font_command(
         &self,
         pid: i32,
         increase: bool,
         amount: u32,
     ) -> Result<ZoomingResult, Box<dyn std::error::Error>> {
-        let kitty_pid = if let Some(cached) = self.pid_cache.get(&pid) {
-            *cached
-        } else {
-            match crate::process::find_kitty_master_pid(pid) {
-                Some(kpid) => {
-                    self.pid_cache.insert(pid, kpid);
-                    kpid
-                }
-                None => {
-                    self.set_status(pid, KittyConnectionStatus::NoSocket).await;
-                    return Ok(ZoomingResult::NotConfigured);
-                }
-            }
-        };
-
-        let socket_path = get_kitty_socket_path(kitty_pid);
-
-        if !socket_path.exists() {
-            self.set_status(pid, KittyConnectionStatus::NoSocket).await;
-            return Ok(ZoomingResult::NotConfigured);
-        }
-
-        if self.config.verbose {
-            eprintln!("Mapped shell PID {} to kitty master PID {}", pid, kitty_pid);
-        }
-
-        let password = match get_kitty_password() {
-            Ok(pw) => pw,
-            Err(_) => {
-                self.set_status(kitty_pid, KittyConnectionStatus::NotConfigured)
-                    .await;
-                return Ok(ZoomingResult::NotConfigured);
-            }
-        };
-
-        let increment_op = if increase { "+" } else { "-" };
-
-        let mut last_error = None;
-
-        for attempt in 0..self.config.max_retries {
-            if attempt > 0 {
-                let delay = match attempt {
-                    1 => Duration::ZERO,
-                    2 => Duration::from_millis(100),
-                    _ => Duration::from_millis(200),
-                };
-                sleep(delay).await;
-            }
-
-            let client = match self
-                .get_or_create_connection(kitty_pid, &socket_path, &password)
-                .await
-            {
-                Ok(client) => client,
-                Err(e) => {
-                    last_error = Some(e.to_string());
-                    continue;
-                }
-            };
-
-            let mut all_succeeded = true;
-
-            for _count in 0..amount {
-                let cmd = SetFontSizeCommand::builder()
-                    .size(1.0)
-                    .increment_op(increment_op.to_string())
-                    .build()
-                    .to_message()?;
-
-                if self.config.verbose {
-                    eprintln!(
-                        "Sending command to PID {} (kitty: {}): {:?}",
-                        pid, kitty_pid, cmd
-                    );
-                }
-
-                let mut client = client.lock().await;
-                let result = client.execute(&cmd).await;
-
-                if self.config.verbose {
-                    eprintln!(
-                        "Font command result for PID {} (kitty: {}): {:?}",
-                        pid, kitty_pid, result
-                    );
-                }
-                match result {
-                    Ok(response) => {
-                        if !response.ok {
-                            all_succeeded = false;
-                            let error_msg = response
-                                .error
-                                .unwrap_or_else(|| "Unknown error".to_string());
-                            eprintln!(
-                                "Kitty returned error for PID {} (kitty: {}): {}",
-                                pid, kitty_pid, error_msg
-                            );
-                            last_error = Some(error_msg);
-                            break;
-                        }
-                    }
-                    Err(e) => {
-                        all_succeeded = false;
-                        last_error = Some(e.to_string());
-                        eprintln!(
-                            "Error executing font command for PID {} (kitty: {}): {}",
-                            pid, kitty_pid, e
-                        );
-                        break;
-                    }
-                }
-            }
-
-            if all_succeeded {
-                self.update_last_used(kitty_pid).await;
-                self.set_status(pid, KittyConnectionStatus::Ready).await;
-
-                let font_adjustment = format!("{}{}", if increase { "+" } else { "-" }, amount);
-                return Ok(ZoomingResult::Success {
-                    pid,
-                    font_adjustment,
-                });
-            }
-        }
-
-        self.set_status(pid, KittyConnectionStatus::Failed).await;
-
-        if let Some(err) = last_error {
-            if err.contains("auth") || err.contains("password") {
-                return Ok(ZoomingResult::AuthFailed);
-            }
-        }
-
-        Ok(ZoomingResult::ConnectionFailed)
+        let op = if increase { "+" } else { "-" };
+        self.execute_font_command_with_op(pid, op, amount as f64)
+            .await
     }
 
+    /// Apply `old <op> amount` to the font size of the kitty instance behind
+    /// `pid` as a single `set-font-size` command. Kitty's remote-control
+    /// protocol accepts `increment_op` in `+`, `-`, `*`, `/` with a positive
+    /// float size, so every adjustment — including fractional and
+    /// multiplicative — is one atomic command.
     pub async fn execute_font_command_with_op(
         &self,
         pid: i32,
         op: &str,
         amount: f64,
     ) -> Result<ZoomingResult, Box<dyn std::error::Error>> {
+        if !matches!(op, "+" | "-" | "*" | "/") {
+            return Err(format!(
+                "invalid font increment op {op:?}: expected one of +, -, *, /"
+            )
+            .into());
+        }
+        if !amount.is_finite() || amount <= 0.0 {
+            return Err(format!(
+                "invalid font adjustment amount {amount}: must be a finite positive number"
+            )
+            .into());
+        }
+
         let kitty_pid = if let Some(cached) = self.pid_cache.get(&pid) {
             *cached
         } else {
@@ -339,11 +248,6 @@ impl KittyRegistry {
             }
         };
 
-        let increment_op = op;
-        let is_multiplicative = op == "*" || op == "/";
-        let iteration_count = if is_multiplicative { 1 } else { amount as u32 };
-        let cmd_size = if is_multiplicative { amount } else { 1.0 };
-
         let mut last_error = None;
 
         for attempt in 0..self.config.max_retries {
@@ -362,81 +266,70 @@ impl KittyRegistry {
             {
                 Ok(client) => client,
                 Err(e) => {
-                    last_error = Some(e.to_string());
+                    last_error = Some(e);
                     continue;
                 }
             };
 
-            let mut all_succeeded = true;
+            let cmd = SetFontSizeCommand::builder()
+                .size(amount)
+                .increment_op(op.to_string())
+                .build()
+                .to_message()?;
 
-            for _count in 0..iteration_count {
-                let cmd = SetFontSizeCommand::builder()
-                    .size(cmd_size)
-                    .increment_op(increment_op.to_string())
-                    .build()
-                    .to_message()?;
-
-                if self.config.verbose {
-                    eprintln!(
-                        "Sending command to PID {} (kitty: {}): {:?}",
-                        pid, kitty_pid, cmd
-                    );
-                }
-
-                let mut client = client.lock().await;
-                let result = client.execute(&cmd).await;
-
-                if self.config.verbose {
-                    eprintln!(
-                        "Font command result for PID {} (kitty: {}): {:?}",
-                        pid, kitty_pid, result
-                    );
-                }
-                match result {
-                    Ok(response) => {
-                        if !response.ok {
-                            all_succeeded = false;
-                            let error_msg = response
-                                .error
-                                .unwrap_or_else(|| "Unknown error".to_string());
-                            eprintln!(
-                                "Kitty returned error for PID {} (kitty: {}): {}",
-                                pid, kitty_pid, error_msg
-                            );
-                            last_error = Some(error_msg);
-                            break;
-                        }
-                    }
-                    Err(e) => {
-                        all_succeeded = false;
-                        last_error = Some(e.to_string());
-                        eprintln!(
-                            "Error executing font command for PID {} (kitty: {}): {}",
-                            pid, kitty_pid, e
-                        );
-                        break;
-                    }
-                }
+            if self.config.verbose {
+                eprintln!(
+                    "Sending command to PID {} (kitty: {}): {:?}",
+                    pid, kitty_pid, cmd
+                );
             }
 
-            if all_succeeded {
-                self.update_last_used(kitty_pid).await;
-                self.set_status(pid, KittyConnectionStatus::Ready).await;
+            let mut client = client.lock().await;
+            let result = client.execute(&cmd).await;
 
-                let font_adjustment = format!("{}{}", op, amount);
-                return Ok(ZoomingResult::Success {
-                    pid,
-                    font_adjustment,
-                });
+            if self.config.verbose {
+                eprintln!(
+                    "Font command result for PID {} (kitty: {}): {:?}",
+                    pid, kitty_pid, result
+                );
+            }
+            match result {
+                Ok(response) => {
+                    if response.ok {
+                        self.update_last_used(kitty_pid).await;
+                        self.set_status(pid, KittyConnectionStatus::Ready).await;
+
+                        let font_adjustment = format!("{}{}", op, amount);
+                        return Ok(ZoomingResult::Success {
+                            pid,
+                            font_adjustment,
+                        });
+                    }
+                    let error_msg = response
+                        .error
+                        .unwrap_or_else(|| "Unknown error".to_string());
+                    eprintln!(
+                        "Kitty returned error for PID {} (kitty: {}): {}",
+                        pid, kitty_pid, error_msg
+                    );
+                    last_error = Some(error_msg);
+                }
+                Err(e) => {
+                    eprintln!(
+                        "Error executing font command for PID {} (kitty: {}): {}",
+                        pid, kitty_pid, e
+                    );
+                    last_error = Some(e.to_string());
+                }
             }
         }
 
         self.set_status(pid, KittyConnectionStatus::Failed).await;
 
-        if let Some(err) = last_error {
-            if err.contains("auth") || err.contains("password") {
-                return Ok(ZoomingResult::AuthFailed);
-            }
+        if let Some(err) = &last_error
+            && (err.contains("auth") || err.contains("password"))
+        {
+            return Ok(ZoomingResult::AuthFailed);
         }
 
         Ok(ZoomingResult::ConnectionFailed)
