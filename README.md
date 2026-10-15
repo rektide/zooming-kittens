@@ -91,8 +91,16 @@ zk font list         # show running kitty instances
 ### From source
 
 ```bash
-cargo install --path .
+cargo install --path app/zk
 ```
+
+The checkout uses a domain-grouped Cargo workspace. `cargo run -- --help` and
+`cargo build --release` at the root select the `zk` application; use
+`cargo nextest run --workspace` to check all workspace packages.
+
+Desktop packages currently use sibling development checkouts of `../umbriel-rs`
+and `../kubeless`. Their relative path dependencies are part of the development
+workspace setup.
 
 ## Configuration
 
