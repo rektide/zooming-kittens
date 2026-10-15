@@ -19,11 +19,44 @@ sources:
   - resource: file:///home/rektide/src/kubeless/control/settlement/src/lib.rs
     title: Acknowledgment-preserving composition and its explicit future-cancellation limitation
 verification:
-  method: Reinspection of selected source contracts and integration of the independent assessment.
-  limits: Proposed adoption and upstream work; no new implementation, integration test or live mutation.
+  method: Source inspection, independent assessment, and review of implemented native/layout baselines with their scoped verification reports.
+  limits: Upstream asks remain proposals; full runner verification is pending. No live mutation is claimed.
 ---
 
 # Kubeless: what we should use and what we should improve
+
+## Implementation return — native and layout baselines, 2026-10-15
+
+The first domain implementations now provide concrete adoption evidence:
+
+| Implemented owner | Actual entrance | Result |
+|---|---|---|
+| [`zk-niri`](../../desktop/niri/src/reducer.rs) | `Replacement`, `Writer::replace_changes`, `Writer::apply_changes` | Native window census/delta events commit through the memory leaf; malformed native input is rejected and source health invalidated by the adapter. |
+| [`zk-umbriel`](../../desktop/umbriel/src/reducer.rs) | Existing `Inventory::install_windows_changes` | Reuses the native state owner and its continuity evidence; no duplicate reflector introduced. |
+| Both native reducers | `view-impact::affected_roots_with` | Projects actual before/after receipts into former/current affected workspaces, alongside semantic capture impact. |
+| [`zk-layout` and `zk-longcat`](../../layout/README.md) | No Kubeless dependencies | Taffy and clock-injected episode decisions remain independent of state-storage and scheduling mechanics. |
+
+The adapter author reported 25 passing tests with strict Clippy/formatting;
+the layout author reported 42 passing tests with strict Clippy/formatting.
+These are scoped baselines, not yet proof of the full application composition.
+Application scheduling and lifecycle integration are still being verified.
+
+What this already teaches us:
+
+- Actual native receipts are a usable reuse boundary. No extra reflection host
+  was necessary for either adapter.
+- Impact must account for native window changes **and** semantic changes such
+  as family readiness and grouping eligibility. A membership-only product would
+  not capture the entire planning input.
+- Invalid native IDs/rows and unknown siblings remain adapter responsibilities;
+  atomic map replacement does not validate a compositor's layout semantics.
+- Umbriel's absent exact grouping remains absent in the semantic view. The
+  libraries compose successfully without pretending the consumer can now resize
+  a topology it cannot observe.
+
+The next return must record the real runner's scheduling, retention, timeout and
+shutdown behavior. Scheduler fairness stays deferred; no upstream files have
+been changed for these baselines.
 
 ## Decision
 
