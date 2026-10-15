@@ -18,7 +18,7 @@ pub struct LongcatCommand {
     /// Native Unix socket; otherwise use the backend's environment discovery.
     #[arg(long)]
     pub socket: Option<PathBuf>,
-    /// Stop after this many capture/decision diagnostics, including startup.
+    /// Stop after this many ready capture/decision records (startup waits do not count).
     #[arg(long, value_parser = clap::value_parser!(u64).range(1..))]
     pub limit: Option<u64>,
     /// Relative active weight; normalized against the other weight.

@@ -250,10 +250,9 @@ fn stop_on_conflict(sender: &mut Option<tokio::sync::oneshot::Sender<()>>, value
     if value["groups"]
         .as_array()
         .is_some_and(|groups| groups.iter().any(|group| group["phase"] == "Conflicted"))
+        && let Some(sender) = sender.take()
     {
-        if let Some(sender) = sender.take() {
-            let _ = sender.send(());
-        }
+        let _ = sender.send(());
     }
 }
 
@@ -383,6 +382,157 @@ async fn dry_run_never_submits_or_records_handled_effects() {
     );
 }
 
+#[tokio::test(start_paused = true)]
+async fn source_loss_during_pending_command_retains_uncertainty_and_unsent_tail() {
+    let mut reducer = ready();
+    let initial = reducer.capture();
+    let (publisher, observer) = Publisher::new(initial, 16);
+    let publisher = Arc::new(publisher);
+    let update = reducer.loss(zk_desktop::LossReason::Disconnected);
+    let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let counted = calls.clone();
+    let executor: Executor = Arc::new(move |_| {
+        let publisher = publisher.clone();
+        let update = update.clone();
+        counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        async move {
+            publisher.publish(update);
+            std::future::pending().await
+        }
+        .boxed()
+    });
+    let mut records = Vec::new();
+    let mut sink = |value| {
+        records.push(value);
+        Ok(())
+    };
+    let mut command = command(&[]);
+    command.shutdown_timeout_ms = 20;
+    let result = drive(
+        observer,
+        Some(executor),
+        &command,
+        &LongcatConfig::default(),
+        &mut sink,
+        std::future::pending().boxed(),
+    )
+    .await;
+    assert!(result.is_err());
+    assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+    let final_record = records.last().unwrap();
+    assert_eq!(final_record["type"], "longcat-stopped");
+    assert_eq!(final_record["episodes"][0]["phase"], "Lost");
+    assert!(
+        final_record["episodes"][0]["requested_effect"]["commands"][0]["PossiblySent"].is_object()
+    );
+    assert_eq!(
+        final_record["episodes"][0]["requested_effect"]["commands"][1],
+        "Unsent"
+    );
+    assert_eq!(
+        final_record["episodes"][0]["requested_effect"]["execution_finished"],
+        true
+    );
+}
+
+#[test]
+fn repeated_dry_run_focus_previews_retain_one_immutable_baseline_and_no_requests() {
+    let mut reducer = ready();
+    let mut control = Control::new(&LongcatConfig::default(), true, 100);
+    let (first, _) = control
+        .evaluate(&reducer.capture(), 0, None, "first")
+        .unwrap();
+    reducer
+        .apply(Event::WindowFocusChanged { id: Some(2) })
+        .unwrap();
+    let (second, selected) = control
+        .evaluate(&reducer.capture(), 1, None, "second")
+        .unwrap();
+    assert!(selected.is_none());
+    assert_eq!(
+        first["groups"][0]["baseline"],
+        second["groups"][0]["baseline"]
+    );
+    assert!(second["groups"][0]["desired"]["Plan"].is_object());
+    assert_eq!(second["groups"][0]["retained_effect_count"], 0);
+    assert_ne!(
+        first["groups"][0]["desired"]["Plan"]["targets"],
+        second["groups"][0]["desired"]["Plan"]["targets"]
+    );
+}
+
+#[tokio::test]
+async fn queued_discontinuity_before_healthy_latest_blocks_first_send_and_revokes_preview_baseline()
+{
+    for dry_run in [false, true] {
+        let reducer = ready();
+        let initial = reducer.capture();
+        let (publisher, observer) = Publisher::new(initial.clone(), 64);
+        let mut injected = false;
+        let mut records = Vec::new();
+        let mut sink = |value: Value| {
+            if value["type"] == "longcat" && value["ready"] == true && !injected {
+                injected = true;
+                let mut before = initial.clone();
+                // Exceed one eight-item drain budget. The same source/epoch then
+                // loses a family and becomes healthy again before admission.
+                for index in 1..=12 {
+                    let mut after = (*initial).clone();
+                    after.version = zk_desktop::ObservationVersion(initial.version.0 + index);
+                    let continuity = if index == 11 {
+                        after
+                            .windows_status
+                            .stale(zk_desktop::LossReason::InvalidSnapshot);
+                        Continuity::Discontinuous(zk_desktop::LossReason::InvalidSnapshot)
+                    } else {
+                        Continuity::Continuous
+                    };
+                    let after = Arc::new(after);
+                    publisher.publish(zk_desktop::DesktopUpdate::new(
+                        before,
+                        after.clone(),
+                        continuity,
+                    ));
+                    before = after;
+                }
+                assert!(before.is_ready());
+            }
+            records.push(value);
+            Ok(())
+        };
+        let executor: Executor =
+            Arc::new(|_| panic!("unprocessed continuity must block all native mutation"));
+        let mut command = command(&[]);
+        command.dry_run = dry_run;
+        command.shutdown_timeout_ms = 20;
+        let result = tokio::time::timeout(
+            Duration::from_secs(1),
+            drive(
+                observer,
+                Some(executor),
+                &command,
+                &LongcatConfig::default(),
+                &mut sink,
+                std::future::pending().boxed(),
+            ),
+        )
+        .await
+        .unwrap();
+        assert!(result.is_err());
+        assert_eq!(records.last().unwrap()["episodes"][0]["phase"], "Lost");
+        assert_eq!(
+            records.last().unwrap()["episodes"][0]["baseline"],
+            records[0]["groups"][0]["baseline"]
+        );
+        if !dry_run {
+            assert_eq!(
+                records.last().unwrap()["episodes"][0]["requested_effect"]["commands"],
+                serde_json::json!(["Unsent", "Unsent", "Unsent"])
+            );
+        }
+    }
+}
+
 #[tokio::test]
 async fn both_backends_acquire_read_only_through_real_native_subscriptions() {
     use tokio::{
@@ -449,10 +599,10 @@ async fn both_backends_acquire_read_only_through_real_native_subscriptions() {
         let mut sender = Some(sender);
         let mut records = Vec::new();
         let mut sink = |value: Value| {
-            if value["ready"] == true {
-                if let Some(sender) = sender.take() {
-                    let _ = sender.send(());
-                }
+            if value["ready"] == true
+                && let Some(sender) = sender.take()
+            {
+                let _ = sender.send(());
             }
             records.push(value);
             Ok(())
@@ -483,4 +633,128 @@ async fn both_backends_acquire_read_only_through_real_native_subscriptions() {
         release.send(()).unwrap();
         peer.await.unwrap();
     }
+}
+
+#[tokio::test]
+async fn scripted_niri_runner_executes_by_id_then_conditionally_restores_on_shutdown() {
+    use tokio::{
+        io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
+        net::UnixListener,
+    };
+    async fn send(socket: &mut tokio::net::UnixStream, event: Event) {
+        let mut bytes = serde_json::to_vec(&event).unwrap();
+        bytes.push(b'\n');
+        socket.write_all(&bytes).await.unwrap();
+    }
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("native.sock");
+    let listener = UnixListener::bind(&path).unwrap();
+    let (release, released) = tokio::sync::oneshot::channel();
+    let peer = tokio::spawn(async move {
+        let (mut events, _) = listener.accept().await.unwrap();
+        let mut line = String::new();
+        BufReader::new(&mut events)
+            .read_line(&mut line)
+            .await
+            .unwrap();
+        assert_eq!(line.trim(), "\"EventStream\"");
+        events.write_all(b"{\"Ok\":\"Handled\"}\n").await.unwrap();
+        send(
+            &mut events,
+            Event::WorkspacesChanged {
+                workspaces: vec![workspace(1)],
+            },
+        )
+        .await;
+        send(
+            &mut events,
+            Event::WindowsChanged {
+                windows: vec![
+                    window(1, 1, 0, 400, true),
+                    window(2, 1, 1, 300, false),
+                    window(3, 1, 2, 200, false),
+                ],
+            },
+        )
+        .await;
+        for heights in [[630, 162, 108], [400, 300, 200]] {
+            for (index, height) in heights.iter().enumerate() {
+                let (mut command, _) = listener.accept().await.unwrap();
+                let mut line = String::new();
+                BufReader::new(&mut command)
+                    .read_line(&mut line)
+                    .await
+                    .unwrap();
+                let request: Value = serde_json::from_str(&line).unwrap();
+                assert_eq!(request["Action"]["SetWindowHeight"]["id"], index + 1);
+                assert_eq!(
+                    request["Action"]["SetWindowHeight"]["change"]["SetFixed"],
+                    *height
+                );
+                command.write_all(b"{\"Ok\":\"Handled\"}\n").await.unwrap();
+            }
+            send(
+                &mut events,
+                Event::WindowsChanged {
+                    windows: heights
+                        .into_iter()
+                        .enumerate()
+                        .map(|(index, height)| {
+                            window(index as u64 + 1, 1, index, height, index == 0)
+                        })
+                        .collect(),
+                },
+            )
+            .await;
+        }
+        let _ = released.await;
+    });
+    let command = command(&["--socket", path.to_str().unwrap()]);
+    let (owner, observer, actuator) = native::subscribe(&command).await.unwrap();
+    let actuator = actuator.unwrap();
+    let executor: Executor = Arc::new(move |request| {
+        let actuator = actuator.clone();
+        async move { actuator.set_height(request).await }.boxed()
+    });
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    let mut sender = Some(sender);
+    let mut records = Vec::new();
+    let mut sink = |value: Value| {
+        if value["groups"][0]["phase"] == "Settled"
+            && let Some(sender) = sender.take()
+        {
+            let _ = sender.send(());
+        }
+        records.push(value);
+        Ok(())
+    };
+    tokio::time::timeout(
+        Duration::from_secs(3),
+        drive(
+            observer,
+            Some(executor),
+            &command,
+            &LongcatConfig::default(),
+            &mut sink,
+            async move { receiver.await.map_err(io::Error::other) }.boxed(),
+        ),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(
+        records
+            .iter()
+            .filter(|record| record["type"] == "longcat-command")
+            .count(),
+        6
+    );
+    assert!(
+        records
+            .iter()
+            .any(|record| record["groups"][0]["phase"] == "Restored")
+    );
+    owner.shutdown().await.unwrap();
+    release.send(()).unwrap();
+    peer.await.unwrap();
 }

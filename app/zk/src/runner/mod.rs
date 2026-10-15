@@ -103,6 +103,7 @@ async fn drive(
     let mut stopping_at = None;
     let mut failure = None;
     let mut observer_closed = false;
+    let mut processed = observer.current();
     // One admitted event per turn; due work and native completion get priority
     // over further intake. This avoids Scheduler's greedy stream-drain issue.
     let result: io::Result<()> = async {
@@ -118,6 +119,7 @@ async fn drive(
                 } => {
                     pending = None;
                     let current = sequence.as_mut().expect("pending sequence");
+                    let native_receipt = format!("{outcome:?}");
                     let outcome = match outcome {
                         zk_niri::Transmission::Handled => CommandOutcome::Handled,
                         zk_niri::Transmission::Rejected(message) => CommandOutcome::Rejected { message },
@@ -126,21 +128,66 @@ async fn drive(
                     };
                     let proceed = outcome == CommandOutcome::Handled;
                     control.record(current, outcome)?;
+                    sink(serde_json::json!({"type":"longcat-command", "plan_id":current.plan.id,
+                        "index":current.next, "target":current.plan.targets[current.next], "native_receipt":native_receipt}))?;
                     current.next += 1;
-                    if !proceed || current.next == current.plan.targets.len() {
+                    if !proceed || current.next == current.plan.targets.len()
+                        || (control.stopping && current.plan.kind == zk_longcat::PlanKind::Emphasize) {
                         control.finish(current)?;
                         sequence = None;
                     }
                     timer.admit(ScheduleRequest { key: (), work: "command-evidence", run_at: Instant::now() }).expect("open schedule");
                 }
+                signal = &mut stop, if !control.stopping => {
+                    signal?;
+                    control.stopping = true;
+                    stopping_at = Some(Instant::now() + Duration::from_millis(command.shutdown_timeout_ms));
+                    timer.admit(ScheduleRequest { key: (), work: "shutdown", run_at: Instant::now() }).expect("open schedule");
+                }
                 work = poll_fn(|cx| std::pin::Pin::new(&mut timer).poll_ready(cx, |_| Some(()))) => {
                     let reason = work.expect("open schedule").work.work;
-                    let capture = observer.current();
+                    // At most eight history items per turn. Never use a healthy
+                    // latest snapshot to skip queued discontinuity evidence.
+                    let mut caught_up = observer_closed;
+                    if !observer_closed {
+                        for _ in 0..8 {
+                            match observer.try_recv() {
+                                Ok(Some(update)) => {
+                                    processed = update.after.clone();
+                                    if discontinuity(&control, &update) {
+                                        control.lose("queued native discontinuity");
+                                        control.stopping = true;
+                                        failure = Some(io::Error::new(io::ErrorKind::ConnectionAborted, "queued native discontinuity"));
+                                        stopping_at.get_or_insert(Instant::now() + Duration::from_millis(command.shutdown_timeout_ms));
+                                    }
+                                }
+                                Ok(None) => { caught_up = true; break; }
+                                Err(error) => {
+                                    observer_closed = error == ObserveError::Closed;
+                                    control.lose(&format!("observer continuity lost: {error}"));
+                                    control.stopping = true;
+                                    failure = Some(io::Error::other(error));
+                                    stopping_at.get_or_insert(Instant::now() + Duration::from_millis(command.shutdown_timeout_ms));
+                                    // No recovery/reacquisition across an unknown gap.
+                                    processed = observer.current();
+                                    caught_up = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    let newest = observer.current();
+                    if !caught_up || newest.version != processed.version || newest.scope != processed.scope {
+                        timer.admit(ScheduleRequest { key: (), work: "history-catchup", run_at: Instant::now() }).expect("open schedule");
+                        tokio::task::yield_now().await;
+                        continue;
+                    }
+                    let capture = processed.clone();
                     if !capture.connected { control.lose("native source disconnected"); }
                     let (record, selected) = control.evaluate(&capture, origin.elapsed().as_millis() as u64,
                         sequence.as_ref(), reason)?;
                     sink(record)?;
-                    emitted += 1;
+                    if capture.is_ready() { emitted += 1; }
                     if sequence.is_none() { sequence = selected; }
                     if command.limit.is_some_and(|limit| emitted >= limit) && !control.stopping {
                         control.stopping = true;
@@ -148,6 +195,11 @@ async fn drive(
                         // A limit caps ordinary diagnostics; final shutdown evidence is
                         // deliberately emitted in addition, never silently discarded.
                         if command.dry_run { break; }
+                        if pending.is_none() && sequence.as_ref().is_some_and(|sequence|
+                            sequence.plan.kind == zk_longcat::PlanKind::Emphasize) {
+                            control.finish(sequence.as_ref().expect("selected sequence"))?;
+                            sequence = None;
+                        }
                     }
                     if !capture.connected && !control.stopping {
                         failure = Some(io::Error::new(io::ErrorKind::ConnectionAborted, "native source disconnected; episode authority revoked"));
@@ -164,21 +216,43 @@ async fn drive(
                         if sequence.is_none() && control.next_deadline().is_none() { break; }
                     }
                     if pending.is_none() && let Some(current) = &sequence {
-                        // Inspect receiver loss before granting another mutation.
-                        // One item only; current() supplies the newest capture.
-                        match observer.try_recv() {
-                            Err(error) => {
-                                control.lose(&format!("observer lost continuity: {error}"));
-                                failure = Some(io::Error::other(error));
-                                control.stopping = true;
-                                stopping_at.get_or_insert(Instant::now() + Duration::from_millis(command.shutdown_timeout_ms));
-                            }
-                            Ok(Some(update)) if matches!(update.continuity, Continuity::Discontinuous(_)) => {
-                                control.lose("native continuity changed before send");
-                            }
-                            _ => {}
+                        if matches!(control.slots[&current.key].episode.phase(),
+                            zk_longcat::Phase::Lost | zk_longcat::Phase::Conflicted)
+                            || (control.stopping && current.plan.kind == zk_longcat::PlanKind::Emphasize) {
+                            control.finish(current)?;
+                            sequence = None;
+                            timer.admit(ScheduleRequest { key: (), work: "revoked-unsent-tail", run_at: Instant::now() }).expect("open schedule");
+                            continue;
                         }
-                        match control.request(&observer.current(), current) {
+                        // A publication may have raced calculation/output. Any
+                        // queued item blocks admission until a later bounded drain.
+                        let empty = match observer.try_recv() {
+                            Ok(None) => true,
+                            Ok(Some(update)) => {
+                                processed = update.after.clone();
+                                if discontinuity(&control, &update) {
+                                    control.lose("native continuity changed before send");
+                                    control.stopping = true;
+                                    failure = Some(io::Error::new(io::ErrorKind::ConnectionAborted, "native continuity changed before send"));
+                                    stopping_at.get_or_insert(Instant::now() + Duration::from_millis(command.shutdown_timeout_ms));
+                                }
+                                false
+                            }
+                            Err(error) => {
+                                observer_closed = error == ObserveError::Closed;
+                                control.lose(&format!("observer lost continuity before send: {error}"));
+                                control.stopping = true;
+                                failure = Some(io::Error::other(error));
+                                stopping_at.get_or_insert(Instant::now() + Duration::from_millis(command.shutdown_timeout_ms));
+                                false
+                            }
+                        };
+                        let fresh = observer.current();
+                        if !empty || fresh.version != processed.version || fresh.scope != processed.scope {
+                            timer.admit(ScheduleRequest { key: (), work: "admission-history-catchup", run_at: Instant::now() }).expect("open schedule");
+                            continue;
+                        }
+                        match control.request(&fresh, current) {
                             Ok(request) if executor.is_some() && !command.dry_run => {
                                 pending = Some(executor.as_ref().expect("executor")(request));
                             }
@@ -198,22 +272,11 @@ async fn drive(
                             run_at: origin + Duration::from_millis(due) }).expect("open schedule");
                     }
                 }
-                signal = &mut stop, if !control.stopping => {
-                    signal?;
-                    control.stopping = true;
-                    stopping_at = Some(Instant::now() + Duration::from_millis(command.shutdown_timeout_ms));
-                    timer.admit(ScheduleRequest { key: (), work: "shutdown", run_at: Instant::now() }).expect("open schedule");
-                }
                 event = observer.recv(), if !observer_closed => {
                     match event {
                         Ok(update) => {
-                            let first_native_epoch = matches!(update.continuity,
-                                Continuity::Discontinuous(zk_desktop::LossReason::EpochChanged))
-                                && update.before.scope.epoch.0 == 0
-                                && update.before.windows_status.stamp.is_none()
-                                && update.before.workspaces_status.stamp.is_none()
-                                && control.slots.is_empty();
-                            if matches!(update.continuity, Continuity::Discontinuous(_)) && !first_native_epoch {
+                            processed = update.after.clone();
+                            if discontinuity(&control, &update) {
                                 control.lose("native discontinuity");
                                 control.stopping = true;
                                 failure = Some(io::Error::new(io::ErrorKind::ConnectionAborted, "native discontinuity"));
@@ -254,4 +317,15 @@ async fn drive(
             "requested_effect":slot.episode.requested(), "retained_effect_count":slot.episode.effects().len()})).collect::<Vec<_>>() });
     let final_output = sink(final_record);
     result.and(failure.map_or(Ok(()), Err)).and(final_output)
+}
+
+fn discontinuity(control: &Control, update: &zk_desktop::DesktopUpdate) -> bool {
+    let first_native_epoch = matches!(
+        update.continuity,
+        Continuity::Discontinuous(zk_desktop::LossReason::EpochChanged)
+    ) && update.before.scope.epoch.0 == 0
+        && update.before.windows_status.stamp.is_none()
+        && update.before.workspaces_status.stamp.is_none()
+        && control.slots.is_empty();
+    matches!(update.continuity, Continuity::Discontinuous(_)) && !first_native_epoch
 }

@@ -22,6 +22,7 @@ pub struct Control {
     pub dry_run: bool,
     pub stopping: bool,
     minimum: u32,
+    resize_debounce_ms: u64,
     policy: Policy,
 }
 
@@ -32,6 +33,7 @@ impl Control {
             dry_run,
             stopping: false,
             minimum: config.minimum_height as u32,
+            resize_debounce_ms: config.resize_debounce_ms,
             policy: Policy {
                 active_share: config.active_height_proportion
                     / (config.active_height_proportion + config.other_height_proportion),
@@ -112,7 +114,7 @@ impl Control {
                 }
             } else if capture.active_window.is_some() {
                 unsupported = Some("active window is not present in the current census".into());
-            } else if capture.capabilities.reported_groups == false {
+            } else if !capture.capabilities.reported_groups {
                 unsupported =
                     Some("native grouping/secondary axis unavailable; no active window".into());
             }
@@ -172,10 +174,21 @@ impl Control {
                 "backend has no by-ID height capability",
             ));
         }
+        let windows: Vec<_> = capture.windows.values().take(128).map(|window| json!({
+            "id":bridge::native_id(&window.key.native),
+            "workspace":window.workspace.as_ref().map(|workspace| bridge::native_id(&workspace.native)),
+            "group_position":window.group.as_ref().map(|group| bridge::native_id(&group.position)),
+            "placement":format!("{:?}", window.placement), "active":window.active,
+            "committed_content":window.geometry.content_size.map(|size| json!({"width":size.width,"height":size.height})),
+            "tile":window.geometry.tile_size.map(|size| json!({"width":size.width,"height":size.height}))
+        })).collect();
         let record = json!({ "type": "longcat", "reason": reason, "version": capture.version.0,
             "source": format!("{:?}:{}", capture.scope.source.backend, capture.scope.source.name), "epoch": capture.scope.epoch.0,
             "ready": capture.is_ready(), "connected": capture.connected, "active_window": capture.active_window.as_ref().map(|w| bridge::native_id(&w.native)),
             "window_count": capture.windows.len(), "workspace_count": capture.workspaces.len(), "dry_run": self.dry_run,
+            "policy":self.policy, "resize_learning":{"enabled":false,"configured_debounce_ms":self.resize_debounce_ms},
+            "observed_windows":windows, "observed_windows_truncated":capture.windows.len() > 128,
+            "family_health":{"windows":format!("{:?}",capture.windows_status.health), "workspaces":format!("{:?}",capture.workspaces_status.health)},
             "unsupported": unsupported, "groups": rows });
         Ok((record, selected))
     }

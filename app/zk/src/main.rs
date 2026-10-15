@@ -10,13 +10,10 @@ use commands::systemd::generate_systemd_service;
 use commands::zoomer::run_zoomer;
 use config::{CliArgs, CliZoomArgs, Config, Verbosity};
 use kitty::KittyRegistry;
-use niri::registry::NiriRegistry;
-use zk_zoomer::KittyResizer;
 
 mod commands;
 mod config;
 use zk_kitty as kitty;
-mod niri;
 mod runner;
 
 #[derive(Subcommand, Debug)]
@@ -89,7 +86,7 @@ enum CliSubcommand {
     Font(FontCommand),
     #[command(
         name = "longcat",
-        about = "Manage window heights in niri columns based on focus"
+        about = "Manage focus-emphasized window heights using native desktop observations"
     )]
     Longcat(commands::longcat::LongcatCommand),
 }
@@ -279,21 +276,9 @@ async fn main() -> std::io::Result<()> {
         eprintln!("Tracking app_id: {}", app_id);
     }
 
-    let kitty_registry = KittyRegistry::new(config.to_registry_config());
-    kitty_registry.start_reaper().await;
-
-    let niri_registry = NiriRegistry::new_with_verbosity(verbosity)
+    run_zoomer(app_id, verbosity, config)
         .await
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
-
-    let mut kitty_resizer = KittyResizer::with_zoom_config(kitty_registry, config.zoom);
-
-    let kitty_events =
-        niri_registry.windows_matching(|window| window.app_id.as_deref() == Some(&app_id));
-
-    let _ = kitty_resizer
-        .process_events(niri::focus_events(kitty_events))
-        .await;
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
 
     Ok(())
 }

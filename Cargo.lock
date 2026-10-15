@@ -2029,7 +2029,6 @@ name = "zooming-kittens"
 version = "0.1.0"
 dependencies = [
  "clap",
- "dashmap",
  "dirs",
  "figment2",
  "futures",
