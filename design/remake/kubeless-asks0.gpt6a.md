@@ -7,7 +7,7 @@ status: proposed
 generated: { at: 2026-10-15, by: 'model:openai/gpt-6-astra#high' }
 sources:
   - resource: opencode://ses_ec3316eefffejmDBXbZ28spBd7
-    title: Human invitation to improve young sibling libraries; adoption decisions, upstream asks and Taffy composition
+    title: Human invitation to improve young sibling libraries, adoption decisions, Taffy composition, and explicit deferral of upstream scheduler fairness during the consumer build
   - resource: kubeless0.gpt61sm.md
     title: Independent source-grounded reuse assessment and prior scoped test evidence
   - resource: architecture0.gpt6a.md
@@ -36,7 +36,8 @@ and protocol facts.
 Treat Kubeless as a library we can improve through this consumer, not a frozen
 framework whose current limitations dictate our architecture. Equally, adopt
 what already works before creating new mechanisms. The strongest first upstream
-change is scheduler fairness. The strongest design contribution is a real
+change identified is scheduler fairness, now explicitly deferred by the human.
+The strongest design contribution is a real
 non-resumable, observation-driven control example.
 
 This sharpens the earlier assessment's optional choices into the following
@@ -113,7 +114,12 @@ Per-window concurrency would be incorrect for sibling-redistributing resize.
 
 ## Upstream ask 1 — fair stream Scheduler
 
-**Priority: implement alongside the first consumer, without blocking it.**
+**Disposition: deferred in Kubeless by human direction, 2026-10-15.**
+
+Build the Longcat consumer using bounded caller intake into direct `Schedule`.
+Do not expand this implementation into upstream scheduler work. Preserve the
+proposal below for a later Kubeless decision; its difficulty and scope do not
+need to be settled to build this application.
 
 `Scheduler::poll_ready` currently loops over input until Pending/EOF, then polls
 the schedule. A perpetually ready producer can prevent due work from being
@@ -238,9 +244,20 @@ the code we write can concentrate on Longcat's actual policy and native fidelity
 ## Readiness to build
 
 There is no outstanding Kubeless research question that should delay the first
-read-only-to-dry-run implementation. Select memory, impact and direct scheduling;
-develop scheduler fairness and the composition example alongside it. Use the
-first real trace to decide publication and settlement adoption.
+read-only-to-dry-run implementation. Select memory, impact and direct scheduling.
+Build the real consumer first; lift the composition example after learning from
+it. Scheduler fairness remains deferred. Use the first real trace to decide
+publication and settlement adoption.
+
+### Required return after implementation
+
+Update this handoff after the first integrated implementation and verification:
+record the exact adopted APIs, awkward integration points, local adaptations,
+checks and observed limits. Revise each ask using that evidence. Identify what
+can actually be lifted into Kubeless and what is application policy. Keep
+scheduler fairness deferred unless the human changes that decision. This is
+an implementation closeout obligation, not a claim that the learning already
+exists.
 
 The independent blocker to full Umbriel control parity remains the compositor
 contract: explicit resize targets and sufficiently exact layout/restore state.

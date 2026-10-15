@@ -298,8 +298,9 @@ current `Longcat` struct behind a backend trait.
 
 The follow-up [adoption and upstream agenda](kubeless-asks0.gpt6a.md) sharpens
 these choices: use memory for niri (reuse Umbriel's existing owner), direct
-impact and direct scheduling in the first implementation. Improve stream
-scheduler fairness alongside the consumer. Add independent derived-status
+impact and direct scheduling in the first implementation. The human deferred
+upstream scheduler fairness on 2026-10-15; use bounded direct scheduling here
+and lift a reusable example after building the consumer. Add independent derived-status
 publication when it gains consumers; fit-test settlement against retained
 episode ownership before adopting its future-based helper. The agenda records
 the human invitation to improve Kubeless while it is still young and connects
