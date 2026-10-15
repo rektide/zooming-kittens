@@ -162,6 +162,20 @@ The [remake reading map](design/remake/README.md) preserves the design rationale
 and [Kubeless handoff](design/remake/kubeless-asks0.gpt6a.md), including the
 implementation findings and deferred upstream work.
 
+## Verification
+
+The integrated remake passes **154 tests**, strict Clippy and formatting:
+
+```sh
+cargo nextest run --workspace --all-features
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo fmt --all --check
+```
+
+Native mutation/convergence tests use scripted compositor peers. A live read-only
+Umbriel run acquired 31 windows and eight workspaces and exited cleanly; live
+niri resizing and exact Umbriel control parity are not claimed.
+
 ## License
 
 SEE LICENSE IN LICENSE

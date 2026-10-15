@@ -151,3 +151,8 @@ Build the application with `cargo build -p zooming-kittens`; install with
 The workspace-level test, feature and Clippy checks establish composition after
 integration. Scripted compositor peers verify protocol behavior without changing
 the live desktop; live convergence is a separate verification claim.
+
+The integrated implementation passed 154 all-feature workspace tests, strict
+all-target/all-feature Clippy and workspace formatting. Read-only live Umbriel
+acquisition returned 31 windows and eight workspaces. Full native mutation
+convergence remains scripted-peer evidence rather than a live claim.

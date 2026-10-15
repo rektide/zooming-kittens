@@ -19,8 +19,9 @@ sources:
   - resource: file:///home/rektide/src/kubeless/control/settlement/src/lib.rs
     title: Acknowledgment-preserving composition and its explicit future-cancellation limitation
 verification:
-  method: Source inspection, scoped implementation verification reports, independent layout review, and read-only live Umbriel application acquisition.
-  limits: Upstream asks remain proposals; aggregate workspace checks are recorded separately when complete. No live mutation is claimed.
+  method: Source inspection, independent layout/runner review, full workspace all-feature nextest, strict all-target/all-feature Clippy, formatting, and read-only live Umbriel acquisition.
+  result: 154 tests passed; strict Clippy and workspace formatting passed after integration corrections.
+  limits: Upstream asks remain proposals. Niri execution uses scripted peers; no live mutation is claimed.
 ---
 
 # Kubeless: what we should use and what we should improve
@@ -42,6 +43,11 @@ the layout implementation and review correction passed 46 tests with Clippy and
 formatting. The application author reported 31 all-feature tests, including
 scripted native acquisition, conditional restoration, timer-only reconsideration,
 partial effects, configuration precedence and discontinuity catch-up.
+
+Final integrated checks after the numerical-baseline, unread-output-pipe and lint
+corrections: **154 tests passed**, all-target/all-feature Clippy with warnings
+denied passed, and workspace formatting passed. The unread-pipe regression uses
+a subprocess and scripted read-only source; it does not modify a live desktop.
 
 Parent live verification ran `zk longcat --backend umbriel --dry-run --limit 1`
 against the available native socket: 31 windows, eight workspaces, explicit
@@ -100,7 +106,16 @@ limits. This preserves the conditional settlement-reducer idea as a later fit
 test, not an immediate upstream ask.
 
 **The first diagnostic consumer did not need another publication layer.** It uses
-a bounded JSONL queue with size/write deadlines. Independent lagging publication
+a bounded JSONL queue with row-size limits and a shutdown drain deadline.
+An unread-pipe probe exposed that a Tokio stdout timeout could still leave its
+blocking-pool writer preventing runtime exit. The final CLI writer is an ordinary
+OS thread using a duplicated descriptor. It owns diagnostics only; on drain
+timeout it remains detached until process exit, without claiming cancellation
+or a joined thread. Native command receipts remain with the runner. This is
+another useful composition-example lesson: an async timeout does not necessarily
+bound the lifetime of the underlying I/O.
+
+Independent lagging publication
 remains a good candidate when there are multiple consumers; it is not installed
 between native subscriptions and their inventory owners.
 
@@ -350,15 +365,13 @@ Build the real consumer first; lift the composition example after learning from
 it. Scheduler fairness remains deferred. Use the first real trace to decide
 publication and settlement adoption.
 
-### Required return after implementation
+### Return obligation — first integrated consumer completed
 
-Update this handoff after the first integrated implementation and verification:
-record the exact adopted APIs, awkward integration points, local adaptations,
-checks and observed limits. Revise each ask using that evidence. Identify what
-can actually be lifted into Kubeless and what is application policy. Keep
-scheduler fairness deferred unless the human changes that decision. This is
-an implementation closeout obligation, not a claim that the learning already
-exists.
+The implementation return at the top now records adopted APIs, awkward integration
+points, local adaptations, checks and observed limits. The first consumer's
+closeout obligation is fulfilled. Revisit this account when lifting the example
+or changing the controller boundary; keep scheduler fairness deferred unless
+the human changes that decision.
 
 The independent blocker to full Umbriel control parity remains the compositor
 contract: explicit resize targets and sufficiently exact layout/restore state.
