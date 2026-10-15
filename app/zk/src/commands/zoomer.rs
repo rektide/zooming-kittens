@@ -1,6 +1,11 @@
 use crate::config::{Config, Verbosity};
-use crate::niri::registry::NiriRegistry;
+use futures::StreamExt;
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
+use zk_desktop::{Backend, SourceId};
 use zk_zoomer::KittyResizer;
+
+mod focus;
 
 /// Run focus tracking for a specific app with configurable font adjustments
 pub async fn run_zoomer(
@@ -37,19 +42,32 @@ pub async fn run_zoomer(
         }
     }
 
+    // Subscribe before starting output work, and retain the actual source owner
+    // until every exit path has joined its receive task.
+    let (source, observer) = zk_niri::subscribe_env(
+        SourceId::new(Backend::Niri, "zoomer"),
+        zk_niri::Options::default(),
+    )
+    .await?;
     let registry_config = config.to_registry_config();
     let kitty_registry = crate::kitty::KittyRegistry::new(registry_config);
     kitty_registry.start_reaper().await;
 
-    let niri_registry = NiriRegistry::new_with_verbosity(verbosity).await?;
     let mut zoomer = KittyResizer::with_zoom_config(kitty_registry, config.zoom);
 
-    let kitty_events =
-        niri_registry.windows_matching(|window| window.app_id.as_deref() == Some(&app_id));
-
-    zoomer
-        .process_events(crate::niri::focus_events(kitty_events))
-        .await?;
-
-    Ok(())
+    // Each slot is one indivisible transition (at most blur + focus). Never
+    // block observation behind kitty I/O or silently coalesce skipped focuses.
+    let (sender, receiver) = mpsc::channel(focus::QUEUE_CAPACITY);
+    let events = ReceiverStream::new(receiver).flat_map(futures::stream::iter);
+    let result = tokio::select! {
+        biased;
+        signal = tokio::signal::ctrl_c() => signal.map_err(Into::into),
+        result = focus::feed(observer, &app_id, sender) => result.map_err(Into::into),
+        result = zoomer.process_events(events) => result,
+    };
+    // Cancellation/loss drops pending effects; neither is evidence of blur.
+    // Commands already sent to kitty may have taken effect; no rollback claimed.
+    let shutdown = source.shutdown().await;
+    shutdown?;
+    result
 }
