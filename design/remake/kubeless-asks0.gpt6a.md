@@ -19,13 +19,13 @@ sources:
   - resource: file:///home/rektide/src/kubeless/control/settlement/src/lib.rs
     title: Acknowledgment-preserving composition and its explicit future-cancellation limitation
 verification:
-  method: Source inspection, independent assessment, and review of implemented native/layout baselines with their scoped verification reports.
-  limits: Upstream asks remain proposals; full runner verification is pending. No live mutation is claimed.
+  method: Source inspection, scoped implementation verification reports, independent layout review, and read-only live Umbriel application acquisition.
+  limits: Upstream asks remain proposals; aggregate workspace checks are recorded separately when complete. No live mutation is claimed.
 ---
 
 # Kubeless: what we should use and what we should improve
 
-## Implementation return — native and layout baselines, 2026-10-15
+## Implementation return — integrated consumer, 2026-10-15
 
 The first domain implementations now provide concrete adoption evidence:
 
@@ -35,11 +35,19 @@ The first domain implementations now provide concrete adoption evidence:
 | [`zk-umbriel`](../../desktop/umbriel/src/reducer.rs) | Existing `Inventory::install_windows_changes` | Reuses the native state owner and its continuity evidence; no duplicate reflector introduced. |
 | Both native reducers | `view-impact::affected_roots_with` | Projects actual before/after receipts into former/current affected workspaces, alongside semantic capture impact. |
 | [`zk-layout` and `zk-longcat`](../../layout/README.md) | No Kubeless dependencies | Taffy and clock-injected episode decisions remain independent of state-storage and scheduling mechanics. |
+| [Application runner](../../app/zk/src/runner/README.md) | Direct `schedule`, `ScheduleRequest`, `ReadyWork::poll_ready` | One coalescing key for reconsidering the bounded episode set; command receipts, capture changes and convergence deadlines trigger current-state decisions. |
 
 The adapter author reported 25 passing tests with strict Clippy/formatting;
-the layout author reported 42 passing tests with strict Clippy/formatting.
-These are scoped baselines, not yet proof of the full application composition.
-Application scheduling and lifecycle integration are still being verified.
+the layout implementation and review correction passed 46 tests with Clippy and
+formatting. The application author reported 31 all-feature tests, including
+scripted native acquisition, conditional restoration, timer-only reconsideration,
+partial effects, configuration precedence and discontinuity catch-up.
+
+Parent live verification ran `zk longcat --backend umbriel --dry-run --limit 1`
+against the available native socket: 31 windows, eight workspaces, explicit
+unsupported grouping, clean shutdown and no mutations. Startup/unready records
+did not consume the ready-decision limit. A separate invocation with write mode
+and a nonexistent socket was rejected for unsupported capability before connecting.
 
 What this already teaches us:
 
@@ -54,9 +62,69 @@ What this already teaches us:
   libraries compose successfully without pretending the consumer can now resize
   a topology it cannot observe.
 
-The next return must record the real runner's scheduling, retention, timeout and
-shutdown behavior. Scheduler fairness stays deferred; no upstream files have
-been changed for these baselines.
+### What the actual runner taught us
+
+**History-gated admission is the most important composition finding.** A latest
+healthy capture can be newer than a queued discontinuity. Reading `current()` and
+checking one queued event is insufficient: it can carry an old episode across an
+unprocessed gap. The runner now catches up at most eight updates per turn,
+examines every continuity marker, and yields/rearms if more remain. No policy
+admission jumps past that history. Before a write it checks again for queued
+updates and current-version mismatch. Native exact-basis validation additionally
+narrows, but does not eliminate, the remote race.
+
+This belongs in the proposed upstream composition example. It is not evidence
+that Kubeless needs a new universal stream abstraction: native ownership already
+exposes the facts, and the controller must decide when continuity matters.
+
+**One direct scheduling key was sufficient.** The first runner serializes native
+effects and reevaluates a bounded episode set from current observations. Native
+impact remains useful evidence; the app does not yet use it to run independent
+per-region queues. Avoid describing this implementation as a parallel keyed
+controller. Per-region scheduling can be evaluated if the current scan becomes
+material, rather than adopted for symmetry with the primitives.
+
+**Direct scheduling solved the immediate liveness need without upstream work.**
+The runner prioritizes command completion/shutdown and bounds history intake.
+Episode deadlines fire even after the final event. This is application-composed
+bounded intake, not a change to `Scheduler` or a general fairness guarantee.
+Scheduler fairness remains explicitly deferred.
+
+**Receipt retention belongs to the episode owner.** The runner has one owned
+command future, records each native result and retains uncertain partial effects.
+At bounded shutdown it records an outstanding request conservatively as possibly
+sent before dropping the waiter. Existing settlement helpers, Executor and the
+retained-action host were not required. Episode/member/effect limits stop the
+runner rather than silently pruning evidence; see the runner contract for exact
+limits. This preserves the conditional settlement-reducer idea as a later fit
+test, not an immediate upstream ask.
+
+**The first diagnostic consumer did not need another publication layer.** It uses
+a bounded JSONL queue with size/write deadlines. Independent lagging publication
+remains a good candidate when there are multiple consumers; it is not installed
+between native subscriptions and their inventory owners.
+
+**Taffy integration exposed a domain distinction, not a Kubeless defect.**
+Baseline content budgets are retained through partial writes; current per-window
+geometry remains observed. Independent review also found the initial fractional
+baseline must be compared with its original observation, not an integer restore
+target never applied. The core was corrected and regression-tested.
+
+### Updated upstream disposition
+
+1. Fair stream Scheduler: **deferred**, unchanged by these results.
+2. Non-resumable composition example: **worth lifting next**, grounded in actual
+   receipts, history-gated admission, timer-only progress, and unknown effects.
+   Keep compositor geometry/Longcat behavior in this repository.
+3. Entrance documentation: **still worthwhile**; the successful low-level path
+   demonstrates why consumers need not start with a full controller host.
+4. Settlement reducer / keyed capacity: **no new primitive justified yet**.
+   Retain the ideas and revisit against a demonstrated consumer pressure.
+
+No Kubeless or umbriel-rs upstream files were changed in this implementation.
+The executable consumer and its tests are now the evidence from which to shape
+the later lift. Do not turn that recommendation into authorization to implement
+the deferred scheduler change.
 
 ## Decision
 

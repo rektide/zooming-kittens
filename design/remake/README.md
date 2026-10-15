@@ -14,6 +14,15 @@ sources:
 
 # Longcat remake
 
+## Implemented consumer
+
+- [Current architecture](../../ARCHITECTURE.md): delivered domain crates and
+  their ownership, distinct from the original proposal below.
+- [Application runner](../../app/zk/src/runner/README.md): real native acquisition,
+  direct scheduling, Taffy decisions, history-gated command admission and shutdown.
+- [Kubeless implementation return](kubeless-asks0.gpt6a.md#implementation-return--integrated-consumer-2026-10-15):
+  actual adopted APIs and what the consumer taught us; fairness remains deferred.
+
 ## Proposed direction
 
 - [Architecture and landing sequence](architecture0.gpt6a.md): domain-grouped

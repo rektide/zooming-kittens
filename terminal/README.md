@@ -6,6 +6,8 @@ resource: terminal/README.md
 status: implemented
 generated: { at: 2026-10-15, by: 'model:zai-coding-plan/glm-5.3#high' }
 sources:
+  - resource: opencode://ses_ec3316eefffejmDBXbZ28spBd7
+    title: Complete native focus-feed integration and replace the retired legacy bridge reference
   - resource: opencode://ses_ec310f020ffe5d6kIV42ehdO2z
     title: Bounded application and terminal extraction, neutral focus bridge and scoped verification
   - resource: opencode://ses_ec3144533ffeIEijLxykcDnn0V
@@ -28,9 +30,11 @@ sources:
   diagnostic labels, not niri IDs. Blur carries the original terminal target.
   Neither crate depends on niri.
 
-The [application bridge](../app/zk/src/niri/mod.rs) translates the legacy niri
-adapter's events; it discards create/destroy events. The new desktop adapters
-are not wired through this extraction. File/environment/CLI loading stays in
+The [application bridge](../app/zk/src/commands/zoomer/focus.rs) derives focus
+transitions from the new native niri desktop captures. It preserves the original
+blur target, handles explicit no-focus and deletion, filters without losing blur,
+and reports bounded-delivery/source loss. Default mode and the zoomer command
+use this bridge; the legacy adapter is removed. File/environment/CLI loading stays in
 the [app config module](../app/zk/src/config.rs), and manual font command
 presentation remains in the app.
 

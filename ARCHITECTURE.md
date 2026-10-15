@@ -71,9 +71,11 @@ native event / family snapshot
   → retained reply evidence + later geometry observations
 ```
 
-Domain baselines are implemented and scoped-tested. Application integration is
-being completed against these interfaces; the preimplementation design is not
-evidence that every proposed capability is delivered.
+The application now composes these domains through the
+[Longcat runner](app/zk/src/runner/README.md). Default font zoom and `zoomer` use
+the new native niri observation source; the legacy focus registry and the old
+Longcat implementation have been removed. Umbriel observation is implemented;
+exact Umbriel grouping and mutation remain unsupported.
 
 ## Desktop sources
 

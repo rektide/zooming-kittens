@@ -79,13 +79,14 @@ additive = 6.0
 # Example: 1.5x on focus, /1.5 on blur
 # multiplicative = 1.5
 
-# Number of steps to apply at once (default: 1.0)
+# Adjustment size for smoothing (default: 1.0); a final remainder reaches the target.
 # For additive zoom with step_size=3.0 and additive=6.0:
 #   Focus: +6 points (applied as 2 steps of +3.0)
 #   Blur: -6 points (applied as 2 steps of -3.0)
 # For multiplicative zoom with step_size=2.0 and multiplicative=9.0:
 #   Focus: 2x, 2x, 2x, then (9/8)x to reach exactly 9x from baseline
-#   Blur: /2x, /2x, /2x, then /(1/8)x to reach exactly 1.0x baseline
+#   Blur: /2x, /2x, /2x, then /(9/8)x to reach exactly 1.0x baseline
+# Multiplicative step_size <= 1 sends one exact adjustment instead of looping.
 step_size = 1.0
 
 # =============================================================================
@@ -95,22 +96,23 @@ step_size = 1.0
 [longcat]
 # Manage window heights in niri columns based on focus
 # When a window gains focus in a column with multiple windows:
-#   - Active window height is scaled by active_height_proportion
-#   - Other windows are scaled by other_height_proportion
-# When focus leaves the column, original heights are restored
-# If the user manually resizes windows, the mode is forgotten after debounce
+#   - Active window receives active / (active + other) of the content budget.
+#   - Siblings share the remainder in their baseline-relative proportions.
+# Taffy applies constraints and conserving integer rounding.
+# Leaving the column conditionally restores a still-valid baseline.
+# Conflicting geometry suspends the episode; automatic resize learning is disabled.
 
-# Height proportion for active window (default: 0.7)
-# This multiplies the window's original height
+# Positive finite relative weight for the active window (default: 0.7)
 active_height_proportion = 0.7
 
-# Height proportion for other windows in the column (default: 0.3)
-# This multiplies the other windows' original heights
+# Positive finite relative weight for all sibling windows together (default: 0.3)
 other_height_proportion = 0.3
 
-# Debounce time in ms before detecting manual resize (default: 500)
-# Windows sometimes auto-resize after being resized; this debounce
-# prevents the mode from being forgotten too quickly
+# Minimum allocated content height for each window (default: 60).
+minimum_height = 60
+
+# Retained compatibility setting; resize learning is currently disabled.
+# This is not the convergence deadline; use --convergence-timeout-ms for that.
 resize_debounce_ms = 500
 
 # =============================================================================

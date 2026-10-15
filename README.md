@@ -10,9 +10,12 @@ sources:
 
 # zooming-kittens
 
-> Niri window manager toolkit for dynamic terminal sizing and focus-driven automation
+> Compositor-driven window sizing and terminal focus automation
 
-Zooming-kittens connects to the [niri](https://github.com/YaLTeR/niri) scrollable-tiling Wayland compositor via IPC and reacts to window focus changes. Currently it ships integrations for [kitty](https://sw.kovidgoyal.net/kitty/) terminal; support for additional terminals is planned.
+Zooming-kittens uses native desktop streams for focus-driven window sizing and
+[kitty](https://sw.kovidgoyal.net/kitty/) font control. Longcat supports
+[niri](https://github.com/YaLTeR/niri) by-ID height changes and read-only Umbriel
+observation through the sibling `umbriel-rs` libraries.
 
 ## Features
 
@@ -41,12 +44,34 @@ zk zoomer --zoom-multiplicative 1.5 --zoom-step-size 2
 
 ### Longcat
 
-Manages window heights within niri columns. When a window in a multi-window column gains focus, the active window expands and others contract. Original heights are restored when focus leaves the column. Manual resizes are detected and adapted to after a configurable debounce period.
+Uses Taffy to allocate heights within reported niri columns. The focused window
+gets an emphasized share; siblings retain their baseline-relative weights within
+the configured constraints. Leaving a column conditionally restores the baseline
+when identity, context and observed effects still agree. Conflicting changes
+suspend the episode rather than silently learning new proportions.
 
 ```bash
 zk longcat
 zk longcat --active-height-proportion 0.7 --other-height-proportion 0.3
+zk longcat --dry-run --limit 1
+zk longcat --backend umbriel --dry-run --limit 1
 ```
+
+`--socket` selects an explicit native endpoint. `--limit` counts ready decisions,
+so startup waits and final shutdown records may add JSONL rows. Weights normalize
+as `active / (active + other)`; explicit CLI values override file/environment
+configuration. `--convergence-timeout-ms` and `--shutdown-timeout-ms` govern the
+effect and conditional-shutdown deadlines.
+
+Umbriel currently reports windows, workspaces, activation and health, but lacks
+the exact grouping and targeted resize contract needed here. Its dry-run reports
+that limitation explicitly; mutation is rejected before connecting. No polling
+or focus-switching workaround is used. `resize_debounce_ms` is retained for
+configuration compatibility; automatic resize learning is disabled.
+
+See the [runner contract](app/zk/src/runner/README.md) for admission, retention
+limits, partial effects, loss handling and diagnostics. Use dry-run to inspect
+the current native input before enabling changes.
 
 ### Export
 
@@ -126,18 +151,16 @@ zk generate-systemd --output > ~/.config/systemd/user/kitty-focus-tracker.servic
 
 ## Architecture
 
-The application uses an async stream architecture built on tokio:
-
-- **NiriRegistry** connects to niri IPC and produces event streams (focus, blur, create, destroy)
-- **KittyResizer** consumes filtered streams and adjusts font sizes through kitty's remote control socket
-- **KittyRegistry** manages pooled connections with retry logic, idle reaping, and PID-based socket discovery
+The workspace separates native observation (`desktop/`), Taffy allocation and
+Longcat policy (`layout/`), font control (`terminal/`), native export
+(`inspection/`) and runtime composition (`app/`). Kubeless supplies selected
+observed-state, before/after impact and direct scheduling mechanisms.
 
 See [`ARCHITECTURE.md`](ARCHITECTURE.md) for details.
 
-The proposed [Longcat remake](design/remake/README.md) develops a domain-grouped
-Rust workspace, niri/Umbriel backends, and separate observation, layout-policy,
-and execution contracts. It includes the streaming and protocol feasibility
-assessment; this is design work, not implemented Umbriel support.
+The [remake reading map](design/remake/README.md) preserves the design rationale
+and [Kubeless handoff](design/remake/kubeless-asks0.gpt6a.md), including the
+implementation findings and deferred upstream work.
 
 ## License
 
