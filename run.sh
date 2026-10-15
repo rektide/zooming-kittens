@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# run.sh - Start kitty-focus-tracker via systemd-run and stream logs
+# run.sh - Start zk via systemd-run
 
 set -euo pipefail
 
@@ -8,10 +8,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$SCRIPT_DIR"
 
 # Build project if not already built
-if [ ! -f "$PROJECT_DIR/target/release/kitty-focus-tracker" ]; then
-    echo "Building kitty-focus-tracker in release mode..."
+if [ ! -f "$PROJECT_DIR/target/release/zk" ]; then
+    echo "Building zk in release mode..."
     cd "$PROJECT_DIR"
-    cargo build --release
+    cargo build --release -p zooming-kittens --bin zk
 fi
 
 # Get service name from ZOOMING_APPNAME env var (defaults to kitty)
@@ -25,7 +25,7 @@ systemd-run --user \
     --unit="$SERVICE_NAME" \
     --setenv=RUST_BACKTRACE=full \
     --setenv=ZOOMING_APPNAME="$SERVICE_NAME" \
-    "$PROJECT_DIR/target/release/kitty-focus-tracker" --verbose "$@"
+    "$PROJECT_DIR/target/release/zk" --verbose "$@"
 
 echo ""
 echo "$SERVICE_NAME is running"

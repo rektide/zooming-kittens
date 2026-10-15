@@ -1,6 +1,6 @@
-# kitty-focus-tracker Configuration Example
+# zooming-kittens Configuration Example
 # 
-# This file demonstrates all available configuration options for kitty-focus-tracker.
+# This file demonstrates configuration options for zk.
 # Copy this to ~/.config/kitty-focus-tracker/config.toml and customize as needed.
 #
 # Configuration is loaded in the following priority order (highest first):

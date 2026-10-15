@@ -1,9 +1,19 @@
+---
+type: Reference
+title: Niri export
+description: Native niri JSON and JSONL export modes, records and filtering.
+resource: doc/export.md
+sources:
+  - resource: opencode://ses_ec3316eefffejmDBXbZ28spBd7
+    title: Correct executable examples during domain-grouped Rust workspace migration
+---
+
 # Niri export
 
 The `export` command prints niri IPC state as typed records. It is a discovery tool and a machine-readable feed for consumers that want raw niri data without going through longcat or zoomer behavior.
 
 ```bash
-kitty-focus-tracker export
+zk export
 ```
 
 With no mode flags, `export` prints a snapshot and then follows the event stream. The default format is JSON Lines because a stream has no natural end.
@@ -20,9 +30,9 @@ With no mode flags, `export` prints a snapshot and then follows the event stream
 Examples:
 
 ```bash
-kitty-focus-tracker export --snapshot --format json
-kitty-focus-tracker export --stream --format jsonl
-kitty-focus-tracker export --snapshot --stream --filter window=4
+zk export --snapshot --format json
+zk export --stream --format jsonl
+zk export --snapshot --stream --filter window=4
 ```
 
 ## Formats
@@ -73,7 +83,7 @@ Snapshot mode currently emits these record types:
 Output records can be noisy because niri reports every available monitor mode. Use `--current-mode` to replace the full `modes` list and `current_mode` index with the current mode object.
 
 ```bash
-kitty-focus-tracker export --snapshot --filter output --current-mode
+zk export --snapshot --filter output --current-mode
 ```
 
 ## Stream records
@@ -119,9 +129,9 @@ Filters are comma-separated and ORed. If any filter matches, the record is emitt
 Examples:
 
 ```bash
-kitty-focus-tracker export --filter window=42,workspace=9
-kitty-focus-tracker export --stream --filter type=cast_started_or_changed
-kitty-focus-tracker export --snapshot --filter output,cast --current-mode
+zk export --filter window=42,workspace=9
+zk export --stream --filter type=cast_started_or_changed
+zk export --snapshot --filter output,cast --current-mode
 ```
 
 Future filters may support nested field predicates such as `window.app_id=kitty` or `cast.target.window=42`.
