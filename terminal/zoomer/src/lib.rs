@@ -1,10 +1,14 @@
 //! Compositor-independent focus-to-font policy, composed with kitty remote control.
 
 pub mod config;
+pub mod plan;
 pub mod resizer;
 
 pub use config::{ZoomConfig, ZoomType};
-pub use resizer::KittyResizer;
+pub use plan::{
+    AppliedEffect, FontAdjustment, FontOp, PlanEvent, WindowState, ZoomPlan, MAX_PLAN_STEPS,
+};
+pub use resizer::{FontPort, KittyResizer, ZoomResizer};
 
 /// A terminal focus target. The opaque ID is used for diagnostics; the PID is
 /// resolved to a kitty master by `zk-kitty`.

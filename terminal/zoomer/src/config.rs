@@ -48,6 +48,33 @@ impl ZoomConfig {
                 types.join(", ")
             ));
         }
+
+        // Amounts are validated before any command is planned: kitty applies
+        // `old <op> size` with a positive float size, so nonfinite or
+        // non-positive values have no meaningful remote interpretation.
+        if !self.step_size.is_finite() || self.step_size <= 0.0 {
+            return Err(format!(
+                "step_size must be a finite positive number, got {}",
+                self.step_size
+            ));
+        }
+        if let Some(absolute) = self.absolute
+            && (!absolute.is_finite() || absolute <= 0.0)
+        {
+            return Err(format!(
+                "absolute zoom target must be a finite positive font size, got {absolute}"
+            ));
+        }
+        if let Some(additive) = self.additive && !additive.is_finite() {
+            return Err(format!("additive zoom amount must be finite, got {additive}"));
+        }
+        if let Some(multiplicative) = self.multiplicative
+            && (!multiplicative.is_finite() || multiplicative <= 0.0)
+        {
+            return Err(format!(
+                "multiplicative zoom factor must be finite and positive, got {multiplicative}"
+            ));
+        }
         Ok(())
     }
 
