@@ -1,0 +1,16 @@
+[package]
+name = "zk-umbriel"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+zk-desktop = { version = "0.1.0", path = "../model" }
+umbriel-client = { version = "0.1.0", path = "../../../umbriel-rs/crates/umbriel-client" }
+umbriel-protocol = { version = "0.1.0", path = "../../../umbriel-rs/crates/umbriel-protocol" }
+umbriel-state = { version = "0.1.0", path = "../../../umbriel-rs/crates/umbriel-state" }
+kubeless-view-impact = { version = "0.1.0", path = "../../../kubeless/view/impact" }
+tokio = { version = "1.49.0", features = ["macros", "rt", "sync", "time"] }
+
+[dev-dependencies]
+tempfile = "3.16"
+tokio = { version = "1.49.0", features = ["io-util", "net"] }
