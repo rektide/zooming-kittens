@@ -6,6 +6,8 @@ resource: design/remake/README.md
 status: draft
 generated: { at: 2026-10-14, by: 'model:openai/gpt-6-astra#medium' }
 sources:
+  - resource: opencode://ses_e9a70a796ffelZmIZrb9Zxlb4f
+    title: Connect the Longcat return effort and correct stale descriptions of implemented Taffy and workspace architecture
   - resource: opencode://ses_ec3316eefffejmDBXbZ28spBd7
     title: Commission, implementation integration, Kubeless return and navigation to the Umbriel-side native control requirements
   - resource: kubeless0.gpt61sm.md
@@ -15,6 +17,9 @@ sources:
 # Longcat remake
 
 ## Implemented consumer
+
+- [Bringing Longcat back](../longcat/README.md): current Umbriel window-sizing
+  effort, independent backend features and related activity/entity research.
 
 - [Current architecture](../../ARCHITECTURE.md): delivered domain crates and
   their ownership, distinct from the original proposal below.
@@ -48,12 +53,12 @@ sources:
 ## Predecessors and current owners
 
 - [Taffy discovery](../../doc/discovery/taffy.md): earlier constraint-solver and
-  full-tree proposals. Taffy is not integrated in the current executable.
+  full-tree proposals. The remake implemented the bounded group solver described
+  in the [layout contract](../../layout/README.md).
 - [Corrected Umbriel investigation](../umbriel/investigation0.glm53max.md):
   native protocol constraints, restore algebra, focus race and geometry identity.
 - [umbriel-rs](file:///home/rektide/src/umbriel-rs/README.md): implemented Rust
   subscriptions, typed actions, state and capture facilities that supersede the
   earlier proposal to start a thin client.
-- [Existing architecture](../../ARCHITECTURE.md): historical single-package
-  organization; current source and the remake proposal distinguish implemented
-  behavior from intended stream capabilities.
+- [Current architecture](../../ARCHITECTURE.md): implemented domain-grouped
+  workspace and the remaining native capability boundaries.
