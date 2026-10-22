@@ -74,6 +74,12 @@ does not select a font-policy change.
 
 ## Delivered related integration
 
+- Independent application backend features are committed in `e6df3fb7`; see
+  [build examples](../../README.md#select-backends). Eight backend combinations,
+  `export-facet` alone and all-features passed tests/Clippy in an isolated setup.
+  **zk-backend-features** remains open until the actual sibling dependency pins
+  are aligned and the real checkout passes verification.
+
 - [Optional Kopacetic active cursor](file:///home/rektide/src/umbriel-rs/integration/kopacetic-active/README.md)
   materializes one source-qualified live entity, with immediate activation and
   same-window metadata updates. Loss and shutdown clear active state. Its isolated

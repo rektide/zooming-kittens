@@ -3,7 +3,10 @@ type: Project
 title: zooming-kittens
 description: Compositor-driven window sizing and terminal font automation.
 resource: README.md
+status: maintained
 sources:
+  - resource: opencode://ses_e9a70a796ffelZmIZrb9Zxlb4f
+    title: Independent backend feature implementation and renewed Umbriel Longcat work
   - resource: opencode://ses_ec3316eefffejmDBXbZ28spBd7
     title: Longcat remake design, implementation integration and workspace usage updates
 ---
@@ -126,6 +129,24 @@ The checkout uses a domain-grouped Cargo workspace. `cargo run -- --help` and
 Desktop packages currently use sibling development checkouts of `../umbriel-rs`
 and `../kubeless`. Their relative path dependencies are part of the development
 workspace setup.
+
+### Select backends
+
+The application enables `niri`, `umbriel`, and `kitty` by default. Select only
+the backends needed for an installation:
+
+```sh
+cargo build -p zooming-kittens --no-default-features --features umbriel
+cargo build -p zooming-kittens --no-default-features --features niri
+cargo build -p zooming-kittens --no-default-features --features niri,kitty
+```
+
+`kitty` enables terminal font commands; automatic font zoom additionally requires
+`niri`. `niri` enables native export. `export-facet` enables niri/export as well as
+its optional serialization scaffold. Disabled commands explain the required
+features before opening sockets. Umbriel-only builds currently support Longcat
+observation; see the [Longcat return effort](design/longcat/README.md) for native
+control implementation and deployment progress.
 
 ## Configuration
 

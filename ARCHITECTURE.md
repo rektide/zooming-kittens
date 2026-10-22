@@ -6,6 +6,8 @@ resource: ARCHITECTURE.md
 status: maintained
 generated: { at: 2026-10-15, by: 'model:openai/gpt-6-astra#high' }
 sources:
+  - resource: opencode://ses_e9a70a796ffelZmIZrb9Zxlb4f
+    title: Independent backend composition and application-owned execution boundary
   - resource: opencode://ses_ec3316eefffejmDBXbZ28spBd7
     title: Approved remake, parallel baseline implementation, architectural review and application integration
   - resource: desktop/README.md
@@ -44,6 +46,14 @@ terminal libraries know no niri types. Export remains explicitly native niri
 data, rather than silently translating its established format into a neutral
 desktop schema. The `export-facet` application feature forwards to the export
 crate's existing optional scaffold.
+
+Application features `niri`, `umbriel`, and `kitty` independently select their
+optional backend dependencies; all are enabled by default. `export-facet` also
+enables `niri`. Font zoom composes niri observation with Kitty control; direct
+font commands require only Kitty. The runner owns its execution request/receipt
+types and converts them at the native boundary, so Umbriel-only builds do not
+depend on the niri adapter. Feature selection applies to the application graph;
+`--workspace` checks still select the individual backend library packages.
 
 Development dependencies use the sibling `../umbriel-rs` and `../kubeless`
 checkouts. The application does not require the Umbriel Polars packages.
