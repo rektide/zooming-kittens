@@ -52,6 +52,14 @@ their native owners and connect those tickets to this effort.
 
 ## Research returns
 
+- [Umbriel control and reusable tracking](umbriel-control-stream0.gpt6a.md): live
+  deployment differs from both local composed and fetched upstream sources.
+  Recommends a coherent layout snapshot and conditional whole-column weight
+  assignment, retaining native baseline weights for restoration. Implementation
+  proceeds in an isolated worktree from fetched upstream `5d657581`; carrying it
+  into the composed desktop build and transitioning the session remain distinct
+  delivery steps. The same research identifies reusable example-loop extraction
+  and the missing structured activity service.
 - [Recent journald work](../activity/journald-survey0.gpt6a.md): dated workspace
   survey identifies Cyclrs's exact-cursor bounded replay and Phyllited's
   binary-preserving parser/oracle. Neither is a complete live activity follower.
