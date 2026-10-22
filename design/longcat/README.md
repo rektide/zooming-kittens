@@ -22,6 +22,20 @@ Work anchor: **zk-longcat-return**. The immediate outcome is usable focus-driven
 window sizing on the Umbriel desktop. The existing Taffy solver and Longcat
 episodes are the starting implementation.
 
+## Deployment decision
+
+The [composed deployment candidate](deployment-candidate0.gpt6a.md) is prepared
+and verified, **not installed**. Candidate `96b118cf8b11` in
+`~/src/umbriel-longcat-deploy` preserves composed base `1845885e` and narrowly ports
+native allocation plus committed-size stream publication. Debug/release builds,
+native checks and four-instance integrated headless stress passed. The record
+includes side-by-side installation, config compatibility and rollback commands.
+
+The composed base itself is 223 commits newer than the running compositor, so
+the transition activates that pre-existing upgrade as well as Longcat. Installing
+the candidate for the next login and choosing the graphical-session transition
+remain user decisions. The activity service is already running independently.
+
 ## Current ground
 
 - [Layout](../../layout/README.md) already implements constrained Taffy allocation,
