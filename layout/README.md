@@ -8,6 +8,8 @@ generated:
   at: 2026-10-15
   by: model:openai/gpt-6.1-sol#xhigh
 sources:
+  - resource: opencode://ses_e9a70297dffe6dQ5UJP0up8m7T
+    title: Add explicit whole-group execution evidence and native restoration targets independent of conserving allocation
   - resource: opencode://ses_ec2fec1aaffe5IDnmC0nIJUQ04
     title: Correct fractional baseline attribution before effects and verify integer restoration tracking
   - resource: opencode://ses_ec3149872ffe9daEmFbCXAaWBp
@@ -23,7 +25,7 @@ sources:
 verification:
   method: Scoped nextest, clippy with warnings denied, and rustfmt checks.
   result: 46 tests passed across zk-layout and zk-longcat; clippy and formatting passed.
-  limits: Pure fixtures only; no live compositor writes or adapter/runner integration checks.
+  limits: Original 46-test result is the pure baseline; the later whole-group/native-target integration is covered by the 107-test consumer scope and isolated headless check documented in the runner contract. No running-desktop mutation.
 ---
 
 # Layout
@@ -83,8 +85,12 @@ The episode separately exposes `baseline()`, `observed()`, `requested()`,
 `effects()`, `phase()` and `suspension()`. The whole episode, decisions, plans,
 observations and execution evidence implement `serde::Serialize`; input values
 also support deserialization for replay. The baseline is immutable. Restoration
-uses its conserving integer allocation, not a claim to recover hidden native
-weights or exact topology that the compositor did not report.
+uses its conserving integer allocation for sequential-height backends. Native
+conditional group backends instead construct `Episode::new_group` with an explicit
+ordered native restoration target vector. `Baseline::native_restore_targets` is
+separate from `allocation`: a native constrained baseline can have a different
+pixel total from the conserving solver representation. The application retains
+the original native restore payload; this pure crate does not decode native weights.
 
 Before any applied effect (including after a completely unsent initial attempt),
 geometry attribution compares with the original observed extents, retaining their
@@ -114,6 +120,14 @@ Do not call `record_execution` with imaginary `Handled` replies to advance a
 dry-run. A preview plan's IDs/deadlines are hypothetical, not executor work IDs.
 
 ### Actual execution and timer call sequence
+
+For a whole-group episode, `Effect::commands` is empty and `group_command` holds
+the **one** native submission outcome. Call `record_group(plan.id, outcome)` and
+`finish_execution`, rather than fabricating one handled operation per target.
+`Effect::outcomes()` and `may_have_effect()` cover either execution mode. Restoration
+plans and subsequent convergence use the supplied native targets; emphasis remains
+Taffy-derived. The runner additionally verifies native basis/receipt authority.
+The sequential niri contract below remains unchanged.
 
 1. Call `episode.decide(observation, now_ms)`. `Decision::Plan(plan)` records an
    unexecuted intent and enters `Applying` or `Restoring`; `Unsent` evidence is

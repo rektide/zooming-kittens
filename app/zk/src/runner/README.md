@@ -6,6 +6,12 @@ resource: app/zk/src/runner/README.md
 status: implemented
 generated: { at: 2026-10-15, by: 'model:openai/gpt-6.1-sol#medium' }
 sources:
+  - resource: opencode://ses_e9a70297dffe6dQ5UJP0up8m7T
+    title: Integrate whole-group Umbriel control, coherent authority and native restoration; verify against isolated native compositor
+  - resource: ../../tests/headless/umbriel_longcat.sh
+    title: Real ZK binary and headless compositor emphasis, switching, restoration and external-edit verification
+  - resource: ../../../../desktop/umbriel/src/layout.rs
+    title: Native snapshot projection, request compiler and receipt verifier
   - resource: opencode://ses_ec2f9e1a4ffeOo3Z1LQUDdetQ5
     title: Rust quality cleanup, observer-loss resynchronization and subprocess verification of bounded stdout shutdown
   - resource: opencode://ses_ec310f020ffe5d6kIV42ehdO2z
@@ -28,13 +34,15 @@ cargo run -- longcat --backend umbriel --dry-run --socket /path/to/socket --limi
 ```
 
 `--limit` counts **ready** capture/decision records, not initial unseen-family
-waits, command receipts, admission refusals or final shutdown evidence. Thus one
-waits for both native families. A silent/unready peer still requires SIGINT;
+waits, command receipts, admission refusals or final shutdown evidence. Niri and
+legacy Umbriel wait for both inventory families; control-capable Umbriel waits for
+its coherent layout family. A silent/unready peer still requires SIGINT;
 there is no periodic acquisition polling. `--socket` overrides native discovery.
-Umbriel mutation is rejected before opening a socket: current native actions are
-focus-targeted, not by ID, and exact native grouping/axis/restore state is absent.
-Read-only Umbriel acquisition emits an explicit unsupported planning result rather
-than deriving fictitious groups from window geometry.
+Umbriel probes the read-only `layout-state` query. A compatible version-1 server
+enables native conditional group control. An older server's explicit unsupported
+reply permits legacy read-only acquisition under `--dry-run`; mutation explains
+the missing extension and stops. Transport/protocol failure is not a reason to
+fall back or attempt a focus workaround.
 
 ## Configuration
 
@@ -57,7 +65,7 @@ all survive the bridge. A same-numbered column on another workspace is not the
 same group. Explicit focus none requests conditional restoration; unknown focus
 does not invent blur.
 
-The content budget is captured once as the sum of baseline committed content
+For niri, the content budget is captured once as the sum of baseline committed content
 heights. Subsequent observations retain that budget while carrying **actual**
 per-member extents, including temporary partial-write sums. It is never recalculated
 from the requested targets or from a partially converging native capture.
@@ -67,6 +75,34 @@ only when its geometry evidence is reported. Niri's inferred tile bounding span
 is deliberately ignored as an independent context signal. Output-height changes
 not exposed independently cannot be proven from this feed; incompatible geometry
 or convergence expiry suspends rather than learns a replacement budget.
+
+### Umbriel native authority
+
+Umbriel's control capture subscribes only to `layout-state`, composed through the
+upstream reusable `Tracker`. Active identity, membership, committed sizes, native
+targets, constraints and complete basis originate in that one snapshot. Immediate
+control does not consume the activity service's five-second dwell or journal.
+Only supported untabbed groups with a vertical secondary axis enter Longcat.
+
+The solver receives native tile row budget minus member title-bar heights,
+content minimum/maximum constraints (also subtracting title bars), and the stricter
+configured minimum. Original rounded edge gaps are preserved. Acquisition waits
+for baseline committed content to match native targets. The native original raw
+weights and target contents are retained independently of the conserving solver
+baseline. That native restore target vector can legitimately have a different sum.
+
+One emphasis request submits the complete Taffy vector, with title bars added back
+to native row weights and native exact-content preview validation enabled. One
+restore request submits the original raw weights and native baseline targets.
+Both compare against the **last accepted native basis**, never newly observed
+external weights. A receipt advances that authority only after validation; the
+runner also waits to observe the accepted basis before treating geometry as settled.
+Old-basis snapshots in that bounded interval do not become a new baseline.
+
+The conditional predicate includes exact weights, so a manual edit hidden by
+pixel rounding still revokes authority. Source loss and uncertain transmission
+also revoke it without replay. Current-state ABA remains the native API's explicit
+limit. Late receipts remain evidence and never revive a lost episode.
 
 ## History-gated admission and scheduling
 
@@ -94,9 +130,11 @@ reconnect or baseline acquisition across that gap is attempted.
   geometry; between commands `validate_identity` permits self-induced geometry
   but still checks focus/topology/context. Every command uses a fresh admitted
   native basis. Changed focus/topology stops the definitely-unsent tail.
-- Native outcomes are installed with `record_command`; `finish_execution` is
+- Sequential native outcomes are installed with `record_command`; `finish_execution` is
   called only when no further command can be submitted. Native handling is not
   visible convergence. `PossiblySent` is retained and never blindly replayed.
+- Umbriel uses one `record_group` outcome and a `longcat-group-command` diagnostic
+  per actual whole-column request. It does not fabricate N separate native sends.
 - Observation continues while a command awaits its reply. A real schedule timer
   drives `next_reconsideration` even after the final native event. Completion
   evidence also triggers a new decision. `Noop::NotSubmitted` prevents identical
@@ -140,5 +178,34 @@ subprocess test uses padded diagnostics from a scripted read-only source: the
 former Tokio writer times out but hangs during runtime shutdown, whereas the
 detached writer reports drain timeout and exits within the test's five-second
 bound. No live desktop
-mutation was performed. Native handling/compatible geometry do not prove causal
-attribution or exact compositor-weight restoration.
+mutation was performed. Native handling/compatible pixels alone do not prove
+causal attribution. Umbriel additionally validates a complete native basis for
+raw-weight restoration; niri retains its conditional pixel-restoration semantics.
+
+### Isolated native integration
+
+The added Umbriel check runs the real ZK executable against the separately built
+native extension, under Umbriel's contained headless harness. It enables forced
+title bars and nonzero edge gaps, verifies focus-driven emphasis and intra-group switching, restores
+exact original raw weights on shutdown, and confirms a same-pixel external weight
+edit prevents automatic restoration. All client windows and native writes belong
+to the harness instance; the running desktop is not involved.
+
+```sh
+cargo build -p zooming-kittens --no-default-features --features umbriel
+ZK_TEST_BIN="$PWD/target/debug/zk" CHECK_DIR="$PWD/app/zk/tests/headless" \
+  bash ../umbriel-longcat-control/tests/harness/check.sh \
+  ../umbriel-longcat-control/build-debug/umbriel umbriel_longcat -j 1
+```
+
+The native contract is in
+[`layout-control.md`](file:///home/rektide/src/umbriel-longcat-control/docs/user/layout-control.md).
+Carry into the user's composed compositor and the graphical-session transition
+remain `zk-longcat-return-native-deploy`; passing a headless test is not deployment.
+
+The real-checkout feature matrix passes `cargo check --locked --all-targets` for
+all eight combinations of `niri`, `umbriel` and `kitty`, plus `export-facet` and
+all features. Existing backend-feature tests, service CLI tests and service-unit
+generation tests pass in every configuration. Niri builds without kitty currently
+report an unused optional `tokio-stream` manifest dependency; this is a warning,
+not a backend isolation or build failure.

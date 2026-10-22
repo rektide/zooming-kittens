@@ -3,11 +3,11 @@ type: Research
 title: Umbriel Longcat control and reusable stream tracking
 description: Source and live-deployment findings, a concrete conditional scrolling-allocation implementation path, and reusable stream ownership for Longcat and activity logging.
 resource: design/longcat/umbriel-control-stream0.gpt6a.md
-status: proposed
+status: implemented-prefix
 generated: { at: 2026-10-22, by: 'model:openai/gpt-6-astra#medium' }
 sources:
   - resource: opencode://ses_e9a70297dffe6dQ5UJP0up8m7T
-    title: Independent source/deployment research followed by authorized native conditional allocation and Rust bindings implementation
+    title: Source/deployment research, native conditional allocation and Rust bindings, followed by integrated ZK sizing and isolated verification
   - resource: ../remake/architecture0.gpt6a.md
     title: Earlier three-boundary design and native requirements
   - resource: ../../desktop/umbriel/src/reducer.rs
@@ -42,6 +42,10 @@ sources:
     title: Implemented conditional allocation wire contract and restoration semantics
   - resource: file:///home/rektide/src/umbriel-rs/crates/umbriel-protocol/src/model/layout.rs
     title: Implemented reusable basis, native weights, target and committed geometry, request and receipt models
+  - resource: ../../app/zk/src/runner/README.md
+    title: Integrated native-authority runner and headless verification recipe
+  - resource: ../../app/zk/tests/headless/umbriel_longcat.sh
+    title: Real ZK binary exercises sizing, focus switching, restore and same-pixel edit revocation in an isolated compositor
   - resource: https://github.com/noctalia-dev/umbriel/blob/5d657581e27e1a3fe604693779ca1405610f4f21/src/server/ipc_commands.cpp
     title: Current upstream membership, tab and content-geometry serialization
 verification:
@@ -104,14 +108,41 @@ passed after that correction.
 Native `clang-tidy` could not run because the executable is not installed; the
 debug build uses native `-Werror=true` and succeeded.
 
-**Delivery still required:** ZK's parent-owned whole-group adapter/controller and
-service, then carry the native commits into the selected composed deployment
+**Delivery still required:** carry the native commits into the selected composed deployment
 branch, rebuild that composed binary and schedule a deliberate graphical-session
 transition. Installing this upstream-based debug binary as a replacement would
 drop the composed branch's independent changes. No live restart, replacement or
 mutation is part of this work. Native/Rust work is tracked by `umbrs-layout-control`
 and the consumer rendezvous remains `zk-longcat-return-native-control`.
 Explicit deployment follow-up: `zk-longcat-return-native-deploy`.
+
+### Integrated consumer addendum
+
+The parent subsequently authorized the ZK consumer slice. Commit **`fa3ca327`**
+integrates the coherent layout-state source through upstream `Tracker`, native
+content budgets and bounds, whole-group execution evidence and restoration.
+The opaque native basis/restore payloads remain adapter-owned; the desktop model
+has no Umbriel protocol dependency. The pure episode now represents native restore
+targets separately from its conserving allocation. A regression fixture verifies
+restoration to native `[400,220]` even when the solver's content budget is `618`.
+
+The real checkout's three obsolete desktop Kubeless constraints were aligned to
+the verified `=0.6.0` sibling packages and the lockfile updated. Existing backend
+feature isolation and service generator implementation were preserved. All eight
+backend selections, plus `export-facet` and all features, pass real-checkout
+`cargo check --locked --all-targets`, backend-feature tests, service CLI tests and
+service-unit generation tests. The integrated default consumer scope passes
+**107 tests** and strict Clippy. The existing unused `tokio-stream` manifest warning
+in niri-without-kitty configurations is non-fatal.
+
+The actual built ZK binary passed the isolated native headless check with forced
+title bars and nonzero edge gaps: Taffy emphasis, intra-group focus switching, exact original raw-weight
+restoration on SIGINT, one group receipt per native request, and revocation after
+an external same-pixel weight edit. Four concurrent independent headless runs also
+passed. The maintained [runner guide](../../app/zk/src/runner/README.md) has the
+reproducible command and semantic contract. The old deployed compositor is still
+read-only under dry-run and gets an explicit missing-extension error for mutation.
+No graphical-session transition or real desktop mutation occurred.
 
 ## Recommendation
 

@@ -1,11 +1,15 @@
 ---
 type: ImplementationContract
-title: Desktop observation baseline
-description: Planning capture, bounded observation and native source ownership for the Longcat remake.
+title: Desktop observation and conditional allocation
+description: Bounded native observation, coherent Umbriel layout authority and conditional whole-group allocation.
 resource: /desktop/README.md
 status: implemented-baseline
 generated: { at: 2026-10-15, by: 'model:openai/gpt-6.1-sol#xhigh' }
 sources:
+  - resource: opencode://ses_e9a70297dffe6dQ5UJP0up8m7T
+    title: Integrate coherent Umbriel layout-state, reusable Tracker composition and conditional native allocation
+  - resource: /desktop/umbriel/src/layout.rs
+    title: Native basis normalization, content constraints, group request compilation and receipt verification
   - resource: opencode://ses_ec314c407ffeXx45VDjb05vmol
     title: Desktop baseline implementation, API contract and scoped verification
   - resource: /design/remake/architecture0.gpt6a.md
@@ -28,17 +32,19 @@ sources:
     title: Existing independent native receive ownership and bounded observers
 verification:
   method: Scoped nextest, strict all-target clippy and package formatting checks.
-  result: 25 tests passed; strict clippy and formatting checks passed.
-  limits: Scripted native peers and reducer fixtures; no live compositor acquisition or mutation.
+  result: Initial desktop baseline had 25 tests; integrated consumer scope now passes 107 tests and strict Clippy, plus isolated native headless sizing/restoration.
+  limits: No mutation or restart of the running desktop; headless verification uses the separately built native extension.
 ---
 
-# Desktop observation baseline
+# Desktop observation and conditional allocation
 
 ## Integration contract
 
 - `zk_desktop::DesktopCapture`: source/epoch `scope`, local `version`, `windows`,
   `workspaces`, `groups`, `active_window`, per-family `windows_status` and
-  `workspaces_status`, `connected`, and declared `capabilities`.
+  `workspaces_status`, `connected`, and declared `capabilities`. An optional
+  `control_status` selects coherent control readiness; `allocations` carries
+  conditional native allocation evidence per group.
 - `WindowKey` / `WorkspaceKey` contain `Scope` plus `NativeId::{Number, Text}`.
   Group keys are positional hints, **not persistent group incarnations**. Ordered
   membership and `Evidence::{Reported, Inferred, Unavailable}` remain explicit.
@@ -52,13 +58,18 @@ verification:
   public `Reducer` supports pure native-event replay. The actuator is obtained
   separately from `Source::actuator()`, accepts by-ID `HeightRequest`, and reports
   `Unsent`, `Rejected`, `Handled`, or `PossiblySent`, never transaction/settlement.
-- Umbriel: `subscribe(endpoint, source_id, Options)` composes existing client and
-  `Inventory`; it is read-only. `Reducer` accepts native observations. No exact
-  grouping or targeted actuation is invented from geometry.
+- Umbriel legacy: `subscribe(endpoint, source_id, Options)` remains read-only
+  windows/workspaces observation with unavailable grouping.
+- Umbriel control: `subscribe_layout` uses `umbriel_tracking::Tracker` over the
+  single `layout-state` family. Membership, active identity, native basis and
+  committed geometry all come from that coherent family. Unrelated windows or
+  workspaces events cannot alter control focus/readiness. `layout::execute`
+  submits one conditional whole-column request and verifies its accepted receipt.
 
 Sibling development dependencies are explicit relative paths: from each desktop
 crate, `../../../umbriel-rs` and `../../../kubeless` resolve under `~/src`.
-No upstream files are modified. The app owns policy input conversion and scheduling.
+The paired native extension and Rust bindings live upstream in their own worktrees.
+The app owns policy input conversion and scheduling.
 
 ## Source ownership and loss
 
@@ -107,7 +118,9 @@ reuses native validation: a bad complete typed family leaves that family's rows
 stale and a later valid complete replacement can reacquire it. Native transport
 loss or native observer lag requires a new native epoch; the adapter never
 silently re-registers after lag. Independent family readiness travels with every
-capture; `is_ready()` does not claim source-atomic windows/workspaces acquisition.
+capture; legacy `is_ready()` does not claim source-atomic windows/workspaces
+acquisition. A control capture instead uses only its `control_status`, with no
+cross-family join. Invalid control state stops that source; no silent reacquisition.
 
 ## Geometry, groups and execution
 
@@ -120,14 +133,28 @@ derived union of observed tile rectangles, potentially including gaps. It is not
 a content-height allocation budget. Preserve `geometry.content_size`, `tile_size`,
 `tile_position`, and `window_offset_in_tile` as distinct quantities.
 
-Umbriel reports committed content sizes and target positions, not target tile
-sizes. Workspace geometry is unavailable in both native inventory payloads.
-This baseline explicitly leaves Umbriel `groups` empty and workspace `grouping`
+Legacy Umbriel reports committed content sizes and target positions, not target
+tile sizes. Its read-only baseline leaves `groups` empty and workspace `grouping`
 unavailable, rather than inventing exact columns from shared x coordinates. It
 still reports windows, workspaces, seat-global activation, scratchpads and changes
 for read-only diagnostics and future protocol work. Workspace-local `focused`
 does not become seat focus. Native source order is retained by Umbriel's owner;
 semantic map iteration is key order, not compositor order.
+
+The native extension reports exact scrolling membership and distinct target
+tile/content and committed geometry. `ConditionalAllocation` normalizes content
+budget, member content bounds, decoration heights, baseline target extents and
+rounded edge gaps. Native tile bounds include title bars; vertical content bounds
+subtract them. The content solver budget is native `row_budget` minus decorations,
+not a sum reconstructed from a transient committed snapshot.
+
+Opaque `basis`, weightless `context`, and `restore_payload` bytes are created and
+interpreted only by the Umbriel adapter. The model has no protocol dependency.
+The runner compares the complete basis against its last accepted authority;
+same-pixel native weight edits are still changes. `GroupAllocationRequest` carries
+the expected basis and either an emphasis pixel vector or the saved original raw
+weights. Accepted native target contents must match the requested vector. Source
+loss, malformed receipts or possibly-sent commands never authorize replay.
 
 `HeightActuator::set_height(HeightRequest { target, basis, height })` checks current
 family readiness, exact local basis, source/epoch, target existence and tiled
@@ -138,7 +165,8 @@ atomic multiwindow change. Retain each returned `Transmission`: `Handled` proves
 native handling only; `PossiblySent` forbids blind retry. **Do not cancel an
 admitted command future** and assume no effect: its lasting receipt/settlement
 ledger belongs to the app runner. Continue processing observations while waiting.
-Umbriel exposes no actuator and never performs focus→resize→focus-back.
+Umbriel's group operation supplies a server-side current-state predicate, not a
+monotonic revision: ABA remains possible. It never performs focus→resize→focus-back.
 
 ## Verification and limitations
 
@@ -155,8 +183,10 @@ cross-workspace same-column collisions, atomic multirow layout updates,
 renumbering, duplicate/malformed snapshots, epoch/loss, native observer byte
 loss, semantic lag, scripted socket shutdown, by-ID replies and uncertain
 transmission. A waiting command does not pause focus observation. This is a
-desktop baseline, not completed policy/runner integration, live convergence,
-causal resize attribution, exact restore, or Umbriel control parity.
+desktop/native boundary; the [runner contract](/app/zk/src/runner/README.md) describes
+integrated Taffy control, native-weight restoration and the headless check recipe.
+The actual deployed older compositor still requires the separate native carry and
+session-transition work before these writes can run on the user's desktop.
 
 ## Connections
 
