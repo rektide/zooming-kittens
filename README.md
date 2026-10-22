@@ -170,6 +170,22 @@ zk generate-systemd --output > ~/.config/systemd/user/kitty-focus-tracker.servic
 ./journal.sh   # tail logs
 ```
 
+Generate a separate window-sizing unit explicitly:
+
+```sh
+zk generate-systemd --output longcat --backend umbriel --dry-run \
+  --active-height-proportion 3 --other-height-proportion 2 \
+  --minimum-height 80 > longcat.service
+```
+
+Add `--socket /path/to/umbriel.sock` to fix the endpoint; otherwise discovery uses
+the service's environment. All Longcat options are supported. The generated unit
+requires an already-running compositor, follows its session lifecycle, and sends
+SIGINT with a stop budget allowing conditional restoration. Generation only prints
+the unit; it does not install or start it. Bare `generate-systemd --output` retains
+the font-tracker service. Umbriel mutation remains pending the native control
+integration; use `--dry-run` with the current observation backend.
+
 ## Architecture
 
 The workspace separates native observation (`desktop/`), Taffy allocation and

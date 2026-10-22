@@ -74,6 +74,11 @@ does not select a font-policy change.
 
 ## Delivered related integration
 
+- Explicit Longcat service generation is committed in `83f7ade6`; see
+  [service usage](../../README.md#running-as-a-systemd-service).
+  **zk-longcat-return-service** is closed. Generated font/niri/Umbriel units passed
+  systemd verification; focused tests and Clippy passed with isolated dependency
+  alignment. No ZK service was installed or started.
 - Independent application backend features are committed in `e6df3fb7`; see
   [build examples](../../README.md#select-backends). Eight backend combinations,
   `export-facet` alone and all-features passed tests/Clippy in an isolated setup.
