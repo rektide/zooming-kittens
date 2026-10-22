@@ -50,6 +50,14 @@ episodes are the starting implementation.
 Independent research precedes integration choices. Track upstream changes with
 their native owners and connect those tickets to this effort.
 
+## Research returns
+
+- [Recent journald work](../activity/journald-survey0.gpt6a.md): dated workspace
+  survey identifies Cyclrs's exact-cursor bounded replay and Phyllited's
+  binary-preserving parser/oracle. Neither is a complete live activity follower.
+  Umbriel's existing **umbrs-activity-history** owns follow/replay work; the survey
+  links that undertaking and distinguishes journal cursors from ZK export counters.
+
 ## Separate follow-up
 
 **zk-font-revisit** records the user's wish to recover an earlier font-change
