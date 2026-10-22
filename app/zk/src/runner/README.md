@@ -198,6 +198,12 @@ ZK_TEST_BIN="$PWD/target/debug/zk" CHECK_DIR="$PWD/app/zk/tests/headless" \
   ../umbriel-longcat-control/build-debug/umbriel umbriel_longcat -j 1
 ```
 
+For the composed candidate that predates server-side title bars, set
+`ZK_NATIVE_TITLEBARS=0` and select `../umbriel-longcat-deploy/build-debug/umbriel`.
+This changes only the test's title-bar configuration. Nonzero edge gaps and all
+sizing, restoration and external-edit assertions still run. See the
+[prepared deployment record](../../../../design/longcat/deployment-candidate0.gpt6a.md).
+
 The native contract is in
 [`layout-control.md`](file:///home/rektide/src/umbriel-longcat-control/docs/user/layout-control.md).
 Carry into the user's composed compositor and the graphical-session transition

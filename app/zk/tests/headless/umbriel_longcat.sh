@@ -4,12 +4,14 @@ set -euo pipefail
 : "${ZK_TEST_BIN:?absolute path to the built zk binary}"
 : "${UMBRIEL_RUNTIME_DIR:?must run inside the native headless harness}"
 
+if [[ ${ZK_NATIVE_TITLEBARS:-1} == 1 ]]; then
 cat >> "$UMBRIEL_CONFIG" <<'CONFIG'
 [[window_rule]]
 match.title = "^zk-longcat-test-"
 title_bar = "forced"
 CONFIG
 "$UMBRIEL" msg config-reload >/dev/null
+fi
 
 python3 - <<'PY'
 import copy, json, os, queue, signal, socket, subprocess, threading, time
@@ -61,7 +63,11 @@ def wait_phase(run,phase,active=None):
     process,records,seen=run
     deadline=time.monotonic()+10
     while time.monotonic()<deadline:
-        row=records.get(timeout=max(.01,deadline-time.monotonic()))
+        try:
+            row=records.get(timeout=max(.01,deadline-time.monotonic()))
+        except queue.Empty:
+            summary=[{k:r.get(k) for k in ('type','ready','unsupported','groups','reason')} for r in seen[-4:]]
+            raise AssertionError({'waiting_for':phase,'records':summary,'native':layout()})
         seen.append(row)
         assert not row.get('eof'), (process.poll(),process.stderr.read(),seen)
         if row.get('type')=='longcat' and (active is None or row.get('active_window')=='text:'+active) and any(g.get('phase')==phase for g in row.get('groups',[])):

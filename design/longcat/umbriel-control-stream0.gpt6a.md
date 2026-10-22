@@ -144,6 +144,18 @@ reproducible command and semantic contract. The old deployed compositor is still
 read-only under dry-run and gets an explicit missing-extension error for mutation.
 No graphical-session transition or real desktop mutation occurred.
 
+### Composed deployment preparation
+
+The [deployment candidate record](deployment-candidate0.gpt6a.md) follows this
+implementation through the user's existing composed history. The isolated
+candidate is `96b118cf8b11` on preserved base `1845885e`; it has a built release
+artifact, validated minimally adjusted config and actual running-binary rollback
+copy. Its integrated headless tests exposed and fixed a missing committed-size
+stream notification on that older base. No broad upstream migration was needed.
+The record owns exact artifact hashes, tests, source differences, side-by-side
+installation and session-transition/rollback commands. Preparation is complete;
+the user-selected deployment itself remains outstanding.
+
 ## Recommendation
 
 **Implement a small native scrolling-allocation API, then connect the existing
