@@ -188,6 +188,26 @@ integration; use `--dry-run` with the current observation backend.
 
 ## Architecture
 
+### Umbriel activity
+
+The sibling Umbriel project now supplies a
+[reusable tracking library](file:///home/rektide/src/umbriel-rs/crates/tracking/README.md)
+and a [structured activity service](file:///home/rektide/src/umbriel-rs/crates/activity/README.md).
+The dedicated `umbriel-activity.service` is installed on this workspace's desktop.
+Follow its structured records with:
+
+```sh
+journalctl --user _SYSTEMD_USER_UNIT=umbriel-activity.service \
+  UMBRIEL_SCHEMA_VERSION=1 TARGET=umbriel::activity --all -o json --follow
+```
+
+Activity acceptance defaults to five seconds; Longcat consumes immediate native
+state. Journal history/replay is tracked separately upstream. The
+[Longcat effort map](design/longcat/README.md) links implementation and deployment
+evidence, journald precedents and the optional Kopacetic integration.
+
+### Workspace domains
+
 The workspace separates native observation (`desktop/`), Taffy allocation and
 Longcat policy (`layout/`), font control (`terminal/`), native export
 (`inspection/`) and runtime composition (`app/`). Kubeless supplies selected

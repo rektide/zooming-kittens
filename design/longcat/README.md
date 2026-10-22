@@ -74,6 +74,15 @@ does not select a font-policy change.
 
 ## Delivered related integration
 
+- [Reusable Umbriel tracking](file:///home/rektide/src/umbriel-rs/crates/tracking/README.md)
+  exposes typed observation installation and Inventory-owned freshness; both
+  examples reuse it. Immediate captures remain distinct from delayed activity
+  acceptance. The [activity application](file:///home/rektide/src/umbriel-rs/crates/activity/README.md)
+  is installed and running as `umbriel-activity.service`, emitting field-first
+  journal records. [Deployment evidence](file:///home/rektide/src/umbriel-rs/design/activity/runtime0.gpt6a.md)
+  records 78 scoped tests, native journal readback, bounded-output cancellation and
+  clean service stop/start without restarting the compositor. History/replay and
+  notify readiness retain their existing upstream tickets.
 - [Native conditional column allocation](file:///home/rektide/src/umbriel-longcat-control/docs/user/layout-control.md)
   is implemented on the isolated upstream-based compositor worktree, with typed
   Rust bindings in `umbriel-rs`. Query/event `layout-state` exposes a coherent
