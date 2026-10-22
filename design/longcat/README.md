@@ -74,6 +74,13 @@ does not select a font-policy change.
 
 ## Delivered related integration
 
+- [Native conditional column allocation](file:///home/rektide/src/umbriel-longcat-control/docs/user/layout-control.md)
+  is implemented on the isolated upstream-based compositor worktree, with typed
+  Rust bindings in `umbriel-rs`. Query/event `layout-state` exposes a coherent
+  allocation basis; `layout-allocate` validates and assigns a complete weight
+  vector without focus/reveal changes. Native build, pure/headless/stress checks
+  and 160 Rust tests plus five doctests passed. ZK consumer integration is next;
+  **zk-longcat-return-native-deploy** tracks the separate desktop transition.
 - Explicit Longcat service generation is committed in `83f7ade6`; see
   [service usage](../../README.md#running-as-a-systemd-service).
   **zk-longcat-return-service** is closed. Generated font/niri/Umbriel units passed
