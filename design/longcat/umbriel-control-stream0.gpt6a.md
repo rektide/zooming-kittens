@@ -7,7 +7,7 @@ status: proposed
 generated: { at: 2026-10-22, by: 'model:openai/gpt-6-astra#medium' }
 sources:
   - resource: opencode://ses_e9a70297dffe6dQ5UJP0up8m7T
-    title: Independent Umbriel source/deployment research and proposed native allocation and stream extraction implementation
+    title: Independent source/deployment research followed by authorized native conditional allocation and Rust bindings implementation
   - resource: ../remake/architecture0.gpt6a.md
     title: Earlier three-boundary design and native requirements
   - resource: ../../desktop/umbriel/src/reducer.rs
@@ -38,17 +38,80 @@ sources:
     title: Native implementation conventions and isolated headless harness
   - resource: file:///home/rektide/src/umbriel-working/SCOPE.md
     title: Native inspection/control mechanisms in scope; application policy stays outside
+  - resource: file:///home/rektide/src/umbriel-longcat-control/docs/user/layout-control.md
+    title: Implemented conditional allocation wire contract and restoration semantics
+  - resource: file:///home/rektide/src/umbriel-rs/crates/umbriel-protocol/src/model/layout.rs
+    title: Implemented reusable basis, native weights, target and committed geometry, request and receipt models
   - resource: https://github.com/noctalia-dev/umbriel/blob/5d657581e27e1a3fe604693779ca1405610f4f21/src/server/ipc_commands.cpp
     title: Current upstream membership, tab and content-geometry serialization
 verification:
-  method: Read source and native tickets, inspected clean sibling checkouts, queried live windows/workspaces and initial subscriptions, inspected systemd state and executable version.
-  limits: No compositor mutations, source builds, new runtime tests or deployment in this research slice. Proposed protocol and extraction below are not implemented.
+  method: Initial read-only deployment research, followed by authorized native debug build, pure scrolling tests, isolated headless allocation harness and concurrent stress checks; Rust scoped nextest and strict Clippy.
+  limits: No mutation or restart of the running desktop. Initial proposal below is preserved; the implementation addendum records delivered API and checks. Reusable tracker/service work belongs to concurrent agents.
 extensions:
   ticket: zk-longcat-return-native-control
   related_work: [zk-longcat-return, umbrs-stream-tracking, umbrs-activity]
 ---
 
 # Umbriel control and stream tracking
+
+## Implementation addendum
+
+After the research checkpoint, the parent authorized implementation and selected
+upstream `5d657581e27e1a3fe604693779ca1405610f4f21` as the base. An isolated named
+worktree at `/home/rektide/src/umbriel-longcat-control` preserves the composed local
+branch and running desktop. Native first implementation commit: **`14dab546`**;
+Rust first implementation commit: **`c318a58f`**. Native refinement **`5432ace1`**
+and Rust refinement **`8d20ca95`** add output
+identity to the basis, reject pinned groups, and extend decoration/inactive-restore
+verification. The current contract is maintained in the native
+[layout-control guide](file:///home/rektide/src/umbriel-longcat-control/docs/user/layout-control.md).
+
+The native API now exists: `layout-state` query/event and `layout-allocate` request.
+Rust `model::layout_state_request`, `Family::LayoutState`, `LayoutAllocation`,
+`LayoutAllocationResult`, `LayoutBasis`, `LayoutWeights`, `LayoutColumn` and
+geometry/constraint types are public. Inventory retains the family with independent
+health/stamps. Native query support is opt-in; the baseline dump's seven-query
+catalog does not start requesting a new unsupported operation on old servers.
+
+Save original `LayoutWeights` separately. Send **last accepted basis** with every
+next write/restore. The whole-group receipt returns previous weights and the new
+accepted basis/targets; it is not N per-window operations. Optional
+`target_content_extents` rejects a vector that the actual native constrained
+preview cannot represent, before changing live weights.
+
+`LayoutMember.constraints` are native **tile** constraints; height bounds include
+title-bar height. `row_budget` is a tile budget after edge gaps. A vertical-content
+solver subtracts member title-bar heights for its budget/bounds and adds them back
+for tile weights. Targets distinguish tile/content from committed content. Output
+identity participates in the basis even if two outputs have equal geometry.
+Current-state comparison includes exact weights, so same-pixel weight edits reject;
+the documented ABA limitation remains.
+
+Verification delivered: native debug executable build, pure scrolling allocation
+tests (both secondary axes), real-client headless vector allocation/commit, stale
+and malformed write rejection without mutation, same-pixel weight-edit rejection,
+focus predicate, native-weight restoration, topology invalidation, initial/update
+stream delivery, and concurrent isolated stress runs. The strengthened harness
+uses forced title bars and restores while another workspace remains active.
+Rust protocol/session/client/state scoped run passed **160 tests**; the three
+layout protocol tests passed again after adding output identity. Strict scoped
+Clippy passes after the concurrent tracker owner resolved its enum warning.
+Five scoped Rust doctests and four existing native IPC/state harness checks also
+passed. Raw positive subfloor weights are accepted and preserved: tab dissolution
+can produce them, while native arrangement still applies its effective `0.05`
+floor. Pure/Rust tests cover this restoration case and the final headless check
+passed after that correction.
+Native `clang-tidy` could not run because the executable is not installed; the
+debug build uses native `-Werror=true` and succeeded.
+
+**Delivery still required:** ZK's parent-owned whole-group adapter/controller and
+service, then carry the native commits into the selected composed deployment
+branch, rebuild that composed binary and schedule a deliberate graphical-session
+transition. Installing this upstream-based debug binary as a replacement would
+drop the composed branch's independent changes. No live restart, replacement or
+mutation is part of this work. Native/Rust work is tracked by `umbrs-layout-control`
+and the consumer rendezvous remains `zk-longcat-return-native-control`.
+Explicit deployment follow-up: `zk-longcat-return-native-deploy`.
 
 ## Recommendation
 
