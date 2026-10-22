@@ -27,8 +27,9 @@ episodes are the starting implementation.
 - [Layout](../../layout/README.md) already implements constrained Taffy allocation,
   baseline-relative sibling weights and conserving integer rounding.
 - [Runner](../../app/zk/src/runner/README.md) joins native streams, decisions,
-  by-ID niri sizing and conditional restoration. Its Umbriel path is currently
-  read-only; exact grouping and targeted sizing need upstream investigation.
+  by-ID niri sizing and conditional restoration. Its integrated Umbriel path uses
+  coherent native layout state and conditional whole-column allocation; older
+  compositors retain read-only dry-run observation.
 - [Remake map](../remake/README.md) preserves the earlier research and links to
   Umbriel's native layout-control requirements. That work supplies the baseline
   for checking current upstream capabilities.
@@ -88,8 +89,12 @@ does not select a font-policy change.
   Rust bindings in `umbriel-rs`. Query/event `layout-state` exposes a coherent
   allocation basis; `layout-allocate` validates and assigns a complete weight
   vector without focus/reveal changes. Native build, pure/headless/stress checks
-  and 160 Rust tests plus five doctests passed. ZK consumer integration is next;
-  **zk-longcat-return-native-deploy** tracks the separate desktop transition.
+  and 160 Rust tests plus five doctests passed. ZK consumer commits `fa3ca327` and
+  `3e5c9b57` add Taffy/native translation, raw-weight restoration and whole-group
+  receipts. 107 scoped tests and real headless integration passed, including four
+  concurrent instances. **zk-longcat-return-native-control** is closed;
+  **zk-longcat-return-native-deploy** tracks composed-build preparation and the
+  separate desktop transition.
 - Explicit Longcat service generation is committed in `83f7ade6`; see
   [service usage](../../README.md#running-as-a-systemd-service).
   **zk-longcat-return-service** is closed. Generated font/niri/Umbriel units passed
@@ -97,9 +102,9 @@ does not select a font-policy change.
   alignment. No ZK service was installed or started.
 - Independent application backend features are committed in `e6df3fb7`; see
   [build examples](../../README.md#select-backends). Eight backend combinations,
-  `export-facet` alone and all-features passed tests/Clippy in an isolated setup.
-  **zk-backend-features** remains open until the actual sibling dependency pins
-  are aligned and the real checkout passes verification.
+  `export-facet` alone and all-features initially passed in an isolated setup.
+  Dependency alignment and all ten real-checkout configurations now pass;
+  **zk-backend-features** is closed.
 
 - [Optional Kopacetic active cursor](file:///home/rektide/src/umbriel-rs/integration/kopacetic-active/README.md)
   materializes one source-qualified live entity, with immediate activation and

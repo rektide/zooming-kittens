@@ -33,7 +33,7 @@ the `zk` executable. Library crates live beneath their owning domains:
 |---|---|---|
 | `desktop/model` | `zk-desktop` | Scoped IDs, semantic captures, readiness, geometry evidence, impact and bounded observation |
 | `desktop/niri` | `zk-niri` | Native event reduction, asynchronous IPC source and by-ID height commands |
-| `desktop/umbriel` | `zk-umbriel` | Composition over the existing Umbriel client and inventory; read-only semantic observations |
+| `desktop/umbriel` | `zk-umbriel` | Reusable tracking, coherent native layout projection and conditional whole-column allocation |
 | `layout/solver` | `zk-layout` | Taffy-based constrained secondary-axis allocation and conserving integer rounding |
 | `layout/longcat` | `zk-longcat` | Pure baseline/intent/observation episodes, decisions and retained effect evidence |
 | `terminal/kitty` | `zk-kitty` | Kitty remote control, connection/process discovery and configuration parsing |
@@ -84,8 +84,9 @@ native event / family snapshot
 The application now composes these domains through the
 [Longcat runner](app/zk/src/runner/README.md). Default font zoom and `zoomer` use
 the new native niri observation source; the legacy focus registry and the old
-Longcat implementation have been removed. Umbriel observation is implemented;
-exact Umbriel grouping and mutation remain unsupported.
+Longcat implementation have been removed. Compatible Umbriel servers supply
+coherent layout observations and conditional whole-column mutation; older servers
+retain read-only observation under dry-run.
 
 ## Desktop sources
 
@@ -104,12 +105,21 @@ reader. The height actuator sends explicit window IDs and distinguishes unsent,
 rejected, handled and possibly-sent outcomes. No automatic action replay or
 multiwindow transaction is implied.
 
-Umbriel composes `umbriel-client` and `umbriel-state`. Seat activation comes from
-`active`, not workspace-local remembered `focused`. Families arrive independently.
-The current adapter leaves exact groups unavailable: the wire data does not
-provide exact columns, axis/weights or a reliable by-ID extent operation. It
-therefore exposes read-only windows, workspaces, activation and health; it does
-not perform focus-switching resize workarounds.
+Umbriel composes `umbriel-client` and `umbriel-tracking`, retaining Inventory as
+the row owner. A read-only capability probe selects the version-1 `layout-state`
+extension when available. That coherent family supplies control focus, topology,
+constraints, native weights and target/committed geometry; independently arriving
+windows/workspaces are not mixed into its authority. Older servers expose legacy
+read-only inventory with unavailable grouping. Immediate control is distinct from
+the activity service's five-second accepted-identity policy.
+
+The Umbriel executor submits one conditional whole-column request with one native
+receipt. Content budgets and bounds subtract titlebar decorations; rounded edge
+gaps are preserved. Original raw native weights and native restoration targets
+are retained separately from the Taffy baseline allocation. Subsequent writes
+compare the last accepted complete native basis, so even same-pixel external
+weight changes revoke control. This is compare-current-state, not an ABA-detecting
+revision. Lost or uncertain transmission does not authorize retries or rebasing.
 
 See [desktop contracts](desktop/README.md) for source lifetime, frame/delivery
 limits, epochs, capabilities and geometry semantics.
@@ -162,7 +172,9 @@ The workspace-level test, feature and Clippy checks establish composition after
 integration. Scripted compositor peers verify protocol behavior without changing
 the live desktop; live convergence is a separate verification claim.
 
-The integrated implementation passed 154 all-feature workspace tests, strict
-all-target/all-feature Clippy and workspace formatting. Read-only live Umbriel
-acquisition returned 31 windows and eight workspaces. Full native mutation
-convergence remains scripted-peer evidence rather than a live claim.
+The latest integration passed 107 scoped tests, strict Clippy, all ten application
+feature configurations and service-generation tests against real sibling checkouts.
+Real ZK/native headless checks cover emphasis, switching, native-weight restoration
+and external edits, including concurrent runs with decorations and gaps. The
+running desktop still requires the composed native build and session transition;
+headless verification is not a claim of deployed desktop sizing.

@@ -17,8 +17,8 @@ sources:
 
 Zooming-kittens uses native desktop streams for focus-driven window sizing and
 [kitty](https://sw.kovidgoyal.net/kitty/) font control. Longcat supports
-[niri](https://github.com/YaLTeR/niri) by-ID height changes and read-only Umbriel
-observation through the sibling `umbriel-rs` libraries.
+[niri](https://github.com/YaLTeR/niri) by-ID height changes and conditional Umbriel
+column allocation through the sibling `umbriel-rs` libraries.
 
 ## Features
 
@@ -47,7 +47,7 @@ zk zoomer --zoom-multiplicative 1.5 --zoom-step-size 2
 
 ### Longcat
 
-Uses Taffy to allocate heights within reported niri columns. The focused window
+Uses Taffy to allocate heights within reported compositor columns. The focused window
 gets an emphasized share; siblings retain their baseline-relative weights within
 the configured constraints. Leaving a column conditionally restores the baseline
 when identity, context and observed effects still agree. Conflicting changes
@@ -66,11 +66,18 @@ as `active / (active + other)`; explicit CLI values override file/environment
 configuration. `--convergence-timeout-ms` and `--shutdown-timeout-ms` govern the
 effect and conditional-shutdown deadlines.
 
-Umbriel currently reports windows, workspaces, activation and health, but lacks
-the exact grouping and targeted resize contract needed here. Its dry-run reports
-that limitation explicitly; mutation is rejected before connecting. No polling
-or focus-switching workaround is used. `resize_debounce_ms` is retained for
-configuration compatibility; automatic resize learning is disabled.
+Umbriel control requires the `layout-state` / `layout-allocate` extension in the
+[native control build](file:///home/rektide/src/umbriel-longcat-control/docs/user/layout-control.md).
+It uses one coherent snapshot, applies a whole column conditionally, and restores
+original native weights. Only supported untabbed groups with vertical secondary
+allocation are admitted. Older compositors retain read-only dry-run observation;
+mutation explains the missing extension. No polling or focus-switching workaround
+is used. `resize_debounce_ms` is retained for configuration compatibility;
+automatic resize learning is disabled.
+
+The integrated implementation has passed real headless compositor tests. The
+current desktop still needs the composed native build and a coordinated session
+transition; see the [deployment work](design/longcat/README.md).
 
 See the [runner contract](app/zk/src/runner/README.md) for admission, retention
 limits, partial effects, loss handling and diagnostics. Use dry-run to inspect
@@ -144,9 +151,9 @@ cargo build -p zooming-kittens --no-default-features --features niri,kitty
 `kitty` enables terminal font commands; automatic font zoom additionally requires
 `niri`. `niri` enables native export. `export-facet` enables niri/export as well as
 its optional serialization scaffold. Disabled commands explain the required
-features before opening sockets. Umbriel-only builds currently support Longcat
-observation; see the [Longcat return effort](design/longcat/README.md) for native
-control implementation and deployment progress.
+features before opening sockets. Umbriel-only builds support Longcat control on
+compatible compositors; see the [Longcat return effort](design/longcat/README.md)
+for deployment progress.
 
 ## Configuration
 
@@ -183,8 +190,8 @@ the service's environment. All Longcat options are supported. The generated unit
 requires an already-running compositor, follows its session lifecycle, and sends
 SIGINT with a stop budget allowing conditional restoration. Generation only prints
 the unit; it does not install or start it. Bare `generate-systemd --output` retains
-the font-tracker service. Umbriel mutation remains pending the native control
-integration; use `--dry-run` with the current observation backend.
+the font-tracker service. Remove `--dry-run` for sizing only after running a
+compositor with the native allocation extension.
 
 ## Architecture
 
@@ -221,7 +228,8 @@ implementation findings and deferred upstream work.
 
 ## Verification
 
-The integrated remake passes **154 tests**, strict Clippy and formatting:
+The latest Umbriel integration passed 107 scoped tests, strict Clippy, all ten
+application feature configurations and service-generation tests. Workspace checks:
 
 ```sh
 cargo nextest run --workspace --all-features
@@ -229,9 +237,10 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo fmt --all --check
 ```
 
-Native mutation/convergence tests use scripted compositor peers. A live read-only
-Umbriel run acquired 31 windows and eight workspaces and exited cleanly; live
-niri resizing and exact Umbriel control parity are not claimed.
+Scripted peers cover failure and continuity handling. Real ZK/native headless tests
+verify emphasis, focus switching, raw-weight restoration and external-edit
+rejection, including four concurrent instances with titlebars and nonzero gaps.
+The running desktop has not yet been upgraded or used for a sizing trial.
 
 ## License
 
