@@ -8,7 +8,7 @@ use commands::export::run_export;
 #[cfg(feature = "kitty")]
 use commands::fonts::handle_font_command;
 use commands::longcat::run_longcat;
-use commands::systemd::generate_systemd_service;
+use commands::systemd::{GenerateSystemdCommand, generate_systemd_service};
 #[cfg(all(feature = "niri", feature = "kitty"))]
 use commands::zoomer::run_zoomer;
 #[cfg(feature = "kitty")]
@@ -64,10 +64,7 @@ enum CliSubcommand {
         name = "generate-systemd",
         about = "Generate a systemd service file for auto-startup"
     )]
-    GenerateSystemd {
-        #[arg(short, long, help = "Print the systemd service file to stdout")]
-        output: bool,
-    },
+    GenerateSystemd(GenerateSystemdCommand),
     #[command(
         name = "cleanup",
         about = "Clean up dead connections in connection pool"
@@ -246,8 +243,8 @@ async fn main() -> std::io::Result<()> {
         return Ok(());
     }
 
-    if let Some(CliSubcommand::GenerateSystemd { output }) = args.command {
-        generate_systemd_service(output)?;
+    if let Some(CliSubcommand::GenerateSystemd(command)) = args.command {
+        generate_systemd_service(command)?;
         return Ok(());
     }
 
