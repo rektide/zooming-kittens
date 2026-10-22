@@ -71,3 +71,16 @@ their native owners and connect those tickets to this effort.
 **zk-font-revisit** records the user's wish to recover an earlier font-change
 topic. Its precise intent remains to be recovered; current window-sizing work
 does not select a font-policy change.
+
+## Delivered related integration
+
+- [Optional Kopacetic active cursor](file:///home/rektide/src/umbriel-rs/integration/kopacetic-active/README.md)
+  materializes one source-qualified live entity, with immediate activation and
+  same-window metadata updates. Loss and shutdown clear active state. Its isolated
+  workspace and explicit feature keep it outside normal Umbriel and ZK paths.
+  Four tests passed, including scripted reconnect/cancellation; live deployment
+  was not performed. Native work items **umbrs-kopacetic-cursor** and
+  **kop-umbriel-cursor** are closed.
+- [Cursor design and verification](file:///home/rektide/src/umbriel-rs/design/kopacetic/active-cursor0.gpt6a.md)
+  records the choice of a stable cursor identity over per-window entities and the
+  existing root-workspace Kubeless version mismatch found during verification.
