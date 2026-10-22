@@ -4,9 +4,14 @@ use figment2::{
 };
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+#[cfg(feature = "kitty")]
 use std::time::Duration;
+#[cfg(feature = "kitty")]
 pub use zk_kitty::RegistryConfig;
-pub use zk_zoomer::{ZoomConfig, ZoomType};
+#[cfg(feature = "kitty")]
+pub use zk_zoomer::ZoomConfig;
+#[cfg(all(feature = "kitty", any(test, feature = "niri")))]
+pub use zk_zoomer::ZoomType;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub enum Verbosity {
@@ -32,6 +37,7 @@ impl Verbosity {
         }
     }
 
+    #[cfg(all(feature = "niri", feature = "kitty"))]
     pub fn log_window_events(&self) -> bool {
         *self >= Self::Debug
     }
@@ -127,6 +133,7 @@ fn default_resize_debounce_ms() -> u64 {
 
 /// CLI arguments subset for zoom configuration
 #[derive(Debug, Clone, Default)]
+#[cfg_attr(not(feature = "kitty"), allow(dead_code))]
 pub struct CliZoomArgs {
     pub absolute: Option<f64>,
     pub additive: Option<f64>,
@@ -170,6 +177,7 @@ pub struct Config {
     pub reap_interval_secs: u64,
 
     /// Zoom configuration
+    #[cfg(feature = "kitty")]
     pub zoom: ZoomConfig,
 
     /// Longcat configuration for window height management
@@ -187,6 +195,7 @@ impl Default for Config {
             max_connections: default_max_connections(),
             idle_timeout_secs: default_idle_timeout(),
             reap_interval_secs: default_reap_interval(),
+            #[cfg(feature = "kitty")]
             zoom: ZoomConfig::default(),
             longcat: LongcatConfig::default(),
         }
@@ -232,15 +241,21 @@ impl Config {
         }
 
         // Extract base config
-        let mut config: Config = figment.extract()?;
+        let config: Config = figment.extract()?;
+        #[cfg(feature = "kitty")]
+        let mut config = config;
+        #[cfg(not(feature = "kitty"))]
+        let _ = zoom_args;
 
         // Validate zoom config from file
+        #[cfg(feature = "kitty")]
         config
             .zoom
             .validate()
             .map_err(|e| format!("Invalid zoom configuration: {}", e))?;
 
         // Apply CLI zoom args if provided (overrides config file)
+        #[cfg(feature = "kitty")]
         if let Some(zoom) = zoom_args {
             if zoom.absolute.is_some() {
                 config.zoom.absolute = zoom.absolute;
@@ -277,6 +292,7 @@ impl Config {
     }
 
     /// Convert to RegistryConfig for KittyRegistry
+    #[cfg(feature = "kitty")]
     pub fn to_registry_config(&self) -> RegistryConfig {
         RegistryConfig {
             socket_timeout: Duration::from_secs(self.socket_timeout_secs),
@@ -289,7 +305,7 @@ impl Config {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "kitty"))]
 mod tests {
     use super::*;
 

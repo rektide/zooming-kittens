@@ -376,7 +376,7 @@ async fn runner_timer_fires_after_last_event_without_polling_or_retries() {
     let counted = calls.clone();
     let executor: Executor = Arc::new(move |_| {
         counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        async { zk_niri::Transmission::Handled }.boxed()
+        async { Transmission::Handled }.boxed()
     });
     let (sender, receiver) = tokio::sync::oneshot::channel();
     let mut sender = Some(sender);
@@ -430,7 +430,7 @@ async fn observations_continue_during_command_and_focus_change_stops_unsent_tail
         async move {
             publisher.publish(update);
             tokio::time::sleep(Duration::from_millis(10)).await;
-            zk_niri::Transmission::Handled
+            Transmission::Handled
         }
         .boxed()
     });
@@ -646,12 +646,15 @@ async fn queued_discontinuity_before_healthy_latest_blocks_first_send_and_revoke
 }
 
 #[tokio::test]
-async fn both_backends_acquire_read_only_through_real_native_subscriptions() {
+async fn enabled_backends_acquire_read_only_through_real_native_subscriptions() {
     use tokio::{
         io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
         net::UnixListener,
     };
     for backend in ["niri", "umbriel"] {
+        if backend == "umbriel" && !cfg!(feature = "umbriel") {
+            continue;
+        }
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("script.sock");
         let listener = UnixListener::bind(&path).unwrap();
@@ -822,12 +825,8 @@ async fn scripted_niri_runner_executes_by_id_then_conditionally_restores_on_shut
         let _ = released.await;
     });
     let command = command(&["--socket", path.to_str().unwrap()]);
-    let (owner, observer, actuator) = native::subscribe(&command).await.unwrap();
-    let actuator = actuator.unwrap();
-    let executor: Executor = Arc::new(move |request| {
-        let actuator = actuator.clone();
-        async move { actuator.set_height(request).await }.boxed()
-    });
+    let (owner, observer, executor) = native::subscribe(&command).await.unwrap();
+    let executor = executor.unwrap();
     let (sender, receiver) = tokio::sync::oneshot::channel();
     let mut sender = Some(sender);
     let mut records = Vec::new();

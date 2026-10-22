@@ -84,6 +84,10 @@ impl LongcatCommand {
 }
 
 pub async fn run_longcat(command: LongcatCommand) -> io::Result<()> {
+    match command.backend {
+        Backend::Niri => crate::require_feature(cfg!(feature = "niri"), "niri")?,
+        Backend::Umbriel => crate::require_feature(cfg!(feature = "umbriel"), "umbriel")?,
+    }
     // No global CLI defaults are merged: Longcat overrides only explicitly supplied values.
     let loaded = Config::load(None, None)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e.to_string()))?;
@@ -94,5 +98,16 @@ pub async fn run_longcat(command: LongcatCommand) -> io::Result<()> {
             "Umbriel mutation unsupported: native extent actions target the focused window, not a chosen ID; exact groups/axis and reversible layout state are unavailable. Use --dry-run; no focus workaround is performed.",
         ));
     }
-    crate::runner::run(command, config).await
+    #[cfg(any(feature = "niri", feature = "umbriel"))]
+    {
+        crate::runner::run(command, config).await
+    }
+    #[cfg(not(any(feature = "niri", feature = "umbriel")))]
+    {
+        let _ = config;
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "Longcat requires feature `niri` or `umbriel`",
+        ))
+    }
 }

@@ -199,7 +199,7 @@ impl Control {
         &self,
         capture: &DesktopCapture,
         sequence: &Sequence,
-    ) -> Result<zk_niri::HeightRequest, String> {
+    ) -> Result<super::native::HeightRequest, String> {
         let slot = self.slots.get(&sequence.key).ok_or("episode missing")?;
         if matches!(slot.episode.phase(), Phase::Lost | Phase::Conflicted) {
             return Err("episode no longer owns mutation authority".into());
@@ -235,7 +235,7 @@ impl Control {
             .clone();
         let height =
             i32::try_from(target.extent).map_err(|_| "height exceeds niri integer range")?;
-        Ok(zk_niri::HeightRequest {
+        Ok(super::native::HeightRequest {
             target: key,
             basis: capture.version,
             height,

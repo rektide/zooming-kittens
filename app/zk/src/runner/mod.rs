@@ -4,7 +4,7 @@ mod control;
 mod native;
 mod output;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "niri"))]
 mod tests;
 
 use crate::{commands::longcat::LongcatCommand, config::LongcatConfig};
@@ -14,23 +14,17 @@ use futures::{
     future::{BoxFuture, poll_fn},
 };
 use kubeless_work_schedule::{ReadyWork, ScheduleOptions, ScheduleRequest, schedule};
+use native::{HeightRequest, Transmission};
 use serde_json::Value;
 use std::{io, sync::Arc, time::Duration};
 use tokio::time::Instant;
 use zk_desktop::{Continuity, ObserveError, Observer};
 use zk_longcat::CommandOutcome;
 
-type Executor =
-    Arc<dyn Fn(zk_niri::HeightRequest) -> BoxFuture<'static, zk_niri::Transmission> + Send + Sync>;
+type Executor = Arc<dyn Fn(HeightRequest) -> BoxFuture<'static, Transmission> + Send + Sync>;
 
 pub async fn run(command: LongcatCommand, config: LongcatConfig) -> io::Result<()> {
-    let (owner, observer, actuator) = native::subscribe(&command).await?;
-    let executor: Option<Executor> = actuator.map(|actuator| {
-        Arc::new(move |request| {
-            let actuator = actuator.clone();
-            async move { actuator.set_height(request).await }.boxed()
-        }) as Executor
-    });
+    let (owner, observer, executor) = native::subscribe(&command).await?;
     // Native I/O never awaits stdout. A slow/broken diagnostic consumer ends the
     // app rather than accumulating an unbounded backlog or silently losing rows.
     let output = output::Output::stdout()?;
@@ -76,7 +70,7 @@ async fn drive(
     let origin = Instant::now();
     let mut control = Control::new(config, command.dry_run, command.convergence_timeout_ms);
     let mut sequence: Option<Sequence> = None;
-    let mut pending: Option<BoxFuture<'static, zk_niri::Transmission>> = None;
+    let mut pending: Option<BoxFuture<'static, Transmission>> = None;
     let mut timer = schedule::<(), &'static str>(ScheduleOptions::default());
     timer
         .admit(ScheduleRequest {
@@ -107,10 +101,10 @@ async fn drive(
                     let current = sequence.as_mut().expect("pending sequence");
                     let native_receipt = format!("{outcome:?}");
                     let outcome = match outcome {
-                        zk_niri::Transmission::Handled => CommandOutcome::Handled,
-                        zk_niri::Transmission::Rejected(message) => CommandOutcome::Rejected { message },
-                        zk_niri::Transmission::PossiblySent(message) => CommandOutcome::PossiblySent { message },
-                        zk_niri::Transmission::Unsent(_) => CommandOutcome::Unsent,
+                        Transmission::Handled => CommandOutcome::Handled,
+                        Transmission::Rejected(message) => CommandOutcome::Rejected { message },
+                        Transmission::PossiblySent(message) => CommandOutcome::PossiblySent { message },
+                        Transmission::Unsent(message) => { drop(message); CommandOutcome::Unsent },
                     };
                     let proceed = outcome == CommandOutcome::Handled;
                     control.record(current, outcome)?;
@@ -285,7 +279,8 @@ async fn drive(
             }
         }
         Ok(())
-    }.await;
+    }
+    .await;
     // Every exit (including output failure) conservatively retains a polled
     // command as possibly sent before dropping it. Never submit its unsent tail.
     if let Some(current) = &sequence {

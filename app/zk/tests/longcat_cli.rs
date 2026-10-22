@@ -1,3 +1,5 @@
+#![cfg(feature = "umbriel")]
+
 use std::{
     fs,
     process::{Command, Output},

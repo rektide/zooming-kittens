@@ -1,20 +1,57 @@
 use clap::{Parser, Subcommand};
-use commands::ConfSizeCommand;
+#[cfg(feature = "niri")]
 use commands::ExportCommand;
-use commands::FontCommand;
+#[cfg(feature = "kitty")]
 use commands::conf_size::handle_conf_size_command;
+#[cfg(feature = "niri")]
 use commands::export::run_export;
+#[cfg(feature = "kitty")]
 use commands::fonts::handle_font_command;
 use commands::longcat::run_longcat;
 use commands::systemd::generate_systemd_service;
+#[cfg(all(feature = "niri", feature = "kitty"))]
 use commands::zoomer::run_zoomer;
+#[cfg(feature = "kitty")]
+use commands::{ConfSizeCommand, FontCommand};
 use config::{CliArgs, CliZoomArgs, Config, Verbosity};
+#[cfg(feature = "kitty")]
 use kitty::KittyRegistry;
 
 mod commands;
 mod config;
+#[cfg(feature = "kitty")]
 use zk_kitty as kitty;
+#[cfg(any(feature = "niri", feature = "umbriel"))]
 mod runner;
+
+// Retain disabled command names so invocation explains the required build feature.
+#[derive(clap::Args, Debug)]
+#[command(
+    after_help = "This command is disabled in this build. Invoke it to see the required Cargo feature."
+)]
+struct DisabledCommand {
+    #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+    _args: Vec<String>,
+}
+#[cfg(not(feature = "kitty"))]
+type ConfSizeCommand = DisabledCommand;
+#[cfg(not(feature = "kitty"))]
+type FontCommand = DisabledCommand;
+#[cfg(not(feature = "niri"))]
+type ExportCommand = DisabledCommand;
+
+fn require_feature(enabled: bool, feature: &str) -> std::io::Result<()> {
+    if enabled {
+        Ok(())
+    } else {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            format!(
+                "feature `{feature}` is disabled in this build; rebuild with --features {feature}"
+            ),
+        ))
+    }
+}
 
 #[derive(Subcommand, Debug)]
 enum CliSubcommand {
@@ -81,7 +118,7 @@ enum CliSubcommand {
         )]
         zoom_step_size: Option<f64>,
     },
-    #[command(subcommand)]
+    #[cfg_attr(feature = "kitty", command(subcommand))]
     #[command(about = "Manually control kitty font sizes")]
     Font(FontCommand),
     #[command(
@@ -189,9 +226,21 @@ impl Args {
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
     let args = Args::parse();
+    match &args.command {
+        Some(CliSubcommand::ConfSize(_) | CliSubcommand::Cleanup | CliSubcommand::Font(_)) => {
+            require_feature(cfg!(feature = "kitty"), "kitty")?
+        }
+        Some(CliSubcommand::Export(_)) => require_feature(cfg!(feature = "niri"), "niri")?,
+        Some(CliSubcommand::Zoomer { .. }) | None => {
+            require_feature(cfg!(feature = "niri"), "niri")?;
+            require_feature(cfg!(feature = "kitty"), "kitty")?;
+        }
+        _ => {}
+    }
     let cli_args = args.to_cli_args();
 
     // Handle subcommands
+    #[cfg(feature = "kitty")]
     if let Some(CliSubcommand::ConfSize(cmd)) = args.command {
         handle_conf_size_command(cmd)?;
         return Ok(());
@@ -202,6 +251,7 @@ async fn main() -> std::io::Result<()> {
         return Ok(());
     }
 
+    #[cfg(feature = "kitty")]
     if let Some(CliSubcommand::Cleanup) = args.command {
         let config = Config::load(None, None).unwrap_or_default();
         let registry = KittyRegistry::new(config.to_registry_config());
@@ -210,6 +260,7 @@ async fn main() -> std::io::Result<()> {
         return Ok(());
     }
 
+    #[cfg(feature = "niri")]
     if let Some(CliSubcommand::Export(export_cmd)) = args.command {
         run_export(export_cmd)
             .await
@@ -240,6 +291,7 @@ async fn main() -> std::io::Result<()> {
         return Ok(());
     }
 
+    #[cfg(feature = "kitty")]
     if let Some(CliSubcommand::Font(font_cmd)) = args.command {
         handle_font_command(font_cmd)
             .await
@@ -262,6 +314,7 @@ async fn main() -> std::io::Result<()> {
     let app_id = config.app_id.clone();
     let verbosity = config.verbosity;
 
+    #[cfg(all(feature = "niri", feature = "kitty"))]
     if verbosity.log_window_events() {
         eprintln!("Starting event stream for window focus changes...");
         eprintln!("Tracking app_id: {}", app_id);
@@ -272,4 +325,10 @@ async fn main() -> std::io::Result<()> {
         .map_err(|e| std::io::Error::other(e.to_string()))?;
 
     Ok(())
+}
+
+#[cfg(not(all(feature = "niri", feature = "kitty")))]
+async fn run_zoomer(_: String, _: Verbosity, _: Config) -> std::io::Result<()> {
+    require_feature(cfg!(feature = "niri"), "niri")?;
+    require_feature(cfg!(feature = "kitty"), "kitty")
 }

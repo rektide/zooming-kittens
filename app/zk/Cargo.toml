@@ -11,25 +11,41 @@ path = "src/main.rs"
 clap = { version = "4.5.56", features = ["derive"] }
 dirs = "6.0.0"
 figment2 = { version = "0.11.4", features = ["toml"] }
-futures = "0.3"
-kitty-rc = "0.5.0"
-niri-ipc = "26.4.0"
+futures = { version = "0.3", optional = true }
+kitty-rc = { version = "0.5.0", optional = true }
+niri-ipc = { version = "26.4.0", optional = true }
 serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.149"
-tokio = "1.49.0"
-tokio-stream = "0.1"
-zk-desktop = { path = "../../desktop/model" }
-zk-niri = { path = "../../desktop/niri" }
-zk-umbriel = { path = "../../desktop/umbriel" }
-zk-longcat = { path = "../../layout/longcat" }
-kubeless-work-schedule = { path = "../../../kubeless/work/schedule" }
-zk-kitty = { path = "../../terminal/kitty" }
-zk-zoomer = { path = "../../terminal/zoomer" }
-zk-export = { path = "../../inspection/export" }
+serde_json = { version = "1.0.149", optional = true }
+tokio = { version = "1.49.0", features = ["macros", "rt-multi-thread", "signal", "time", "sync"] }
+tokio-stream = { version = "0.1", optional = true }
+zk-desktop = { path = "../../desktop/model", optional = true }
+zk-niri = { path = "../../desktop/niri", optional = true }
+zk-umbriel = { path = "../../desktop/umbriel", optional = true }
+zk-longcat = { path = "../../layout/longcat", optional = true }
+kubeless-work-schedule = { path = "../../../kubeless/work/schedule", optional = true }
+zk-kitty = { path = "../../terminal/kitty", optional = true }
+zk-zoomer = { path = "../../terminal/zoomer", optional = true }
+zk-export = { path = "../../inspection/export", optional = true }
 
 [features]
-export-facet = ["zk-export/export-facet"]
+default = ["niri", "umbriel", "kitty"]
+niri = ["dep:zk-niri", "dep:niri-ipc", "dep:zk-export", "dep:zk-desktop", "dep:zk-longcat", "dep:kubeless-work-schedule", "dep:futures", "dep:serde_json", "dep:tokio-stream"]
+umbriel = ["dep:zk-umbriel", "dep:zk-desktop", "dep:zk-longcat", "dep:kubeless-work-schedule", "dep:futures", "dep:serde_json"]
+kitty = ["dep:zk-kitty", "dep:zk-zoomer", "dep:kitty-rc"]
+export-facet = ["niri", "zk-export/export-facet"]
+
+[[example]]
+name = "listen_events"
+required-features = ["niri"]
+
+[[example]]
+name = "list_windows"
+required-features = ["niri"]
+
+[[example]]
+name = "poll_windows"
+required-features = ["niri"]
 
 [dev-dependencies]
 tempfile = "3.16"
-tokio = { version = "1.49.0", features = ["test-util"] }
+tokio = { version = "1.49.0", features = ["test-util", "io-std", "io-util"] }
