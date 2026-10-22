@@ -92,12 +92,6 @@ pub async fn run_longcat(command: LongcatCommand) -> io::Result<()> {
     let loaded = Config::load(None, None)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e.to_string()))?;
     let config = command.compose(loaded.longcat)?;
-    if command.backend == Backend::Umbriel && !command.dry_run {
-        return Err(io::Error::new(
-            io::ErrorKind::Unsupported,
-            "Umbriel mutation unsupported: native extent actions target the focused window, not a chosen ID; exact groups/axis and reversible layout state are unavailable. Use --dry-run; no focus workaround is performed.",
-        ));
-    }
     #[cfg(any(feature = "niri", feature = "umbriel"))]
     {
         crate::runner::run(command, config).await

@@ -2,12 +2,20 @@ use super::bridge::{self, Context};
 use crate::config::LongcatConfig;
 use serde_json::{Value, json};
 use std::{collections::BTreeMap, io};
-use zk_desktop::{DesktopCapture, GroupKey, WindowKey};
+use zk_desktop::{ConditionalAllocation, DesktopCapture, GroupKey, WindowKey};
 use zk_longcat::{CommandOutcome, Decision, Episode, Phase, Plan, Policy};
 
 pub struct Slot {
     pub episode: Episode,
     context: Context,
+    native: Option<NativeEpisode>,
+}
+
+struct NativeEpisode {
+    baseline: ConditionalAllocation,
+    accepted: ConditionalAllocation,
+    previous_basis: Option<std::sync::Arc<[u8]>>,
+    awaiting_basis: bool,
 }
 
 #[derive(Clone)]
@@ -15,6 +23,7 @@ pub struct Sequence {
     pub key: GroupKey,
     pub plan: Plan,
     pub next: usize,
+    pub group_submission: bool,
 }
 
 pub struct Control {
@@ -73,12 +82,11 @@ impl Control {
                             Ok((observation, context)) => {
                                 let overlapping_effect = self.slots.values().any(|slot| {
                                     slot.episode.phase() != Phase::Restored
-                                        && slot.episode.effects().iter().any(|effect| {
-                                            effect
-                                                .commands
-                                                .iter()
-                                                .any(CommandOutcome::may_have_effect)
-                                        })
+                                        && slot
+                                            .episode
+                                            .effects()
+                                            .iter()
+                                            .any(|effect| effect.may_have_effect())
                                         && slot.episode.baseline().observation.group.source
                                             == observation.group.source
                                         && slot.episode.baseline().observation.members.iter().any(
@@ -97,12 +105,56 @@ impl Control {
                                         "episode retention limit (32) reached; restart explicitly",
                                     ));
                                 } else {
-                                    match Episode::new(observation, self.policy) {
-                                        Ok(episode) => {
-                                            self.slots
-                                                .insert(key.clone(), Slot { episode, context });
+                                    let native = capture.allocations.get(key).cloned();
+                                    let created = if let Some(allocation) = &native {
+                                        if observation.members.iter().zip(&allocation.members).any(
+                                            |(m, a)| {
+                                                (m.extent - f64::from(a.target_content)).abs()
+                                                    > f64::from(self.policy.geometry_tolerance)
+                                            },
+                                        ) {
+                                            unsupported = Some("waiting for native baseline target/committed convergence".into());
+                                            None
+                                        } else {
+                                            let targets = observation
+                                                .members
+                                                .iter()
+                                                .zip(&allocation.members)
+                                                .map(|(m, a)| zk_longcat::Target {
+                                                    member: m.id.clone(),
+                                                    extent: a.target_content,
+                                                })
+                                                .collect();
+                                            Some(Episode::new_group(
+                                                observation,
+                                                self.policy,
+                                                targets,
+                                            ))
                                         }
-                                        Err(error) => unsupported = Some(error.to_string()),
+                                    } else {
+                                        Some(Episode::new(observation, self.policy))
+                                    };
+                                    if let Some(created) = created {
+                                        match created {
+                                            Ok(episode) => {
+                                                self.slots.insert(
+                                                    key.clone(),
+                                                    Slot {
+                                                        episode,
+                                                        context,
+                                                        native: native.map(|baseline| {
+                                                            NativeEpisode {
+                                                                accepted: baseline.clone(),
+                                                                baseline,
+                                                                previous_basis: None,
+                                                                awaiting_basis: false,
+                                                            }
+                                                        }),
+                                                    },
+                                                );
+                                            }
+                                            Err(error) => unsupported = Some(error.to_string()),
+                                        }
                                     }
                                 }
                             }
@@ -122,6 +174,40 @@ impl Control {
         let mut rows = Vec::new();
         let mut selected = None;
         for (key, slot) in &mut self.slots {
+            if let Some(native) = &mut slot.native {
+                let pending = in_flight.is_some_and(|sequence| &sequence.key == key)
+                    && slot
+                        .episode
+                        .requested()
+                        .is_some_and(|effect| !effect.execution_finished);
+                if !pending {
+                    match capture.allocations.get(key) {
+                        Some(current) if current.basis == native.accepted.basis => {
+                            native.awaiting_basis = false;
+                            native.previous_basis = None;
+                        }
+                        Some(current)
+                            if native.awaiting_basis
+                                && native.previous_basis.as_ref() == Some(&current.basis) =>
+                        {
+                            if slot
+                                .episode
+                                .next_reconsideration()
+                                .is_some_and(|due| now >= due)
+                            {
+                                slot.episode
+                                    .lose("accepted native basis was not observed before deadline");
+                            } else {
+                                rows.push(json!({"phase":slot.episode.phase(),"waiting":"accepted native basis observation"}));
+                                continue;
+                            }
+                        }
+                        _ => {
+                            slot.episode.lose("native basis changed independently; no automatic rebasing or restoration");
+                        }
+                    }
+                }
+            }
             let budget = slot.episode.baseline().observation.available_extent;
             let input = bridge::observation(capture, key, self.minimum, Some(budget));
             let observed;
@@ -162,13 +248,18 @@ impl Control {
                     key: key.clone(),
                     plan: (**plan).clone(),
                     next: 0,
+                    group_submission: slot.native.is_some(),
                 });
             }
             rows.push(json!({ "observed": observed, "baseline": slot.episode.baseline(),
                 "desired": decision, "preview": preview, "phase": slot.episode.phase(),
                 "requested_effect": slot.episode.requested(), "retained_effect_count": slot.episode.effects().len() }));
         }
-        if !self.dry_run && !capture.capabilities.height_by_id && selected.is_some() {
+        if !self.dry_run
+            && !capture.capabilities.height_by_id
+            && !capture.capabilities.atomic_multiwindow
+            && selected.is_some()
+        {
             return Err(io::Error::new(
                 io::ErrorKind::Unsupported,
                 "backend has no by-ID height capability",
@@ -199,7 +290,7 @@ impl Control {
         &self,
         capture: &DesktopCapture,
         sequence: &Sequence,
-    ) -> Result<super::native::HeightRequest, String> {
+    ) -> Result<super::native::Request, String> {
         let slot = self.slots.get(&sequence.key).ok_or("episode missing")?;
         if matches!(slot.episode.phase(), Phase::Lost | Phase::Conflicted) {
             return Err("episode no longer owns mutation authority".into());
@@ -219,6 +310,45 @@ impl Control {
             sequence.plan.validate_identity(&observation)
         };
         validation.map_err(|e| format!("plan admission refused: {e:?}"))?;
+        if let Some(native) = &slot.native {
+            let current = capture
+                .allocations
+                .get(&sequence.key)
+                .ok_or("native allocation disappeared")?;
+            if native.awaiting_basis || current.basis != native.accepted.basis {
+                return Err("native basis no longer matches last accepted authority".into());
+            }
+            let group = capture.groups.get(&sequence.key).ok_or("group missing")?;
+            let expected_active = sequence
+                .plan
+                .active
+                .as_ref()
+                .map(|active| {
+                    group
+                        .members
+                        .iter()
+                        .find(|id| bridge::native_id(&id.native) == active.id)
+                        .cloned()
+                        .ok_or("active member disappeared")
+                })
+                .transpose()?;
+            return Ok(super::native::Request::Group(
+                zk_desktop::GroupAllocationRequest {
+                    group: sequence.key.clone(),
+                    expected: native.accepted.basis.clone(),
+                    restore_payload: (sequence.plan.kind == zk_longcat::PlanKind::Restore)
+                        .then(|| native.baseline.restore_payload.clone()),
+                    targets: sequence
+                        .plan
+                        .targets
+                        .iter()
+                        .map(|target| target.extent)
+                        .collect(),
+                    edge_gaps: native.baseline.edge_gaps,
+                    expected_active,
+                },
+            ));
+        }
         let target = sequence
             .plan
             .targets
@@ -235,20 +365,68 @@ impl Control {
             .clone();
         let height =
             i32::try_from(target.extent).map_err(|_| "height exceeds niri integer range")?;
-        Ok(super::native::HeightRequest {
-            target: key,
-            basis: capture.version,
-            height,
-        })
+        Ok(super::native::Request::Height(
+            super::native::HeightRequest {
+                target: key,
+                basis: capture.version,
+                height,
+            },
+        ))
     }
 
     pub fn record(&mut self, sequence: &Sequence, outcome: CommandOutcome) -> io::Result<()> {
-        self.slots
+        let slot = self
+            .slots
             .get_mut(&sequence.key)
-            .ok_or_else(|| bridge::invalid("episode missing"))?
-            .episode
-            .record_command(sequence.plan.id, sequence.next, outcome)
-            .map_err(|e| bridge::invalid(format!("command evidence: {e:?}")))
+            .ok_or_else(|| bridge::invalid("episode missing"))?;
+        let uncertain =
+            sequence.group_submission && matches!(outcome, CommandOutcome::PossiblySent { .. });
+        let result = if sequence.group_submission {
+            slot.episode.record_group(sequence.plan.id, outcome)
+        } else {
+            slot.episode
+                .record_command(sequence.plan.id, sequence.next, outcome)
+        };
+        result.map_err(|e| bridge::invalid(format!("command evidence: {e:?}")))?;
+        if uncertain {
+            slot.episode
+                .lose("uncertain native group transmission; authority revoked without replay");
+        }
+        Ok(())
+    }
+
+    pub fn accept_group(
+        &mut self,
+        sequence: &Sequence,
+        accepted: ConditionalAllocation,
+    ) -> io::Result<()> {
+        let slot = self
+            .slots
+            .get_mut(&sequence.key)
+            .ok_or_else(|| bridge::invalid("episode missing"))?;
+        let native = slot
+            .native
+            .as_mut()
+            .ok_or_else(|| bridge::invalid("native group episode missing"))?;
+        if accepted.context != native.baseline.context
+            || accepted
+                .members
+                .iter()
+                .map(|m| m.target_content)
+                .collect::<Vec<_>>()
+                != sequence
+                    .plan
+                    .targets
+                    .iter()
+                    .map(|t| t.extent)
+                    .collect::<Vec<_>>()
+        {
+            return Err(bridge::invalid("native receipt context/targets mismatch"));
+        }
+        native.previous_basis = Some(native.accepted.basis.clone());
+        native.accepted = accepted;
+        native.awaiting_basis = true;
+        self.record(sequence, CommandOutcome::Handled)
     }
 
     pub fn finish(&mut self, sequence: &Sequence) -> io::Result<()> {

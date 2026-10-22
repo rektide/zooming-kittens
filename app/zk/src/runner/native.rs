@@ -1,5 +1,5 @@
 use crate::commands::longcat::{Backend, LongcatCommand};
-#[cfg(feature = "niri")]
+#[cfg(any(feature = "niri", feature = "umbriel"))]
 use futures::FutureExt;
 use std::io;
 use zk_desktop::Observer;
@@ -15,12 +15,22 @@ pub struct HeightRequest {
     pub height: i32,
 }
 
+#[derive(Debug, Clone)]
+pub enum Request {
+    #[cfg_attr(not(feature = "niri"), allow(dead_code))]
+    Height(HeightRequest),
+    #[cfg_attr(not(feature = "umbriel"), allow(dead_code))]
+    Group(zk_desktop::GroupAllocationRequest),
+}
+
 #[derive(Debug)]
 #[cfg_attr(not(feature = "niri"), allow(dead_code))]
 pub enum Transmission {
     Unsent(String),
     Rejected(String),
     Handled,
+    #[cfg_attr(not(feature = "umbriel"), allow(dead_code))]
+    GroupHandled(zk_desktop::ConditionalAllocation),
     PossiblySent(String),
 }
 
@@ -58,6 +68,9 @@ pub async fn subscribe(
             let executor: super::Executor = std::sync::Arc::new(move |request| {
                 let actuator = actuator.clone();
                 async move {
+                    let Request::Height(request) = request else {
+                        return Transmission::Unsent("wrong backend request".into());
+                    };
                     match actuator
                         .set_height(zk_niri::HeightRequest {
                             target: request.target,
@@ -91,14 +104,59 @@ pub async fn subscribe(
                     .resolve()
                     .map_err(io::Error::other)?,
             };
-            let (owner, observer) = zk_umbriel::subscribe(
-                endpoint,
-                SourceId::new(zk_desktop::Backend::Umbriel, "longcat"),
-                zk_umbriel::Options::default(),
-            )
-            .await
+            let available = zk_umbriel::layout::available(&endpoint)
+                .await
+                .map_err(io::Error::other)?;
+            if !available && !command.dry_run {
+                return Err(io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    "Umbriel server lacks layout-state/layout-allocate conditional control; use --dry-run for read-only observation or deploy the compatible native extension; no focus workaround",
+                ));
+            }
+            let (owner, observer) = if available {
+                zk_umbriel::subscribe_layout(
+                    endpoint.clone(),
+                    SourceId::new(zk_desktop::Backend::Umbriel, "longcat"),
+                    zk_umbriel::Options::default(),
+                )
+                .await
+            } else {
+                zk_umbriel::subscribe(
+                    endpoint.clone(),
+                    SourceId::new(zk_desktop::Backend::Umbriel, "longcat"),
+                    zk_umbriel::Options::default(),
+                )
+                .await
+            }
             .map_err(io::Error::other)?;
-            Ok((Owner::Umbriel(owner), observer, None))
+            let executor: super::Executor = std::sync::Arc::new(move |request| {
+                let endpoint = endpoint.clone();
+                async move {
+                    let Request::Group(request) = request else {
+                        return Transmission::Unsent("wrong backend request".into());
+                    };
+                    match zk_umbriel::layout::execute(&endpoint, request).await {
+                        zk_umbriel::layout::Transmission::Handled(receipt) => {
+                            Transmission::GroupHandled(receipt)
+                        }
+                        zk_umbriel::layout::Transmission::Rejected(message) => {
+                            Transmission::Rejected(message)
+                        }
+                        zk_umbriel::layout::Transmission::Unsent(message) => {
+                            Transmission::Unsent(message)
+                        }
+                        zk_umbriel::layout::Transmission::PossiblySent(message) => {
+                            Transmission::PossiblySent(message)
+                        }
+                    }
+                }
+                .boxed()
+            });
+            Ok((
+                Owner::Umbriel(owner),
+                observer,
+                available.then_some(executor),
+            ))
         }
         #[cfg(not(feature = "umbriel"))]
         Backend::Umbriel => Err(io::Error::new(

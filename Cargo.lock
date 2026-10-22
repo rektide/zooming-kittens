@@ -686,18 +686,18 @@ dependencies = [
 
 [[package]]
 name = "kubeless-view-change"
-version = "0.1.0"
+version = "0.6.0"
 
 [[package]]
 name = "kubeless-view-impact"
-version = "0.1.0"
+version = "0.6.0"
 dependencies = [
  "kubeless-view-change",
 ]
 
 [[package]]
 name = "kubeless-view-memory"
-version = "0.1.0"
+version = "0.6.0"
 dependencies = [
  "hashbrown 0.16.1",
  "kubeless-view-change",
@@ -706,11 +706,11 @@ dependencies = [
 
 [[package]]
 name = "kubeless-work-ready"
-version = "0.1.0"
+version = "0.6.0"
 
 [[package]]
 name = "kubeless-work-schedule"
-version = "0.1.0"
+version = "0.6.0"
 dependencies = [
  "futures",
  "hashbrown 0.16.1",
@@ -723,7 +723,7 @@ dependencies = [
 
 [[package]]
 name = "kubeless-work-schedule-policy"
-version = "0.1.0"
+version = "0.6.0"
 
 [[package]]
 name = "libc"
@@ -1466,6 +1466,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "umbriel-tracking"
+version = "0.1.0"
+dependencies = [
+ "thiserror 2.0.21",
+ "tokio",
+ "umbriel-client",
+ "umbriel-protocol",
+ "umbriel-state",
+]
+
+[[package]]
 name = "uncased"
 version = "0.9.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1798,11 +1809,14 @@ name = "zk-umbriel"
 version = "0.1.0"
 dependencies = [
  "kubeless-view-impact",
+ "serde",
+ "serde_json",
  "tempfile",
  "tokio",
  "umbriel-client",
  "umbriel-protocol",
  "umbriel-state",
+ "umbriel-tracking",
  "zk-desktop",
 ]
 

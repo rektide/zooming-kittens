@@ -260,6 +260,9 @@ fn bridge_keeps_baseline_budget_during_partial_native_application() {
     let mut next = sequence.clone();
     next.next = 1;
     let request = control.request(&partial, &next).unwrap();
+    let native::Request::Height(request) = request else {
+        panic!("expected sequential height request")
+    };
     assert_eq!(request.basis, partial.version);
     assert_eq!(request.target.native, NativeId::Number(2));
     assert_eq!(request.height, 162);
@@ -683,6 +686,18 @@ async fn enabled_backends_acquire_read_only_through_real_native_subscriptions() 
                     tokio::time::sleep(Duration::from_millis(5)).await;
                 }
             } else {
+                assert!(line.contains("layout-state"));
+                socket
+                    .write_all(b"{\"err\":\"unknown command: layout-state\"}\n")
+                    .await
+                    .unwrap();
+                drop(socket);
+                socket = listener.accept().await.unwrap().0;
+                line.clear();
+                BufReader::new(&mut socket)
+                    .read_line(&mut line)
+                    .await
+                    .unwrap();
                 assert!(line.contains("subscribe"));
                 socket
                     .write_all(b"{\"event\":\"windows\",\"data\":[]}\n")

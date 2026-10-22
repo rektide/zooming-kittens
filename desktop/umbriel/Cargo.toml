@@ -8,9 +8,12 @@ zk-desktop = { version = "0.1.0", path = "../model" }
 umbriel-client = { version = "0.1.0", path = "../../../umbriel-rs/crates/umbriel-client" }
 umbriel-protocol = { version = "0.1.0", path = "../../../umbriel-rs/crates/umbriel-protocol" }
 umbriel-state = { version = "0.1.0", path = "../../../umbriel-rs/crates/umbriel-state" }
-kubeless-view-impact = { version = "0.1.0", path = "../../../kubeless/view/impact" }
+umbriel-tracking = { path = "../../../umbriel-rs/crates/tracking" }
+serde = "1"
+kubeless-view-impact = { version = "=0.6.0", path = "../../../kubeless/view/impact" }
 tokio = { version = "1.49.0", features = ["macros", "rt", "sync", "time"] }
 
 [dev-dependencies]
+serde_json = "1"
 tempfile = "3.16"
 tokio = { version = "1.49.0", features = ["io-util", "net"] }

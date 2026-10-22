@@ -97,6 +97,9 @@ pub struct Baseline {
     /// Conserving, bounded integer restoration representation. This is not a
     /// native restore token and makes no claim to restore hidden split weights.
     pub allocation: Allocation,
+    /// Explicit native restoration targets, independent of the conserving solver
+    /// representation (native constraints can leave a different pixel total).
+    pub native_restore_targets: Option<Vec<Target>>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -210,8 +213,19 @@ pub struct Effect {
     /// Exactly one entry per ordered plan target, retained through supersession,
     /// conflicts and loss. A native sequence is not a transaction.
     pub commands: Vec<CommandOutcome>,
+    /// One whole-group submission, mutually exclusive with sequential commands.
+    pub group_command: Option<CommandOutcome>,
     pub execution_finished: bool,
     pub convergence: Convergence,
+}
+
+impl Effect {
+    pub fn outcomes(&self) -> impl Iterator<Item = &CommandOutcome> {
+        self.commands.iter().chain(self.group_command.iter())
+    }
+    pub fn may_have_effect(&self) -> bool {
+        self.outcomes().any(CommandOutcome::may_have_effect)
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -318,6 +332,7 @@ impl Episode {
             baseline: Baseline {
                 observation: observation.clone(),
                 allocation,
+                native_restore_targets: None,
             },
             observed: observation,
             policy,
@@ -332,6 +347,27 @@ impl Episode {
 
     pub fn baseline(&self) -> &Baseline {
         &self.baseline
+    }
+
+    /// Native restoration has its own target representation and one group receipt.
+    pub fn new_group(
+        observation: Observation,
+        policy: Policy,
+        restore_targets: Vec<Target>,
+    ) -> Result<Self, InputError> {
+        if restore_targets.len() != observation.members.len()
+            || restore_targets
+                .iter()
+                .zip(&observation.members)
+                .any(|(t, m)| t.member != m.id || t.extent == 0)
+        {
+            return Err(InputError::InvalidGeometry {
+                id: "native restoration targets".into(),
+            });
+        }
+        let mut episode = Self::new(observation, policy)?;
+        episode.baseline.native_restore_targets = Some(restore_targets);
+        Ok(episode)
     }
 
     pub fn observed(&self) -> &Observation {
@@ -398,8 +434,7 @@ impl Episode {
 
         if self.effects.iter().any(|effect| {
             effect
-                .commands
-                .iter()
+                .outcomes()
                 .any(|outcome| matches!(outcome, CommandOutcome::Rejected { .. }))
         }) {
             return self.conflict(Suspension::CommandRejected);
@@ -414,7 +449,7 @@ impl Episode {
                 }
                 return Decision::Noop(Noop::AwaitingExecution);
             }
-            if !effect.commands.iter().any(CommandOutcome::may_have_effect) {
+            if !effect.may_have_effect() {
                 effect.convergence = Convergence::NoEffect;
                 // A refused, definitely-unsent replacement does not erase the
                 // prior settled effect or the duty to conditionally restore it.
@@ -511,7 +546,11 @@ impl Episode {
         } else if self.phase == Phase::Settled {
             // Restoration authority requires unchanged identity/context AND
             // observed compatibility with a possibly-sent requested effect.
-            let desired = targets(&self.baseline.observation, &self.baseline.allocation);
+            let desired = self
+                .baseline
+                .native_restore_targets
+                .clone()
+                .unwrap_or_else(|| targets(&self.baseline.observation, &self.baseline.allocation));
             if self.unsent_same_capture() {
                 return Decision::Noop(Noop::NotSubmitted);
             }
@@ -563,6 +602,27 @@ impl Episode {
         Ok(())
     }
 
+    pub fn record_group(
+        &mut self,
+        plan_id: u64,
+        outcome: CommandOutcome,
+    ) -> Result<(), EvidenceError> {
+        let effect = self
+            .effects
+            .iter_mut()
+            .find(|e| e.plan.id == plan_id)
+            .ok_or(EvidenceError::UnknownPlan)?;
+        let previous = effect
+            .group_command
+            .as_mut()
+            .ok_or(EvidenceError::InvalidCommandCount)?;
+        if !can_refine(previous, &outcome, effect.execution_finished) {
+            return Err(EvidenceError::ContradictoryEvidence);
+        }
+        *previous = outcome;
+        Ok(())
+    }
+
     /// Mark the mutation sequence stopped, including its definitely-unsent tail.
     /// Do not finish while an executor may still submit more commands.
     pub fn finish_execution(&mut self, plan_id: u64) -> Result<(), EvidenceError> {
@@ -587,7 +647,7 @@ impl Episode {
             .iter_mut()
             .find(|effect| effect.plan.id == plan_id)
             .ok_or(EvidenceError::UnknownPlan)?;
-        if outcomes.len() != effect.commands.len() {
+        if effect.group_command.is_some() || outcomes.len() != effect.commands.len() {
             return Err(EvidenceError::InvalidCommandCount);
         }
         if effect
@@ -625,7 +685,16 @@ impl Episode {
             PlanKind::Restore => Phase::Restoring,
         };
         self.effects.push(Effect {
-            commands: vec![CommandOutcome::Unsent; plan.targets.len()],
+            commands: if self.baseline.native_restore_targets.is_some() {
+                Vec::new()
+            } else {
+                vec![CommandOutcome::Unsent; plan.targets.len()]
+            },
+            group_command: self
+                .baseline
+                .native_restore_targets
+                .as_ref()
+                .map(|_| CommandOutcome::Unsent),
             plan: plan.clone(),
             execution_finished: false,
             convergence: Convergence::Waiting,

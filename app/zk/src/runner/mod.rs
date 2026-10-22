@@ -6,6 +6,8 @@ mod output;
 
 #[cfg(all(test, feature = "niri"))]
 mod tests;
+#[cfg(all(test, feature = "umbriel"))]
+mod umbriel_tests;
 
 use crate::{commands::longcat::LongcatCommand, config::LongcatConfig};
 use control::{Control, Sequence};
@@ -14,14 +16,14 @@ use futures::{
     future::{BoxFuture, poll_fn},
 };
 use kubeless_work_schedule::{ReadyWork, ScheduleOptions, ScheduleRequest, schedule};
-use native::{HeightRequest, Transmission};
+use native::{Request, Transmission};
 use serde_json::Value;
 use std::{io, sync::Arc, time::Duration};
 use tokio::time::Instant;
 use zk_desktop::{Continuity, ObserveError, Observer};
 use zk_longcat::CommandOutcome;
 
-type Executor = Arc<dyn Fn(HeightRequest) -> BoxFuture<'static, Transmission> + Send + Sync>;
+type Executor = Arc<dyn Fn(Request) -> BoxFuture<'static, Transmission> + Send + Sync>;
 
 pub async fn run(command: LongcatCommand, config: LongcatConfig) -> io::Result<()> {
     let (owner, observer, executor) = native::subscribe(&command).await?;
@@ -100,18 +102,29 @@ async fn drive(
                     pending = None;
                     let current = sequence.as_mut().expect("pending sequence");
                     let native_receipt = format!("{outcome:?}");
+                    let mut recorded = false;
                     let outcome = match outcome {
+                        Transmission::GroupHandled(receipt) => match control.accept_group(current, receipt) {
+                            Ok(()) => { recorded = true; CommandOutcome::Handled },
+                            Err(error) => CommandOutcome::PossiblySent { message: error.to_string() },
+                        },
+                        Transmission::Handled if current.group_submission => CommandOutcome::PossiblySent { message: "group handling reply lacks accepted native basis".into() },
                         Transmission::Handled => CommandOutcome::Handled,
                         Transmission::Rejected(message) => CommandOutcome::Rejected { message },
                         Transmission::PossiblySent(message) => CommandOutcome::PossiblySent { message },
                         Transmission::Unsent(message) => { drop(message); CommandOutcome::Unsent },
                     };
                     let proceed = outcome == CommandOutcome::Handled;
-                    control.record(current, outcome)?;
-                    sink(serde_json::json!({"type":"longcat-command", "plan_id":current.plan.id,
-                        "index":current.next, "target":current.plan.targets[current.next], "native_receipt":native_receipt}))?;
+                    if !recorded { control.record(current, outcome)?; }
+                    if current.group_submission {
+                        sink(serde_json::json!({"type":"longcat-group-command", "plan_id":current.plan.id,
+                            "targets":current.plan.targets, "native_receipt":native_receipt}))?;
+                    } else {
+                        sink(serde_json::json!({"type":"longcat-command", "plan_id":current.plan.id,
+                            "index":current.next, "target":current.plan.targets[current.next], "native_receipt":native_receipt}))?;
+                    }
                     current.next += 1;
-                    if !proceed || current.next == current.plan.targets.len()
+                    if current.group_submission || !proceed || current.next == current.plan.targets.len()
                         || (control.stopping && current.plan.kind == zk_longcat::PlanKind::Emphasize) {
                         control.finish(current)?;
                         sequence = None;

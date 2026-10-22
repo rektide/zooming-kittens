@@ -44,6 +44,52 @@ pub async fn subscribe(
     source: SourceId,
     options: Options,
 ) -> Result<(Source, Observer), umbriel_client::Error> {
+    subscribe_inner(endpoint, source, options, false).await
+}
+
+pub async fn subscribe_layout(
+    endpoint: Endpoint,
+    source: SourceId,
+    options: Options,
+) -> Result<(Source, Observer), umbriel_client::Error> {
+    subscribe_inner(endpoint, source, options, true).await
+}
+
+enum Reduction {
+    Legacy(Reducer),
+    Layout(crate::layout::Reducer),
+}
+impl Reduction {
+    fn capture(&self) -> std::sync::Arc<DesktopCapture> {
+        match self {
+            Self::Legacy(r) => r.capture(),
+            Self::Layout(r) => r.capture(),
+        }
+    }
+    fn loss(&mut self, reason: LossReason) -> DesktopUpdate {
+        match self {
+            Self::Legacy(r) => r.loss(reason),
+            Self::Layout(r) => r.loss(reason),
+        }
+    }
+    fn apply(
+        &mut self,
+        now: std::time::Duration,
+        observation: umbriel_client::Observation,
+    ) -> Result<Option<DesktopUpdate>, crate::ReduceError> {
+        match self {
+            Self::Legacy(r) => r.apply(now, observation),
+            Self::Layout(r) => r.apply(now, observation),
+        }
+    }
+}
+
+async fn subscribe_inner(
+    endpoint: Endpoint,
+    source: SourceId,
+    options: Options,
+    layout: bool,
+) -> Result<(Source, Observer), umbriel_client::Error> {
     if source.backend != Backend::Umbriel
         || options.observer_capacity == 0
         || options
@@ -56,9 +102,20 @@ pub async fn subscribe(
         ));
     }
     let (native, mut observations) = endpoint
-        .subscribe(&[Family::Windows, Family::Workspaces], options.native)
+        .subscribe(
+            if layout {
+                &[Family::LayoutState]
+            } else {
+                &[Family::Windows, Family::Workspaces]
+            },
+            options.native,
+        )
         .await?;
-    let mut reducer = Reducer::new(source);
+    let mut reducer = if layout {
+        Reduction::Layout(crate::layout::Reducer::new(source))
+    } else {
+        Reduction::Legacy(Reducer::new(source))
+    };
     let (publisher, observer) = Publisher::new(reducer.capture(), options.observer_capacity);
     let (stop, mut stopped) = oneshot::channel();
     let task = tokio::spawn(async move {

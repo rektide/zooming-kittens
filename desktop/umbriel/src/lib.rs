@@ -3,6 +3,7 @@
 
 mod reducer;
 mod source;
+pub mod layout;
 pub use reducer::{ReduceError, Reducer};
-pub use source::{Options, Source, subscribe};
+pub use source::{Options, Source, subscribe, subscribe_layout};
 pub use umbriel_client::{Discovery, Endpoint, SubscriptionOptions};

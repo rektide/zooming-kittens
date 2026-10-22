@@ -222,6 +222,39 @@ pub struct Capabilities {
     pub exact_restore: bool,
 }
 
+/// Adapter-owned native evidence with a solver-facing projection. Opaque payloads
+/// are compared byte-for-byte and interpreted only by their originating adapter.
+/// They are never reconstructed from geometry or refreshed after an external edit.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ConditionalAllocation {
+    pub basis: Arc<[u8]>,
+    /// All conditional sizing context except the assigned native weights.
+    pub context: Arc<[u8]>,
+    pub restore_payload: Arc<[u8]>,
+    pub content_budget: u32,
+    pub members: Vec<AllocationMember>,
+    pub edge_gaps: (u32, u32),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AllocationMember {
+    pub target_content: u32,
+    pub decoration: u32,
+    pub minimum: u32,
+    pub maximum: Option<u32>,
+}
+
+#[derive(Debug, Clone)]
+pub struct GroupAllocationRequest {
+    pub group: GroupKey,
+    pub expected: Arc<[u8]>,
+    /// Some restores the original native state; None compiles pixel emphasis.
+    pub restore_payload: Option<Arc<[u8]>>,
+    pub targets: Vec<u32>,
+    pub edge_gaps: (u32, u32),
+    pub expected_active: Option<WindowKey>,
+}
+
 impl Capabilities {
     pub const READ_ONLY: Self = Self {
         reported_groups: false,
@@ -244,6 +277,9 @@ pub struct DesktopCapture {
     pub groups: BTreeMap<GroupKey, GroupView>,
     pub active_window: Option<WindowKey>,
     pub capabilities: Capabilities,
+    /// When present, this coherent family alone establishes control readiness.
+    pub control_status: Option<FamilyStatus>,
+    pub allocations: BTreeMap<GroupKey, ConditionalAllocation>,
 }
 
 impl DesktopCapture {
@@ -259,12 +295,18 @@ impl DesktopCapture {
             groups: BTreeMap::new(),
             active_window: None,
             capabilities,
+            control_status: None,
+            allocations: BTreeMap::new(),
         }
     }
 
     /// Local joined readiness, NOT an atomic joint compositor revision.
     pub fn is_ready(&self) -> bool {
-        self.connected && self.windows_status.is_current() && self.workspaces_status.is_current()
+        self.connected
+            && self.control_status.as_ref().map_or_else(
+                || self.windows_status.is_current() && self.workspaces_status.is_current(),
+                FamilyStatus::is_current,
+            )
     }
 }
 
@@ -285,7 +327,10 @@ impl Impact {
             health_changed: before.connected != after.connected
                 || before.scope != after.scope
                 || before.windows_status.health != after.windows_status.health
-                || before.workspaces_status.health != after.workspaces_status.health,
+                || before.workspaces_status.health != after.workspaces_status.health
+                || before.control_status.as_ref().map(|s| &s.health)
+                    != after.control_status.as_ref().map(|s| &s.health),
+            // Native basis edits may leave every rounded pixel unchanged.
             ..Self::default()
         };
         for key in before.windows.keys().chain(after.windows.keys()) {
@@ -306,7 +351,9 @@ impl Impact {
             }
         }
         for key in before.groups.keys().chain(after.groups.keys()) {
-            if before.groups.get(key) != after.groups.get(key) {
+            if before.groups.get(key) != after.groups.get(key)
+                || before.allocations.get(key) != after.allocations.get(key)
+            {
                 impact.groups.insert(key.clone());
             }
         }

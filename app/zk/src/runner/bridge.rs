@@ -23,11 +23,13 @@ pub struct Context {
     output: Option<String>,
     reported_span: Option<(f64, f64)>,
     decorations_and_widths: Vec<(Option<f64>, f64)>,
+    native: Option<std::sync::Arc<[u8]>>,
 }
 
 impl Context {
     pub fn compatible(&self, other: &Self) -> bool {
         self.output == other.output
+            && self.native == other.native
             && self.reported_span == other.reported_span
             && self.decorations_and_widths.len() == other.decorations_and_widths.len()
             && self
@@ -69,7 +71,11 @@ pub fn observation(
         .ok_or("workspace is not known")?;
     let mut members = Vec::new();
     let mut signatures = Vec::new();
-    for id in &group.members {
+    let native = capture.allocations.get(key);
+    if native.is_some_and(|a| a.members.len() != group.members.len()) {
+        return Err("native member evidence mismatch".into());
+    }
+    for (index, id) in group.members.iter().enumerate() {
         let window = capture.windows.get(id).ok_or("group member is missing")?;
         if window.placement != desktop::Placement::Tiled
             || window.workspace.as_ref() != Some(&key.workspace)
@@ -96,28 +102,36 @@ pub fn observation(
         if decoration.is_some_and(|d| !d.is_finite()) {
             return Err("invalid tile decorations".into());
         }
-        signatures.push((decoration, content.width));
+        if native.is_none() {
+            signatures.push((decoration, content.width));
+        }
+        let constraints = native.map(|allocation| &allocation.members[index]);
         members.push(policy::ObservedMember {
             id: native_id(&id.native),
             extent: content.height,
-            minimum,
-            maximum: None,
+            minimum: constraints.map_or(minimum, |c| c.minimum.max(minimum)),
+            maximum: constraints.and_then(|c| c.maximum),
         });
     }
-    let budget = retained_budget.unwrap_or_else(|| members.iter().map(|m| m.extent).sum());
+    let budget = native.map_or_else(
+        || retained_budget.unwrap_or_else(|| members.iter().map(|m| m.extent).sum()),
+        |a| a.content_budget as f64,
+    );
     let focus = match &capture.active_window {
         None => policy::Focus::None,
-        Some(id) => {
-            let window = capture.windows.get(id).ok_or("active window is missing")?;
-            match &window.workspace {
-                Some(workspace) => policy::Focus::Window(policy::WindowKey {
-                    source: source(&id.scope),
-                    workspace: native_id(&workspace.native),
-                    id: native_id(&id.native),
-                }),
-                None => policy::Focus::Unknown,
-            }
-        }
+        Some(id) => match capture.windows.get(id).and_then(|w| w.workspace.as_ref()) {
+            Some(workspace) => policy::Focus::Window(policy::WindowKey {
+                source: source(&id.scope),
+                workspace: native_id(&workspace.native),
+                id: native_id(&id.native),
+            }),
+            None if capture.control_status.is_some() => policy::Focus::Window(policy::WindowKey {
+                source: source(&id.scope),
+                workspace: "outside-native-layout".into(),
+                id: native_id(&id.native),
+            }),
+            None => policy::Focus::Unknown,
+        },
     };
     let reported_span = if group.geometry_evidence == desktop::Evidence::Reported {
         group.bounds.map(|rect| (rect.size.width, rect.size.height))
@@ -142,6 +156,7 @@ pub fn observation(
             output: workspace.output.clone(),
             reported_span,
             decorations_and_widths: signatures,
+            native: native.map(|a| a.context.clone()),
         },
     ))
 }
