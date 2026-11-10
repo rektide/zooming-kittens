@@ -67,6 +67,13 @@ their native owners and connect those tickets to this effort.
 
 ## Research returns
 
+- [Umbriel IPC landscape handoff](handoff0.glm53m.md) (2026-11-10): the
+  "port the bespoke family?" question resolved differently — upstream stock IPC
+  now carries most of a loose Longcat's needs, and sizing-without-focus landed
+  as the small `--window`-qualified `idtarget` extension on the umbriel working
+  line. Maps all control surfaces (stock, idtarget, preserved bespoke family),
+  the closable stock loop, the adapter evidence question, and client tooling
+  for reimplementations.
 - [Umbriel control and reusable tracking](umbriel-control-stream0.gpt6a.md): live
   deployment differs from both local composed and fetched upstream sources.
   Recommends a coherent layout snapshot and conditional whole-column weight
@@ -98,7 +105,7 @@ does not select a font-policy change.
   records 78 scoped tests, native journal readback, bounded-output cancellation and
   clean service stop/start without restarting the compositor. History/replay and
   notify readiness retain their existing upstream tickets.
-- [Native conditional column allocation](file:///home/rektide/src/umbriel-longcat-control/docs/user/layout-control.md)
+- [Native conditional column allocation](https://github.com/rektide/umbriel/blob/96b118cf/docs/user/layout-control.md)
   is implemented on the isolated upstream-based compositor worktree, with typed
   Rust bindings in `umbriel-rs`. Query/event `layout-state` exposes a coherent
   allocation basis; `layout-allocate` validates and assigns a complete weight
