@@ -6,6 +6,8 @@ resource: design/longcat/README.md
 status: active
 generated: { at: 2026-10-22, by: 'model:openai/gpt-6-astra#medium' }
 sources:
+  - resource: opencode://ses_e33541051ffeer2RcnuC2Rn4rj
+    title: Add independent implementation-ready Taffy feedback-loop design and distinguish current working-line direction
   - resource: opencode://ses_e9a70a796ffelZmIZrb9Zxlb4f
     title: Commission Longcat return, independent backend features, journald research and optional upstream Kopacetic integration
   - resource: ../../layout/README.md
@@ -23,6 +25,13 @@ window sizing on the Umbriel desktop. The existing Taffy solver and Longcat
 episodes are the starting implementation.
 
 ## Deployment decision
+
+The [working-line IPC handoff](handoff0.glm53m.md) supersedes the deployment
+assumption in the historical candidate account below: stock IPC plus qualified
+sizing is integrated in `working-20261110`, while the bespoke family is preserved
+separately. The [feedback-loop design](feedback0.gpt6a.md) selects a concrete
+implementation path on that surface, including user-guided preferences and
+dispatchable assignments. It is proposed, not yet implemented or accepted.
 
 The [composed deployment candidate](deployment-candidate0.gpt6a.md) is prepared
 and verified, **not installed**. Candidate `96b118cf8b11` in
@@ -67,6 +76,13 @@ their native owners and connect those tickets to this effort.
 
 ## Research returns
 
+- [Taffy-driven feedback loop](feedback0.gpt6a.md) (2026-11-11): independently
+  inspected stock observation and native resize math; selects internal-boundary
+  correction, persistent user-guided focus shares and neutral sibling proportions,
+  topology reconciliation, bounded constraint handling and four implementation
+  assignments. Refines the handoff's target-versus-committed geometry claims and
+  deliberately revises the existing permanent-conflict episode policy while
+  retaining the Taffy solver and native/application ownership boundaries.
 - [Umbriel IPC landscape handoff](handoff0.glm53m.md) (2026-11-10): the
   "port the bespoke family?" question resolved differently — upstream stock IPC
   now carries most of a loose Longcat's needs, and sizing-without-focus landed
