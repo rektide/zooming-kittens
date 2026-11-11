@@ -686,18 +686,18 @@ dependencies = [
 
 [[package]]
 name = "kubeless-view-change"
-version = "0.6.0"
+version = "0.23.0"
 
 [[package]]
 name = "kubeless-view-impact"
-version = "0.6.0"
+version = "0.23.0"
 dependencies = [
  "kubeless-view-change",
 ]
 
 [[package]]
 name = "kubeless-view-memory"
-version = "0.6.0"
+version = "0.23.0"
 dependencies = [
  "hashbrown 0.16.1",
  "kubeless-view-change",
@@ -706,11 +706,11 @@ dependencies = [
 
 [[package]]
 name = "kubeless-work-ready"
-version = "0.6.0"
+version = "0.23.0"
 
 [[package]]
 name = "kubeless-work-schedule"
-version = "0.6.0"
+version = "0.23.0"
 dependencies = [
  "futures",
  "hashbrown 0.16.1",
@@ -723,7 +723,7 @@ dependencies = [
 
 [[package]]
 name = "kubeless-work-schedule-policy"
-version = "0.6.0"
+version = "0.23.0"
 
 [[package]]
 name = "libc"

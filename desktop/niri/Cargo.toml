@@ -8,8 +8,8 @@ zk-desktop = { version = "0.1.0", path = "../model" }
 niri-ipc = "26.4.0"
 serde_json = "1.0.149"
 tokio = { version = "1.49.0", features = ["io-util", "macros", "net", "rt", "sync", "time"] }
-kubeless-view-memory = { version = "=0.6.0", path = "../../../kubeless/view/memory" }
-kubeless-view-impact = { version = "=0.6.0", path = "../../../kubeless/view/impact" }
+kubeless-view-memory = { version = "=0.23.0", path = "../../../kubeless/view/memory" }
+kubeless-view-impact = { version = "=0.23.0", path = "../../../kubeless/view/impact" }
 
 [dev-dependencies]
 tempfile = "3.16"

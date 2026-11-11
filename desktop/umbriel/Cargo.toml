@@ -10,7 +10,7 @@ umbriel-protocol = { version = "0.1.0", path = "../../../umbriel-rs/crates/umbri
 umbriel-state = { version = "0.1.0", path = "../../../umbriel-rs/crates/umbriel-state" }
 umbriel-tracking = { path = "../../../umbriel-rs/crates/tracking" }
 serde = "1"
-kubeless-view-impact = { version = "=0.6.0", path = "../../../kubeless/view/impact" }
+kubeless-view-impact = { version = "=0.23.0", path = "../../../kubeless/view/impact" }
 tokio = { version = "1.49.0", features = ["macros", "rt", "sync", "time"] }
 
 [dev-dependencies]
