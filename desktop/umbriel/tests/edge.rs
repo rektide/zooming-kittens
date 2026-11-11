@@ -50,10 +50,9 @@ async fn initial(listener: &UnixListener) -> UnixStream {
 async fn probes(listener: &UnixListener) {
     for direction in ["height-down", "width-right"] {
         let (socket, request) = read_request(listener).await;
-        assert_eq!(request["cmd"], "msg");
         assert_eq!(
-            request["arg"],
-            format!("window-modify-{direction} 0.001 --window \"zk-qualified-edge-check\0\"")
+            request,
+            json!({"cmd":"action", "action":format!("window-modify-{direction}"), "delta":0.001, "window":"zk-qualified-edge-check\0"})
         );
         reply(
             socket,
@@ -94,7 +93,7 @@ async fn stale_target_is_rejected_once_without_focus_or_bare_fallback() {
         let (socket, command) = read_request(&listener).await;
         assert_eq!(
             command,
-            json!({"cmd":"msg","arg":"window-modify-height-down -0.1 --window \"upper\""})
+            json!({"cmd":"action","action":"window-modify-height-down","delta":-0.1,"window":"upper"})
         );
         reply(socket, json!({"err":"unknown window: upper"})).await;
         assert!(
@@ -125,7 +124,8 @@ async fn unknown_grammar_or_handled_impossible_id_cannot_admit_live_sizing() {
         let peer = tokio::spawn(async move {
             let _subscription = initial(&listener).await;
             let (socket, command) = read_request(&listener).await;
-            assert!(command["arg"].as_str().unwrap().contains("--window"));
+            assert_eq!(command["cmd"], "action");
+            assert_eq!(command["window"], "zk-qualified-edge-check\0");
             reply(socket, response).await;
             assert!(
                 timeout(Duration::from_millis(40), listener.accept())

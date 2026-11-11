@@ -4,12 +4,12 @@
 use std::sync::Arc;
 use tokio::sync::{Semaphore, watch};
 use umbriel_client::{Endpoint, Error, Options};
-use umbriel_protocol::action::{Action, ExtentDelta, WindowEdge};
+use umbriel_protocol::action::{Action, ExtentDelta, QualifiedSizing, WindowEdge};
 use zk_desktop::*;
 
 // Foreign toplevel identifiers are native C strings: this nonempty ID with an
-// embedded NUL cannot equal any mapped identifier. Native splitActionString
-// preserves the full token (covered by the real parser conformance test).
+// embedded NUL cannot equal any mapped identifier. The native structured action
+// decoder preserves the full window field (checked by native conformance).
 const CAPABILITY_TARGET: &str = "zk-qualified-edge-check\0";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -92,7 +92,7 @@ impl Factory {
 pub fn prepare(
     capture: &DesktopCapture,
     request: &RelativeEdgeRequest,
-) -> Result<Action<'static>, String> {
+) -> Result<QualifiedSizing, String> {
     if !capture.is_ready()
         || capture.scope.source.backend != Backend::Umbriel
         || request.group.workspace.scope != capture.scope
