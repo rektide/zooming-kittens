@@ -4,8 +4,11 @@ title: Bringing Longcat back
 description: Window-sizing work, upstream research and separately tracked activity and entity integrations.
 resource: design/longcat/README.md
 status: active
+updated: { at: 2026-11-11, by: 'model:openai/gpt-6.1-sol#high' }
 generated: { at: 2026-10-22, by: 'model:openai/gpt-6-astra#medium' }
 sources:
+  - resource: opencode://ses_e331fea99ffeEcIAeJ9F8pM2aK
+    title: Deliver stock observation and qualified internal-edge slice A and link its B–D continuation
   - resource: opencode://ses_e33541051ffeer2RcnuC2Rn4rj
     title: Add independent implementation-ready Taffy feedback-loop design and distinguish current working-line direction
   - resource: opencode://ses_e9a70a796ffelZmIZrb9Zxlb4f
@@ -31,7 +34,10 @@ assumption in the historical candidate account below: stock IPC plus qualified
 sizing is integrated in `working-20261110`, while the bespoke family is preserved
 separately. The [feedback-loop design](feedback0.gpt6a.md) selects a concrete
 implementation path on that surface, including user-guided preferences and
-dispatchable assignments. It is proposed, not yet implemented or accepted.
+dispatchable assignments. Its implementation is commissioned: the
+[stock boundary slice A](implementation-a0.gpt61s.md) is checkpointed; pure
+feedback preferences, corrective execution and application integration (B–D)
+remain. This is not yet an accepted or usable end-to-end stock controller.
 
 The [composed deployment candidate](deployment-candidate0.gpt6a.md) is prepared
 and verified, **not installed**. Candidate `96b118cf8b11` in
@@ -112,6 +118,13 @@ does not select a font-policy change.
 
 ## Delivered related integration
 
+- [Stock observation and qualified command boundary](implementation-a0.gpt61s.md)
+  (2026-11-11): upstream typed layout/output fields and independent freshness,
+  reported ordered groups, inferred two-axis geometry, presentation admission,
+  and an epoch-bound qualified internal-edge actuator. No focus dance or bare
+  fallback. Native parser, existing headless by-ID checks and scoped Rust suites
+  pass. The receipt names the exact DTOs, commits and remaining B–D work; the
+  running desktop, service and default application control policy are unchanged.
 - [Reusable Umbriel tracking](file:///home/rektide/src/umbriel-rs/crates/tracking/README.md)
   exposes typed observation installation and Inventory-owned freshness; both
   examples reuse it. Immediate captures remain distinct from delayed activity
