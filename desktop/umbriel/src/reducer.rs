@@ -1,12 +1,13 @@
 use kubeless_view_impact::affected_roots_with;
 use std::{sync::Arc, time::Duration};
 use umbriel_client::Observation;
-use umbriel_protocol::{
-    envelope::{EventName, Family, Message},
-    model::{Event, EventDecode, decode_event},
-};
-use umbriel_state::inventory::{Inventory, Stamp, Status};
+use umbriel_protocol::envelope::Family;
+use umbriel_state::inventory::Status;
+use umbriel_tracking::{Tracker, Update};
 use zk_desktop::*;
+
+pub(crate) const STOCK_FAMILIES: &[Family] =
+    &[Family::Windows, Family::Workspaces, Family::Outputs];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReduceError(pub String);
@@ -17,23 +18,26 @@ impl std::fmt::Display for ReduceError {
 }
 impl std::error::Error for ReduceError {}
 
-/// Native Inventory remains the ONLY owner of Umbriel rows/change receipts.
+/// Tracker/Inventory are the sole owners of typed native rows and receipts.
+/// The three latest full families are a local join, never an atomic snapshot.
 pub struct Reducer {
-    inventory: Inventory,
+    tracker: Tracker,
     current: Arc<DesktopCapture>,
 }
 impl Reducer {
     pub fn new(source: SourceId) -> Self {
         assert_eq!(source.backend, Backend::Umbriel);
+        let mut initial = DesktopCapture::empty(
+            Scope {
+                source,
+                epoch: Epoch(0),
+            },
+            Capabilities::READ_ONLY,
+        );
+        initial.outputs_status = Some(FamilyStatus::default());
         Self {
-            inventory: Inventory::new(0),
-            current: Arc::new(DesktopCapture::empty(
-                Scope {
-                    source,
-                    epoch: Epoch(0),
-                },
-                Capabilities::READ_ONLY,
-            )),
+            tracker: Tracker::new(STOCK_FAMILIES, true),
+            current: Arc::new(initial),
         }
     }
     pub fn capture(&self) -> Arc<DesktopCapture> {
@@ -41,12 +45,16 @@ impl Reducer {
     }
 
     pub fn loss(&mut self, reason: LossReason) -> DesktopUpdate {
-        self.inventory.gap();
+        self.tracker.lost();
         let mut update = self.commit(Continuity::Discontinuous(reason.clone()));
-        // Native inventory records Gap; retain the more precise local cause too.
         let mut after = (*update.after).clone();
         after.windows_status.stale(reason.clone());
-        after.workspaces_status.stale(reason);
+        after.workspaces_status.stale(reason.clone());
+        after
+            .outputs_status
+            .as_mut()
+            .expect("stock outputs")
+            .stale(reason);
         update.after = Arc::new(after);
         update.impact = Impact::between(&update.before, &update.after);
         self.current = update.after.clone();
@@ -58,130 +66,51 @@ impl Reducer {
         now: Duration,
         observation: Observation,
     ) -> Result<Option<DesktopUpdate>, ReduceError> {
-        match observation {
-            Observation::Epoch { epoch } => {
-                self.inventory
-                    .begin_epoch(epoch)
-                    .map_err(|e| ReduceError(e.to_string()))?;
-                Ok(Some(self.commit(Continuity::Discontinuous(
-                    LossReason::EpochChanged,
-                ))))
-            }
-            Observation::Gap { .. } => Ok(Some(self.loss(LossReason::Disconnected))),
-            Observation::Frame {
-                epoch,
-                position,
-                bytes,
+        let mut roots = Vec::new();
+        let continuity = match self.tracker.observe(now, observation) {
+            Update::Ignored => return Ok(None),
+            Update::Epoch { .. } => Continuity::Discontinuous(LossReason::EpochChanged),
+            Update::Gap { .. } => return Ok(Some(self.loss(LossReason::Disconnected))),
+            Update::Rejected { .. } => Continuity::Discontinuous(LossReason::InvalidSnapshot),
+            Update::Installed {
+                before,
+                after,
+                mut windows,
+                ..
             } => {
-                let message = match Message::decode(&bytes) {
-                    Ok(message) => message,
-                    Err(_) => return Ok(Some(self.invalid(None))),
-                };
-                let family = match &message {
-                    Message::Event {
-                        name: EventName::Known(family),
-                        ..
-                    } if matches!(family, Family::Windows | Family::Workspaces) => *family,
-                    _ => return Ok(None),
-                };
-                let event = match decode_event(&message) {
-                    Ok(EventDecode::Known(event)) => event,
-                    _ => return Ok(Some(self.invalid(Some(family)))),
-                };
-                let stamp = Stamp {
-                    epoch,
-                    position,
-                    observed_at: now,
-                };
-                match event {
-                    Event::Windows(windows) => {
-                        if windows.iter().filter(|w| w.active).count() > 1
-                            || windows.iter().any(|w| w.w < 0 || w.h < 0)
-                        {
-                            return Ok(Some(self.invalid(Some(Family::Windows))));
-                        }
-                        let mut changes =
-                            match self.inventory.install_windows_changes(stamp, windows) {
-                                Ok(changes) => changes,
-                                Err(_) => return Ok(Some(self.invalid(Some(Family::Windows)))),
-                            };
-                        let continuity = continuity(changes.before, changes.is_continuous());
-                        changes
-                            .commit
-                            .evidence
-                            .retain(|row| match (&row.before, &row.after) {
-                                (Some(a), Some(b)) => {
-                                    a.workspace != b.workspace
-                                        || a.scratchpad != b.scratchpad
-                                        || a.active != b.active
-                                        || a.floating != b.floating
-                                        || a.x != b.x
-                                        || a.y != b.y
-                                        || a.w != b.w
-                                        || a.h != b.h
-                                }
-                                (None, None) => false,
-                                _ => true,
-                            });
-                        let mut old_scope = self.current.scope.clone();
-                        if let Some(stamp) = changes.before.stamp {
-                            old_scope.epoch = Epoch(stamp.epoch);
-                        }
-                        let new_scope = Scope {
-                            source: self.current.scope.source.clone(),
-                            epoch: Epoch(epoch),
-                        };
-                        let roots = affected_roots_with(
+                if let Some(changes) = windows.as_mut() {
+                    changes.retain_layout_changes();
+                    let old_scope = Scope {
+                        source: self.current.scope.source.clone(),
+                        epoch: before
+                            .stamp
+                            .map_or(self.current.scope.epoch, |s| Epoch(s.epoch)),
+                    };
+                    let new_scope = Scope {
+                        epoch: Epoch(after.stamp.expect("installed stamp").epoch),
+                        ..old_scope.clone()
+                    };
+                    roots.extend(
+                        affected_roots_with(
                             &changes.commit.evidence,
-                            |_, w| {
-                                (!w.workspace.as_str().is_empty()).then(|| WorkspaceKey {
-                                    scope: old_scope.clone(),
-                                    native: NativeId::Text(w.workspace.as_str().to_owned()),
-                                })
-                            },
-                            |_, w| {
-                                (!w.workspace.as_str().is_empty()).then(|| WorkspaceKey {
-                                    scope: new_scope.clone(),
-                                    native: NativeId::Text(w.workspace.as_str().to_owned()),
-                                })
-                            },
-                        );
-                        let mut update = self.commit(continuity);
-                        // Before/after semantic comparison already preserves old-epoch keys.
-                        update
-                            .impact
-                            .workspaces
-                            .extend(roots.keys().iter().cloned());
-                        Ok(Some(update))
-                    }
-                    Event::Workspaces(workspaces) => {
-                        let prior = self.inventory.status(Family::Workspaces);
-                        if self
-                            .inventory
-                            .install(stamp, Event::Workspaces(workspaces))
-                            .is_err()
-                        {
-                            return Ok(Some(self.invalid(Some(Family::Workspaces))));
-                        }
-                        let continuity = continuity(prior, prior.is_ready());
-                        Ok(Some(self.commit(continuity)))
-                    }
-                    _ => Ok(None),
+                            |_, w| workspace(&old_scope, w.workspace.as_str()),
+                            |_, w| workspace(&new_scope, w.workspace.as_str()),
+                        )
+                        .keys()
+                        .iter()
+                        .cloned(),
+                    );
                 }
+                continuity(before)
             }
-        }
+        };
+        let mut update = self.commit(continuity);
+        update.impact.workspaces.extend(roots);
+        Ok(Some(update))
     }
 
-    fn invalid(&mut self, family: Option<Family>) -> DesktopUpdate {
-        for candidate in [Family::Windows, Family::Workspaces] {
-            if family.is_none_or(|family| family == candidate) {
-                self.inventory.invalid_snapshot(candidate);
-            }
-        }
-        self.commit(Continuity::Discontinuous(LossReason::InvalidSnapshot))
-    }
     fn commit(&mut self, continuity: Continuity) -> DesktopUpdate {
-        let native = self.inventory.snapshot();
+        let native = self.tracker.inventory().snapshot();
         let scope = Scope {
             source: self.current.scope.source.clone(),
             epoch: Epoch(native.epoch),
@@ -197,70 +126,86 @@ impl Reducer {
         after.connected = native.connected;
         after.windows_status = status(native.windows.status);
         after.workspaces_status = status(native.workspaces.status);
-        let window_scope = Scope {
-            epoch: native
+        after.outputs_status = Some(status(native.outputs.status));
+        let window_scope = family_scope(&scope, native.windows.status);
+        let workspace_scope = family_scope(&scope, native.workspaces.status);
+        let output_scope = family_scope(&scope, native.outputs.status);
+        after.windows =
+            native
                 .windows
-                .status
-                .stamp
-                .map_or(scope.epoch, |s| Epoch(s.epoch)),
-            ..scope.clone()
-        };
-        let workspace_scope = Scope {
-            epoch: native
-                .workspaces
-                .status
-                .stamp
-                .map_or(scope.epoch, |s| Epoch(s.epoch)),
-            ..scope
-        };
-        after.windows = native
-            .windows
-            .entries()
-            .values()
-            .map(|w| {
-                let key = WindowKey {
-                    scope: window_scope.clone(),
-                    native: NativeId::Text(w.id.as_str().to_owned()),
-                };
-                let workspace = (!w.workspace.as_str().is_empty()).then(|| WorkspaceKey {
-                    scope: window_scope.clone(),
-                    native: NativeId::Text(w.workspace.as_str().to_owned()),
-                });
-                let placement = if !w.scratchpad.is_empty() {
-                    Placement::Scratchpad(w.scratchpad.clone())
-                } else if w.floating {
-                    Placement::Floating
-                } else if workspace.is_some() {
-                    Placement::Tiled
-                } else {
-                    Placement::Unknown
-                };
-                (
-                    key.clone(),
-                    WindowView {
-                        key,
-                        workspace,
-                        group: None,
-                        placement,
-                        title: Some(w.title.clone()),
-                        app_id: Some(w.app_id.clone()),
-                        pid: (w.pid >= 0).then_some(w.pid),
-                        active: w.active,
-                        geometry: Geometry {
-                            content_size: Some(Size {
-                                width: w.w as f64,
-                                height: w.h as f64,
+                .entries()
+                .values()
+                .map(|w| {
+                    let key = window(&window_scope, w.id.as_str());
+                    let workspace = workspace(&window_scope, w.workspace.as_str());
+                    let placement = if !w.scratchpad.is_empty() {
+                        Placement::Scratchpad(w.scratchpad.clone())
+                    } else if w.floating {
+                        Placement::Floating
+                    } else if workspace.is_some() {
+                        Placement::Tiled
+                    } else {
+                        Placement::Unknown
+                    };
+                    let group = workspace
+                        .clone()
+                        .zip(w.column)
+                        .zip(w.row)
+                        .filter(|((_, column), row)| *column >= 0 && *row >= 0)
+                        .map(|((workspace, column), _)| GroupKey {
+                            workspace,
+                            position: NativeId::Number(column as u64),
+                        });
+                    (
+                        key.clone(),
+                        WindowView {
+                            key,
+                            workspace,
+                            group,
+                            placement,
+                            output: w.output.as_ref().filter(|s| !s.is_empty()).map(|name| {
+                                OutputKey {
+                                    scope: window_scope.clone(),
+                                    name: name.clone(),
+                                }
                             }),
-                            target_position: Some(Point {
-                                x: w.x as f64,
-                                y: w.y as f64,
-                            }),
-                            ..Geometry::default()
+                            presentation: Presentation {
+                                title_bar: w.title_bar,
+                                tabbed: w.tabbed,
+                                tab_index: w.tab_index,
+                                tab_hidden: w.tab_hidden,
+                                fullscreen: w.fullscreen,
+                                maximized: w.maximized,
+                                maximized_to_edges: w.maximized_to_edges,
+                                pinned: w.pinned,
+                                minimized: w.minimized,
+                                visible: w.visible,
+                                parent: w
+                                    .parent
+                                    .as_ref()
+                                    .filter(|id| !id.as_str().is_empty())
+                                    .map(|id| window(&window_scope, id.as_str())),
+                                region: w.region.clone(),
+                            },
+                            title: Some(w.title.clone()),
+                            app_id: Some(w.app_id.clone()),
+                            pid: (w.pid >= 0).then_some(w.pid),
+                            active: w.active,
+                            geometry: Geometry {
+                                content_size: Some(Size {
+                                    width: w.w as f64,
+                                    height: w.h as f64,
+                                }),
+                                target_position: Some(Point {
+                                    x: w.x as f64,
+                                    y: w.y as f64,
+                                }),
+                                ..Geometry::default()
+                            },
                         },
-                    },
-                )
-            })
-            .collect();
+                    )
+                })
+                .collect();
         after.active_window = after
             .windows
             .values()
@@ -271,10 +216,8 @@ impl Reducer {
             .entries()
             .values()
             .map(|w| {
-                let key = WorkspaceKey {
-                    scope: workspace_scope.clone(),
-                    native: NativeId::Text(w.id.as_str().to_owned()),
-                };
+                let key =
+                    workspace(&workspace_scope, w.id.as_str()).expect("validated workspace ID");
                 (
                     key.clone(),
                     WorkspaceView {
@@ -290,10 +233,69 @@ impl Reducer {
                 )
             })
             .collect();
+        after.outputs = native
+            .outputs
+            .entries()
+            .values()
+            .map(|o| {
+                let key = OutputKey {
+                    scope: output_scope.clone(),
+                    name: o.name.clone(),
+                };
+                (
+                    key.clone(),
+                    OutputView {
+                        key,
+                        enabled: o.enabled,
+                        powered: o.powered,
+                        position: o.position.map(|p| Point {
+                            x: p.x as f64,
+                            y: p.y as f64,
+                        }),
+                        logical_size: o.logical_size.map(|s| Size {
+                            width: s.width as f64,
+                            height: s.height as f64,
+                        }),
+                        usable_area: o.usable_area.map(|r| Rect {
+                            origin: Point {
+                                x: r.x as f64,
+                                y: r.y as f64,
+                            },
+                            size: Size {
+                                width: r.width as f64,
+                                height: r.height as f64,
+                            },
+                        }),
+                        scale: o.scale,
+                        transform: o.transform.clone(),
+                    },
+                )
+            })
+            .collect();
+        crate::stock::project_groups(&mut after, &native.windows);
         let after = Arc::new(after);
         let update = DesktopUpdate::new(self.current.clone(), after.clone(), continuity);
         self.current = after;
         update
+    }
+}
+
+fn window(scope: &Scope, id: &str) -> WindowKey {
+    WindowKey {
+        scope: scope.clone(),
+        native: NativeId::Text(id.into()),
+    }
+}
+fn workspace(scope: &Scope, id: &str) -> Option<WorkspaceKey> {
+    (!id.is_empty()).then(|| WorkspaceKey {
+        scope: scope.clone(),
+        native: NativeId::Text(id.into()),
+    })
+}
+fn family_scope(scope: &Scope, status: Status) -> Scope {
+    Scope {
+        epoch: status.stamp.map_or(scope.epoch, |s| Epoch(s.epoch)),
+        ..scope.clone()
     }
 }
 fn status(native: Status) -> FamilyStatus {
@@ -314,9 +316,8 @@ fn status(native: Status) -> FamilyStatus {
         },
     }
 }
-
-fn continuity(prior: Status, continuous: bool) -> Continuity {
-    if continuous {
+fn continuity(prior: Status) -> Continuity {
+    if prior.is_ready() {
         return Continuity::Continuous;
     }
     if prior.stamp.is_none() {

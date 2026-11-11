@@ -56,6 +56,12 @@ pub struct WorkspaceKey {
     pub native: NativeId,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct OutputKey {
+    pub scope: Scope,
+    pub name: String,
+}
+
 /// A location hint within one capture, NOT persistent topology identity.
 /// Bind a control episode to its ordered members as well as this location.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -166,11 +172,48 @@ pub enum Placement {
     Unknown,
 }
 
+/// Unreported flags stay None. Native presentation is not a policy preference.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Presentation {
+    pub title_bar: Option<bool>,
+    pub tabbed: Option<bool>,
+    pub tab_index: Option<i32>,
+    pub tab_hidden: Option<bool>,
+    pub fullscreen: Option<bool>,
+    pub maximized: Option<bool>,
+    pub maximized_to_edges: Option<bool>,
+    pub pinned: Option<bool>,
+    pub minimized: Option<bool>,
+    pub visible: Option<bool>,
+    pub parent: Option<WindowKey>,
+    pub region: Option<String>,
+}
+
+impl Presentation {
+    pub fn ordinary_untabbed(&self) -> bool {
+        [
+            self.tabbed,
+            self.tab_hidden,
+            self.fullscreen,
+            self.maximized,
+            self.maximized_to_edges,
+            self.pinned,
+            self.minimized,
+        ]
+        .into_iter()
+        .all(|v| v == Some(false))
+            && self.title_bar.is_some()
+            && self.tab_index == Some(-1)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct WindowView {
     pub key: WindowKey,
     pub workspace: Option<WorkspaceKey>,
     pub group: Option<GroupKey>,
+    pub output: Option<OutputKey>,
+    pub presentation: Presentation,
     pub placement: Placement,
     pub title: Option<String>,
     pub app_id: Option<String>,
@@ -185,6 +228,8 @@ impl WindowView {
         self.key == other.key
             && self.workspace == other.workspace
             && self.group == other.group
+            && self.output == other.output
+            && self.presentation == other.presentation
             && self.placement == other.placement
             && self.active == other.active
             && self.geometry == other.geometry
@@ -207,16 +252,49 @@ pub struct WorkspaceView {
 pub struct GroupView {
     pub key: GroupKey,
     pub members: Vec<WindowKey>,
-    pub secondary_axis: Axis,
+    /// Stock membership can be reported while its physical axis is ambiguous.
+    pub secondary_axis: Option<Axis>,
     pub membership: Evidence,
     pub bounds: Option<Rect>,
     pub geometry_evidence: Evidence,
+    /// Local geometry/presentation admission only; not a native atomic predicate
+    /// or proof that the server understands qualified action grammar.
+    pub edge_eligibility: EdgeEligibility,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EdgeEligibility {
+    Eligible,
+    NotSupported,
+    FamilyUnavailable,
+    InconsistentMembership,
+    UnsupportedLayout,
+    UnsupportedPresentation,
+    OutputUnavailable,
+    AmbiguousAxis,
+    TooFewMembers,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct OutputView {
+    pub key: OutputKey,
+    pub enabled: Option<bool>,
+    pub powered: Option<bool>,
+    pub position: Option<Point>,
+    pub logical_size: Option<Size>,
+    /// Reported output workarea, NOT exact native tiledArea or content budget.
+    pub usable_area: Option<Rect>,
+    pub scale: Option<f64>,
+    pub transform: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Capabilities {
     pub reported_groups: bool,
     pub height_by_id: bool,
+    /// Adapter offers qualified relative edges; runtime server grammar admission
+    /// is additionally required. Does NOT imply fixed-pixel assignment.
+    pub relative_edge_by_id: bool,
     pub atomic_multiwindow: bool,
     pub native_revision_precondition: bool,
     pub exact_restore: bool,
@@ -255,10 +333,24 @@ pub struct GroupAllocationRequest {
     pub expected_active: Option<WindowKey>,
 }
 
+/// One signed motion of the cross-end edge of target. `following` must be its
+/// actual next row; never use the group's last outer edge. Fraction is of native
+/// tiledArea, not a pixel count, workarea fraction guarantee, or solver share.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RelativeEdgeRequest {
+    pub group: GroupKey,
+    pub target: WindowKey,
+    pub following: WindowKey,
+    pub basis: ObservationVersion,
+    pub axis: Axis,
+    pub fraction: f64,
+}
+
 impl Capabilities {
     pub const READ_ONLY: Self = Self {
         reported_groups: false,
         height_by_id: false,
+        relative_edge_by_id: false,
         atomic_multiwindow: false,
         native_revision_precondition: false,
         exact_restore: false,
@@ -272,8 +364,12 @@ pub struct DesktopCapture {
     pub connected: bool,
     pub windows_status: FamilyStatus,
     pub workspaces_status: FamilyStatus,
+    /// Stock requires all three independent families. None for adapters whose
+    /// readiness contract does not use a separately observed outputs family.
+    pub outputs_status: Option<FamilyStatus>,
     pub windows: BTreeMap<WindowKey, WindowView>,
     pub workspaces: BTreeMap<WorkspaceKey, WorkspaceView>,
+    pub outputs: BTreeMap<OutputKey, OutputView>,
     pub groups: BTreeMap<GroupKey, GroupView>,
     pub active_window: Option<WindowKey>,
     pub capabilities: Capabilities,
@@ -290,8 +386,10 @@ impl DesktopCapture {
             connected: true,
             windows_status: FamilyStatus::default(),
             workspaces_status: FamilyStatus::default(),
+            outputs_status: None,
             windows: BTreeMap::new(),
             workspaces: BTreeMap::new(),
+            outputs: BTreeMap::new(),
             groups: BTreeMap::new(),
             active_window: None,
             capabilities,
@@ -304,7 +402,18 @@ impl DesktopCapture {
     pub fn is_ready(&self) -> bool {
         self.connected
             && self.control_status.as_ref().map_or_else(
-                || self.windows_status.is_current() && self.workspaces_status.is_current(),
+                || {
+                    self.windows_status.is_current()
+                        && self.workspaces_status.is_current()
+                        && self
+                            .outputs_status
+                            .as_ref()
+                            .is_none_or(FamilyStatus::is_current)
+                        && [&self.windows_status, &self.workspaces_status]
+                            .into_iter()
+                            .chain(self.outputs_status.as_ref())
+                            .all(|s| s.stamp.is_some_and(|s| s.epoch == self.scope.epoch))
+                },
                 FamilyStatus::is_current,
             )
     }
@@ -315,6 +424,7 @@ pub struct Impact {
     pub windows: BTreeSet<WindowKey>,
     pub workspaces: BTreeSet<WorkspaceKey>,
     pub groups: BTreeSet<GroupKey>,
+    pub outputs: BTreeSet<OutputKey>,
     pub focus_changed: bool,
     pub health_changed: bool,
 }
@@ -328,6 +438,8 @@ impl Impact {
                 || before.scope != after.scope
                 || before.windows_status.health != after.windows_status.health
                 || before.workspaces_status.health != after.workspaces_status.health
+                || before.outputs_status.as_ref().map(|s| &s.health)
+                    != after.outputs_status.as_ref().map(|s| &s.health)
                 || before.control_status.as_ref().map(|s| &s.health)
                     != after.control_status.as_ref().map(|s| &s.health),
             // Native basis edits may leave every rounded pixel unchanged.
@@ -355,6 +467,26 @@ impl Impact {
                 || before.allocations.get(key) != after.allocations.get(key)
             {
                 impact.groups.insert(key.clone());
+            }
+        }
+        for key in before.outputs.keys().chain(after.outputs.keys()) {
+            if before.outputs.get(key) == after.outputs.get(key) {
+                continue;
+            }
+            impact.outputs.insert(key.clone());
+            for capture in [before, after] {
+                for group in capture.groups.values() {
+                    if capture
+                        .workspaces
+                        .get(&group.key.workspace)
+                        .is_some_and(|w| {
+                            w.key.scope == key.scope && w.output.as_ref() == Some(&key.name)
+                        })
+                    {
+                        impact.groups.insert(group.key.clone());
+                        impact.workspaces.insert(group.key.workspace.clone());
+                    }
+                }
             }
         }
         impact

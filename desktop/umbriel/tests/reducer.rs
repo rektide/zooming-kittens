@@ -7,6 +7,8 @@ fn reducer() -> Reducer {
     let mut r = Reducer::new(SourceId::new(Backend::Umbriel, "script"));
     r.apply(Duration::ZERO, Observation::Epoch { epoch: 1 })
         .unwrap();
+    // Output freshness is required even for older observation-only windows.
+    r.apply(Duration::ZERO, frame(1, 0, outputs())).unwrap();
     r
 }
 fn frame(epoch: u64, position: u64, text: String) -> Observation {
@@ -26,6 +28,9 @@ fn windows(rows: &[String]) -> String {
 }
 fn workspaces() -> String {
     r#"{"event":"workspaces","data":[{"id":"old","name":"one","named":false,"index":1,"output":"display","active":true,"focused":true,"occupied":true,"layout":"scrolling"}]}"#.into()
+}
+fn outputs() -> String {
+    r#"{"event":"outputs","data":[]}"#.into()
 }
 fn apply(r: &mut Reducer, position: u64, text: String) -> DesktopUpdate {
     r.apply(Duration::ZERO, frame(1, position, text))
@@ -177,11 +182,12 @@ fn new_epoch_preserves_retained_row_identity_and_independent_family_readiness() 
     assert_eq!(update.impact.workspaces.len(), 2);
     assert!(!update.after.is_ready());
     r.apply(Duration::ZERO, frame(2, 2, workspaces())).unwrap();
+    assert!(!r.capture().is_ready());
+    r.apply(Duration::ZERO, frame(2, 3, outputs())).unwrap();
     assert!(r.capture().is_ready());
-    assert!(
-        r.apply(Duration::ZERO, Observation::Epoch { epoch: 2 })
-            .is_err()
-    );
+    r.apply(Duration::ZERO, Observation::Epoch { epoch: 2 })
+        .unwrap();
+    assert!(!r.capture().is_ready());
 }
 
 #[test]

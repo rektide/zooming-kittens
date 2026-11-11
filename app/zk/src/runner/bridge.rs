@@ -59,7 +59,7 @@ pub fn observation(
     if group.membership != desktop::Evidence::Reported {
         return Err("native ordered grouping is not reported unambiguously".into());
     }
-    if group.secondary_axis != desktop::Axis::Vertical {
+    if group.secondary_axis != Some(desktop::Axis::Vertical) {
         return Err("height control requires a reported vertical secondary axis".into());
     }
     if group.members.len() < 2 || group.members.len() > 128 {

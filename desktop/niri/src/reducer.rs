@@ -409,7 +409,8 @@ impl Reducer {
                     GroupView {
                         key,
                         members,
-                        secondary_axis: Axis::Vertical,
+                        secondary_axis: Some(Axis::Vertical),
+                        edge_eligibility: EdgeEligibility::NotSupported,
                         membership: if unambiguous && fully_located {
                             Evidence::Reported
                         } else {
@@ -494,6 +495,8 @@ fn project_window(w: &Window, scope: &Scope) -> WindowView {
         },
         workspace,
         group,
+        output: None,
+        presentation: Presentation::default(),
         placement: if w.is_floating {
             Placement::Floating
         } else {

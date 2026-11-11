@@ -189,6 +189,11 @@ async fn layout_source_is_coherent_and_ignores_other_family_focus() {
     assert_eq!(capture.allocations.len(), 1);
     assert!(capture.control_status.as_ref().unwrap().is_current());
     assert!(!capture.windows_status.is_current());
+    assert!(capture.outputs_status.is_none());
+    assert!(matches!(
+        source.edge_actuator().await,
+        Err(zk_umbriel::edge::AdmissionError::NotStock)
+    ));
     source.shutdown().await.unwrap();
     let _ = finish.send(());
     peer.await.unwrap();

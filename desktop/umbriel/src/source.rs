@@ -20,8 +20,21 @@ impl Default for Options {
 pub struct Source {
     stop: Option<oneshot::Sender<()>>,
     task: Option<JoinHandle<()>>,
+    edge: Option<crate::edge::Factory>,
 }
 impl Source {
+    /// Explicit stock capability check using an impossible stale ID; never a
+    /// focused resize. Reverify after native epoch changes. Observation itself
+    /// remains read-only and never implicitly probes the command surface.
+    pub async fn edge_actuator(
+        &self,
+    ) -> Result<crate::edge::EdgeActuator, crate::edge::AdmissionError> {
+        self.edge
+            .as_ref()
+            .ok_or(crate::edge::AdmissionError::NotStock)?
+            .verify()
+            .await
+    }
     pub async fn shutdown(mut self) -> Result<(), tokio::task::JoinError> {
         if let Some(stop) = self.stop.take() {
             let _ = stop.send(());
@@ -101,12 +114,13 @@ async fn subscribe_inner(
             "invalid desktop source/capacity",
         ));
     }
+    let edge_options = options.native.io.clone();
     let (native, mut observations) = endpoint
         .subscribe(
             if layout {
                 &[Family::LayoutState]
             } else {
-                &[Family::Windows, Family::Workspaces]
+                crate::reducer::STOCK_FAMILIES
             },
             options.native,
         )
@@ -117,6 +131,12 @@ async fn subscribe_inner(
         Reduction::Legacy(Reducer::new(source))
     };
     let (publisher, observer) = Publisher::new(reducer.capture(), options.observer_capacity);
+    let edge = (!layout).then(|| crate::edge::Factory {
+        endpoint,
+        current: publisher.watch(),
+        options: edge_options,
+        serial: std::sync::Arc::new(tokio::sync::Semaphore::new(1)),
+    });
     let (stop, mut stopped) = oneshot::channel();
     let task = tokio::spawn(async move {
         let origin = Instant::now();
@@ -146,6 +166,7 @@ async fn subscribe_inner(
         Source {
             stop: Some(stop),
             task: Some(task),
+            edge,
         },
         observer,
     ))

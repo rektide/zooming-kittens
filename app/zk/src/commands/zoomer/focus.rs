@@ -122,6 +122,8 @@ mod tests {
                     key: key.clone(),
                     workspace: None,
                     group: None,
+                    output: None,
+                    presentation: Default::default(),
                     placement: Placement::Tiled,
                     title: None,
                     app_id: Some(if id == 3 { "browser" } else { "kitty" }.into()),

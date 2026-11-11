@@ -20,6 +20,7 @@ fn capture() -> DesktopCapture {
         Capabilities {
             reported_groups: true,
             height_by_id: false,
+            relative_edge_by_id: false,
             atomic_multiwindow: true,
             native_revision_precondition: false,
             exact_restore: true,
@@ -49,6 +50,8 @@ fn capture() -> DesktopCapture {
                 key: id.clone(),
                 workspace: Some(workspace.clone()),
                 group: Some(group.clone()),
+                output: None,
+                presentation: Presentation::default(),
                 placement: Placement::Tiled,
                 title: None,
                 app_id: None,
@@ -87,7 +90,8 @@ fn capture() -> DesktopCapture {
         GroupView {
             key: group.clone(),
             members,
-            secondary_axis: Axis::Vertical,
+            secondary_axis: Some(Axis::Vertical),
+            edge_eligibility: EdgeEligibility::NotSupported,
             membership: Evidence::Reported,
             bounds: None,
             geometry_evidence: Evidence::Reported,

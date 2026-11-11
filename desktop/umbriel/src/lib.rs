@@ -1,9 +1,11 @@
-//! Read-only Umbriel desktop observation, composed over its native inventory.
+//! Umbriel stock observation and explicit native control boundaries.
 #![forbid(unsafe_code)]
 
+pub mod edge;
+pub mod layout;
 mod reducer;
 mod source;
-pub mod layout;
+pub mod stock;
 pub use reducer::{ReduceError, Reducer};
 pub use source::{Options, Source, subscribe, subscribe_layout};
 pub use umbriel_client::{Discovery, Endpoint, SubscriptionOptions};

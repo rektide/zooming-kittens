@@ -24,9 +24,10 @@ async fn native_subscription_is_read_only_and_idle_shutdown_joins_underlying_soc
         assert!(line.contains("subscribe"));
         assert!(line.contains("windows"));
         assert!(line.contains("workspaces"));
+        assert!(line.contains("outputs"));
         socket
             .write_all(
-                b"{\"event\":\"windows\",\"data\":[]}\n{\"event\":\"workspaces\",\"data\":[]}\n",
+                b"{\"event\":\"windows\",\"data\":[]}\n{\"event\":\"workspaces\",\"data\":[]}\n{\"event\":\"outputs\",\"data\":[]}\n",
             )
             .await
             .unwrap();
@@ -77,7 +78,7 @@ async fn eof_and_drop_are_observable_without_polling_native_socket() {
                 .read_line(&mut line)
                 .await
                 .unwrap();
-            socket.write_all(b"{\"event\":\"windows\",\"data\":[]}\n{\"event\":\"workspaces\",\"data\":[]}\n").await.unwrap();
+            socket.write_all(b"{\"event\":\"windows\",\"data\":[]}\n{\"event\":\"workspaces\",\"data\":[]}\n{\"event\":\"outputs\",\"data\":[]}\n").await.unwrap();
             let _ = wait.await;
         });
         let (source, mut observer) = subscribe(

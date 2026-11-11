@@ -699,6 +699,7 @@ async fn enabled_backends_acquire_read_only_through_real_native_subscriptions() 
                     .await
                     .unwrap();
                 assert!(line.contains("subscribe"));
+                assert!(line.contains("outputs"));
                 socket
                     .write_all(b"{\"event\":\"windows\",\"data\":[]}\n")
                     .await
@@ -706,6 +707,10 @@ async fn enabled_backends_acquire_read_only_through_real_native_subscriptions() 
                 tokio::time::sleep(Duration::from_millis(5)).await;
                 socket
                     .write_all(b"{\"event\":\"workspaces\",\"data\":[]}\n")
+                    .await
+                    .unwrap();
+                socket
+                    .write_all(b"{\"event\":\"outputs\",\"data\":[]}\n")
                     .await
                     .unwrap();
             }

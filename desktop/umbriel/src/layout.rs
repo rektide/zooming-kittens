@@ -77,6 +77,7 @@ impl Reducer {
             Capabilities {
                 reported_groups: true,
                 height_by_id: false,
+                relative_edge_by_id: false,
                 atomic_multiwindow: true,
                 native_revision_precondition: false,
                 exact_restore: true,
@@ -270,6 +271,8 @@ pub(crate) fn project(capture: &mut DesktopCapture, state: &LayoutState) -> Resu
                     key: id.clone(),
                     workspace: Some(workspace.clone()),
                     group: Some(key.clone()),
+                    output: None,
+                    presentation: Presentation::default(),
                     placement: Placement::Tiled,
                     title: None,
                     app_id: None,
@@ -313,11 +316,12 @@ pub(crate) fn project(capture: &mut DesktopCapture, state: &LayoutState) -> Resu
                 GroupView {
                     key: key.clone(),
                     members,
-                    secondary_axis: if basis.axis == SecondaryAxis::Vertical {
+                    secondary_axis: Some(if basis.axis == SecondaryAxis::Vertical {
                         Axis::Vertical
                     } else {
                         Axis::Horizontal
-                    },
+                    }),
+                    edge_eligibility: EdgeEligibility::NotSupported,
                     membership: Evidence::Reported,
                     bounds: None,
                     geometry_evidence: Evidence::Reported,
