@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-dashmap = "6.1.0"
 dirs = "6.0.0"
 kitty-rc = "0.5.0"
 serde = { version = "1.0.228", features = ["derive"] }

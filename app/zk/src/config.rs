@@ -10,7 +10,7 @@ use std::time::Duration;
 pub use zk_kitty::RegistryConfig;
 #[cfg(feature = "kitty")]
 pub use zk_zoomer::ZoomConfig;
-#[cfg(all(feature = "kitty", any(test, feature = "niri")))]
+#[cfg(all(feature = "kitty", any(test, feature = "niri", feature = "umbriel")))]
 pub use zk_zoomer::ZoomType;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
@@ -37,7 +37,7 @@ impl Verbosity {
         }
     }
 
-    #[cfg(all(feature = "niri", feature = "kitty"))]
+    #[cfg(all(any(feature = "niri", feature = "umbriel"), feature = "kitty"))]
     pub fn log_window_events(&self) -> bool {
         *self >= Self::Debug
     }

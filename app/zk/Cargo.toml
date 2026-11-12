@@ -30,7 +30,7 @@ zk-export = { path = "../../inspection/export", optional = true }
 [features]
 default = ["niri", "umbriel", "kitty"]
 niri = ["dep:zk-niri", "dep:niri-ipc", "dep:zk-export", "dep:zk-desktop", "dep:zk-longcat", "dep:kubeless-work-schedule", "dep:futures", "dep:serde_json", "dep:tokio-stream"]
-umbriel = ["dep:zk-umbriel", "dep:zk-desktop", "dep:zk-longcat", "dep:kubeless-work-schedule", "dep:futures", "dep:serde_json"]
+umbriel = ["dep:zk-umbriel", "dep:zk-desktop", "dep:zk-longcat", "dep:kubeless-work-schedule", "dep:futures", "dep:serde_json", "dep:tokio-stream"]
 kitty = ["dep:zk-kitty", "dep:zk-zoomer", "dep:kitty-rc"]
 export-facet = ["niri", "zk-export/export-facet"]
 

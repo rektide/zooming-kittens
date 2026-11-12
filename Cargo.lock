@@ -1766,7 +1766,6 @@ dependencies = [
 name = "zk-kitty"
 version = "0.1.0"
 dependencies = [
- "dashmap",
  "dirs",
  "kitty-rc",
  "serde",

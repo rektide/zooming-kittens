@@ -7,7 +7,7 @@ use std::collections::VecDeque;
 use std::sync::Mutex;
 
 use futures::executor::block_on;
-use futures::stream::iter;
+use futures::{StreamExt, stream::iter};
 use zk_kitty::ZoomingResult;
 use zk_kitty::conf_parser::set_baseline_font_size;
 use zk_zoomer::{
@@ -297,4 +297,274 @@ fn invalid_config_sends_no_commands() {
     .unwrap();
 
     assert!(port.calls().is_empty());
+}
+
+fn run_and_stop(
+    port: &ScriptedPort,
+    config: ZoomConfig,
+    events: Vec<FocusEvent>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (stop, stopped) = futures::channel::oneshot::channel();
+    let mut stop = Some(stop);
+    let events = iter(events).chain(futures::stream::poll_fn(move |_| {
+        if let Some(stop) = stop.take() {
+            let _ = stop.send(());
+        }
+        std::task::Poll::Pending
+    }));
+    let mut resizer = ZoomResizer::with_zoom_config(RecordedPort(port), config);
+    block_on(resizer.process_events_until(events, async {
+        let _ = stopped.await;
+    }))
+}
+
+#[test]
+fn shutdown_restores_only_the_net_acknowledged_effect_and_original_pid() {
+    let port = ScriptedPort::new((0..10).map(|_| success()).collect());
+    run_and_stop(
+        &port,
+        ZoomConfig {
+            additive: Some(3.0),
+            step_size: 3.0,
+            ..ZoomConfig::default()
+        },
+        vec![
+            FocusEvent::Focus { window: target(1) },
+            FocusEvent::Blur { window: target(1) },
+            FocusEvent::Focus { window: target(2) },
+        ],
+    )
+    .unwrap();
+    assert_eq!(
+        port.calls(),
+        vec![
+            (
+                1,
+                FontAdjustment {
+                    op: FontOp::Add,
+                    amount: 3.0
+                }
+            ),
+            (
+                1,
+                FontAdjustment {
+                    op: FontOp::Sub,
+                    amount: 3.0
+                }
+            ),
+            (
+                2,
+                FontAdjustment {
+                    op: FontOp::Add,
+                    amount: 3.0
+                }
+            ),
+            (
+                2,
+                FontAdjustment {
+                    op: FontOp::Sub,
+                    amount: 3.0
+                }
+            ),
+        ]
+    );
+}
+
+#[test]
+fn shutdown_after_partial_refusal_reverses_only_acknowledged_commands() {
+    let port = ScriptedPort::new(vec![
+        success(),
+        success(),
+        Ok(ZoomingResult::ConnectionFailed),
+        success(),
+    ]);
+    run_and_stop(
+        &port,
+        ZoomConfig {
+            additive: Some(6.0),
+            step_size: 2.0,
+            ..ZoomConfig::default()
+        },
+        vec![FocusEvent::Focus { window: target(7) }],
+    )
+    .unwrap();
+    assert_eq!(
+        port.calls().last(),
+        Some(&(
+            7,
+            FontAdjustment {
+                op: FontOp::Sub,
+                amount: 4.0
+            }
+        ))
+    );
+    assert_eq!(port.calls().len(), 4);
+}
+
+#[test]
+fn shutdown_multiplicative_inverse_and_refused_restoration_are_honest() {
+    let port = ScriptedPort::new(vec![success(), success()]);
+    run_and_stop(
+        &port,
+        ZoomConfig {
+            multiplicative: Some(1.5),
+            ..ZoomConfig::default()
+        },
+        vec![FocusEvent::Focus { window: target(7) }],
+    )
+    .unwrap();
+    assert_eq!(
+        port.calls().last(),
+        Some(&(
+            7,
+            FontAdjustment {
+                op: FontOp::Div,
+                amount: 1.5
+            }
+        ))
+    );
+    let port = ScriptedPort::new(vec![success(), Ok(ZoomingResult::NotConfigured)]);
+    assert!(
+        run_and_stop(
+            &port,
+            ZoomConfig {
+                additive: Some(3.0),
+                step_size: 3.0,
+                ..ZoomConfig::default()
+            },
+            vec![FocusEvent::Focus { window: target(7) }]
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn stop_during_a_command_settles_it_then_restores_without_draining_queued_focus() {
+    struct GatedPort {
+        calls: Mutex<Vec<(i32, FontAdjustment)>>,
+        entered: Mutex<Option<futures::channel::oneshot::Sender<()>>>,
+        release: Mutex<Option<futures::channel::oneshot::Receiver<()>>>,
+    }
+    impl FontPort for &GatedPort {
+        async fn adjust_font(
+            &self,
+            pid: i32,
+            adjustment: FontAdjustment,
+        ) -> Result<ZoomingResult, Box<dyn std::error::Error + Send + Sync>> {
+            self.calls.lock().unwrap().push((pid, adjustment));
+            let release = self.release.lock().unwrap().take();
+            if let Some(release) = release {
+                self.entered
+                    .lock()
+                    .unwrap()
+                    .take()
+                    .unwrap()
+                    .send(())
+                    .unwrap();
+                release.await.unwrap();
+            }
+            success()
+        }
+    }
+    let (entered, entering) = futures::channel::oneshot::channel();
+    let (release, released) = futures::channel::oneshot::channel();
+    let (stop, stopped) = futures::channel::oneshot::channel();
+    let port = GatedPort {
+        calls: Mutex::new(vec![]),
+        entered: Mutex::new(Some(entered)),
+        release: Mutex::new(Some(released)),
+    };
+    let mut resizer = ZoomResizer::with_zoom_config(
+        &port,
+        ZoomConfig {
+            additive: Some(3.0),
+            ..ZoomConfig::default()
+        },
+    );
+    let events = iter(vec![
+        FocusEvent::Focus { window: target(7) },
+        FocusEvent::Focus { window: target(8) },
+    ]);
+    let processing = resizer.process_events_until(events, async {
+        stopped.await.unwrap();
+    });
+    let control = async {
+        entering.await.unwrap();
+        stop.send(()).unwrap();
+        release.send(()).unwrap();
+    };
+    let (result, ()) = block_on(futures::future::join(processing, control));
+    result.unwrap();
+    assert_eq!(
+        *port.calls.lock().unwrap(),
+        vec![
+            (
+                7,
+                FontAdjustment {
+                    op: FontOp::Add,
+                    amount: 1.0
+                }
+            ),
+            (
+                7,
+                FontAdjustment {
+                    op: FontOp::Sub,
+                    amount: 1.0
+                }
+            ),
+        ]
+    );
+}
+
+#[test]
+fn stop_between_commands_does_not_start_the_unsent_animation_tail() {
+    struct StopOnAck {
+        calls: Mutex<Vec<FontAdjustment>>,
+        stop: Mutex<Option<futures::channel::oneshot::Sender<()>>>,
+    }
+    impl FontPort for &StopOnAck {
+        async fn adjust_font(
+            &self,
+            _: i32,
+            adjustment: FontAdjustment,
+        ) -> Result<ZoomingResult, Box<dyn std::error::Error + Send + Sync>> {
+            self.calls.lock().unwrap().push(adjustment);
+            if let Some(stop) = self.stop.lock().unwrap().take() {
+                stop.send(()).unwrap();
+            }
+            success()
+        }
+    }
+    let (stop, stopped) = futures::channel::oneshot::channel();
+    let port = StopOnAck {
+        calls: Mutex::new(vec![]),
+        stop: Mutex::new(Some(stop)),
+    };
+    let mut resizer = ZoomResizer::with_zoom_config(
+        &port,
+        ZoomConfig {
+            additive: Some(3.0),
+            ..ZoomConfig::default()
+        },
+    );
+    block_on(resizer.process_events_until(
+        iter(vec![FocusEvent::Focus { window: target(7) }]),
+        async {
+            stopped.await.unwrap();
+        },
+    ))
+    .unwrap();
+    assert_eq!(
+        *port.calls.lock().unwrap(),
+        vec![
+            FontAdjustment {
+                op: FontOp::Add,
+                amount: 1.0
+            },
+            FontAdjustment {
+                op: FontOp::Sub,
+                amount: 1.0
+            },
+        ]
+    );
 }

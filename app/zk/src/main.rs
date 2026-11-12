@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand};
 #[cfg(feature = "niri")]
 use commands::ExportCommand;
+use commands::backend::Backend;
 #[cfg(feature = "kitty")]
 use commands::conf_size::handle_conf_size_command;
 #[cfg(feature = "niri")]
@@ -9,7 +10,7 @@ use commands::export::run_export;
 use commands::fonts::handle_font_command;
 use commands::longcat::run_longcat;
 use commands::systemd::{GenerateSystemdCommand, generate_systemd_service};
-#[cfg(all(feature = "niri", feature = "kitty"))]
+#[cfg(all(any(feature = "niri", feature = "umbriel"), feature = "kitty"))]
 use commands::zoomer::run_zoomer;
 #[cfg(feature = "kitty")]
 use commands::{ConfSizeCommand, FontCommand};
@@ -80,6 +81,10 @@ enum CliSubcommand {
         about = "Run focus tracking for a specific app with configurable font adjustments"
     )]
     Zoomer {
+        /// Native focus source (default mode remains niri).
+        #[arg(long, value_enum, default_value = "niri")]
+        backend: Backend,
+
         #[arg(
             short,
             long,
@@ -126,7 +131,7 @@ enum CliSubcommand {
 }
 
 #[derive(Parser, Debug)]
-#[command(author, version, about = "Track niri window focus and adjust kitty terminal font sizes", long_about = None)]
+#[command(author, version, about = "Track desktop window focus and adjust kitty terminal font sizes", long_about = None)]
 struct Args {
     #[arg(
         short,
@@ -228,8 +233,12 @@ async fn main() -> std::io::Result<()> {
             require_feature(cfg!(feature = "kitty"), "kitty")?
         }
         Some(CliSubcommand::Export(_)) => require_feature(cfg!(feature = "niri"), "niri")?,
-        Some(CliSubcommand::Zoomer { .. }) | None => {
-            require_feature(cfg!(feature = "niri"), "niri")?;
+        Some(CliSubcommand::Zoomer { backend, .. }) => {
+            backend.require()?;
+            require_feature(cfg!(feature = "kitty"), "kitty")?;
+        }
+        None => {
+            Backend::Niri.require()?;
             require_feature(cfg!(feature = "kitty"), "kitty")?;
         }
         _ => {}
@@ -266,6 +275,7 @@ async fn main() -> std::io::Result<()> {
     }
 
     if let Some(CliSubcommand::Zoomer {
+        backend,
         app_id: zoomer_app_id,
         verbose_count,
         zoom_absolute,
@@ -280,9 +290,11 @@ async fn main() -> std::io::Result<()> {
             multiplicative: zoom_multiplicative,
             step_size: zoom_step_size,
         };
-        let config = Config::load(Some(&cli_args), Some(&zoom_args)).unwrap_or_default();
+        let config = Config::load(Some(&cli_args), Some(&zoom_args)).map_err(|error| {
+            std::io::Error::new(std::io::ErrorKind::InvalidInput, error.to_string())
+        })?;
         let verbosity = Verbosity::from_count(args.verbose_count + verbose_count);
-        run_zoomer(zoomer_app_id, verbosity, config)
+        run_zoomer(backend, zoomer_app_id, verbosity, config)
             .await
             .map_err(|e| std::io::Error::other(e.to_string()))?;
         return Ok(());
@@ -317,15 +329,52 @@ async fn main() -> std::io::Result<()> {
         eprintln!("Tracking app_id: {}", app_id);
     }
 
-    run_zoomer(app_id, verbosity, config)
+    run_zoomer(Backend::Niri, app_id, verbosity, config)
         .await
         .map_err(|e| std::io::Error::other(e.to_string()))?;
 
     Ok(())
 }
 
-#[cfg(not(all(feature = "niri", feature = "kitty")))]
-async fn run_zoomer(_: String, _: Verbosity, _: Config) -> std::io::Result<()> {
-    require_feature(cfg!(feature = "niri"), "niri")?;
+#[cfg(not(all(any(feature = "niri", feature = "umbriel"), feature = "kitty")))]
+async fn run_zoomer(backend: Backend, _: String, _: Verbosity, _: Config) -> std::io::Result<()> {
+    backend.require()?;
     require_feature(cfg!(feature = "kitty"), "kitty")
+}
+
+#[cfg(test)]
+mod cli_tests {
+    use super::*;
+
+    #[test]
+    fn zoomer_preserves_niri_default_and_explicit_umbriel_zoom_options() {
+        let default = Args::try_parse_from(["zk", "zoomer"]).unwrap();
+        assert!(matches!(
+            default.command,
+            Some(CliSubcommand::Zoomer {
+                backend: Backend::Niri,
+                ..
+            })
+        ));
+        let explicit = Args::try_parse_from([
+            "zk",
+            "zoomer",
+            "--backend",
+            "umbriel",
+            "--zoom-additive",
+            "3",
+            "--zoom-step-size",
+            "3",
+        ])
+        .unwrap();
+        assert!(matches!(
+            explicit.command,
+            Some(CliSubcommand::Zoomer {
+                backend: Backend::Umbriel,
+                zoom_additive: Some(3.0),
+                zoom_step_size: Some(3.0),
+                ..
+            })
+        ));
+    }
 }

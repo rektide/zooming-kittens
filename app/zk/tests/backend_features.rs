@@ -63,6 +63,7 @@ fn disabled_backends_are_rejected_before_socket_discovery_or_mutation_checks() {
         ("umbriel", cfg!(feature = "umbriel")),
     ] {
         if !enabled {
+            disabled(&["zoomer", "--backend", backend], backend);
             disabled(
                 &[
                     "longcat",
@@ -75,6 +76,9 @@ fn disabled_backends_are_rejected_before_socket_discovery_or_mutation_checks() {
             );
             disabled(&["longcat", "--backend", backend, "--dry-run"], backend);
         }
+        if enabled && !cfg!(feature = "kitty") {
+            disabled(&["zoomer", "--backend", backend], "kitty");
+        }
     }
 }
 
@@ -84,6 +88,7 @@ fn basic_cli_is_available_in_every_build() {
         vec!["--help"],
         vec!["--version"],
         vec!["longcat", "--help"],
+        vec!["zoomer", "--help"],
         vec!["generate-systemd", "--output"],
     ] {
         let output = invoke(&args);
@@ -93,6 +98,21 @@ fn basic_cli_is_available_in_every_build() {
             String::from_utf8_lossy(&output.stderr)
         );
     }
+}
+
+#[test]
+fn zoomer_backend_cli_is_available_even_without_its_features() {
+    let help = invoke(&["zoomer", "--help"]);
+    let text = String::from_utf8(help.stdout).unwrap();
+    assert!(text.contains("--backend"), "{text}");
+    assert!(text.contains("niri") && text.contains("umbriel"), "{text}");
+    let invalid = invoke(&["zoomer", "--backend", "guess"]);
+    assert!(!invalid.status.success());
+    assert!(
+        String::from_utf8(invalid.stderr)
+            .unwrap()
+            .contains("invalid value")
+    );
 }
 
 #[cfg(feature = "niri")]

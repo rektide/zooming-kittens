@@ -2,11 +2,7 @@ use crate::config::{Config, LongcatConfig};
 use clap::{Args, ValueEnum};
 use std::{io, path::PathBuf};
 
-#[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq)]
-pub enum Backend {
-    Niri,
-    Umbriel,
-}
+pub use super::backend::Backend;
 
 #[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq, Default)]
 pub enum UmbrielControl {
@@ -101,10 +97,7 @@ impl LongcatCommand {
 }
 
 pub async fn run_longcat(command: LongcatCommand) -> io::Result<()> {
-    match command.backend {
-        Backend::Niri => crate::require_feature(cfg!(feature = "niri"), "niri")?,
-        Backend::Umbriel => crate::require_feature(cfg!(feature = "umbriel"), "umbriel")?,
-    }
+    command.backend.require()?;
     // No global CLI defaults are merged: Longcat overrides only explicitly supplied values.
     let loaded = Config::load(None, None)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e.to_string()))?;

@@ -1,4 +1,5 @@
 use std::fs;
+use std::os::unix::fs::MetadataExt;
 use std::path::PathBuf;
 
 pub fn get_kitty_password() -> Result<String, std::io::Error> {
@@ -19,15 +20,21 @@ pub fn get_kitty_password() -> Result<String, std::io::Error> {
 }
 
 pub fn get_kitty_socket_path(pid: i32) -> PathBuf {
-    let runtime_dir = std::env::var("XDG_RUNTIME_DIR").ok();
+    let runtime_dir = std::env::var_os("XDG_RUNTIME_DIR")
+        .map(PathBuf::from)
+        .or_else(|| {
+            fs::metadata("/proc/self")
+                .ok()
+                .map(|meta| PathBuf::from(format!("/run/user/{}", meta.uid())))
+        });
+    socket_path(pid, runtime_dir)
+}
 
+fn socket_path(pid: i32, runtime_dir: Option<PathBuf>) -> PathBuf {
     let paths: Vec<PathBuf> = match runtime_dir {
-        Some(dir) => vec![PathBuf::from(dir).join(format!("kitty-{}.sock", pid))],
+        Some(dir) => vec![dir.join(format!("kitty-{}.sock", pid))],
         None => {
-            vec![
-                PathBuf::from(format!("/run/user/1000/kitty-{}.sock", pid)),
-                PathBuf::from(format!("/tmp/kitty-{}.sock", pid)),
-            ]
+            vec![PathBuf::from(format!("/tmp/kitty-{}.sock", pid))]
         }
     };
 
@@ -42,4 +49,24 @@ pub fn get_kitty_socket_path(pid: i32) -> PathBuf {
 
 pub fn is_process_alive(pid: i32) -> bool {
     std::path::Path::new(&format!("/proc/{}", pid)).exists()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn socket_discovery_never_substitutes_another_kitty_pid() {
+        let runtime = tempfile::tempdir().unwrap();
+        fs::write(runtime.path().join("kitty-222.sock"), []).unwrap();
+        assert_eq!(
+            socket_path(111, Some(runtime.path().into())),
+            runtime.path().join("kitty-111.sock")
+        );
+        fs::write(runtime.path().join("kitty-111.sock"), []).unwrap();
+        assert_eq!(
+            socket_path(111, Some(runtime.path().into())),
+            runtime.path().join("kitty-111.sock")
+        );
+    }
 }

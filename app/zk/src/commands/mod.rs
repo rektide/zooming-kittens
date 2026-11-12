@@ -1,3 +1,4 @@
+pub mod backend;
 #[cfg(feature = "kitty")]
 pub mod conf_size;
 #[cfg(feature = "niri")]
@@ -6,7 +7,7 @@ pub use zk_export::command as export;
 pub mod fonts;
 pub mod longcat;
 pub mod systemd;
-#[cfg(all(feature = "niri", feature = "kitty"))]
+#[cfg(all(any(feature = "niri", feature = "umbriel"), feature = "kitty"))]
 pub mod zoomer;
 #[cfg(feature = "kitty")]
 pub use conf_size::ConfSizeCommand;

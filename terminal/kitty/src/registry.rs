@@ -1,7 +1,6 @@
 use crate::config::RegistryConfig;
 use crate::types::{KittyConnectionStatus, ZoomingResult};
 use crate::util::{get_kitty_password, get_kitty_socket_path, is_process_alive};
-use dashmap::DashMap;
 use kitty_rc::Kitty;
 use kitty_rc::commands::SetFontSizeCommand;
 use std::collections::HashMap;
@@ -19,7 +18,6 @@ struct ManagedConnection {
 pub struct KittyRegistry {
     connections: Arc<Mutex<HashMap<i32, ManagedConnection>>>,
     statuses: Arc<Mutex<HashMap<i32, KittyConnectionStatus>>>,
-    pid_cache: Arc<DashMap<i32, i32>>,
     config: RegistryConfig,
 }
 
@@ -28,7 +26,6 @@ impl KittyRegistry {
         Self {
             connections: Arc::new(Mutex::new(HashMap::new())),
             statuses: Arc::new(Mutex::new(HashMap::new())),
-            pid_cache: Arc::new(DashMap::new()),
             config,
         }
     }
@@ -212,18 +209,13 @@ impl KittyRegistry {
             .into());
         }
 
-        let kitty_pid = if let Some(cached) = self.pid_cache.get(&pid) {
-            *cached
-        } else {
-            match crate::process::find_kitty_master_pid(pid) {
-                Some(kpid) => {
-                    self.pid_cache.insert(pid, kpid);
-                    kpid
-                }
-                None => {
-                    self.set_status(pid, KittyConnectionStatus::NoSocket).await;
-                    return Ok(ZoomingResult::NotConfigured);
-                }
+        // Resolve only this process's ancestry, including the supplied PID.
+        // Never scan other terminals or trust a stale PID-reuse cache entry.
+        let kitty_pid = match crate::process::find_kitty_master_pid(pid) {
+            Some(kpid) => kpid,
+            None => {
+                self.set_status(pid, KittyConnectionStatus::NoSocket).await;
+                return Ok(ZoomingResult::NotConfigured);
             }
         };
 
@@ -235,7 +227,10 @@ impl KittyRegistry {
         }
 
         if self.config.verbose {
-            eprintln!("Mapped shell PID {} to kitty master PID {}", pid, kitty_pid);
+            eprintln!(
+                "Mapped process PID {} to kitty master PID {}",
+                pid, kitty_pid
+            );
         }
 
         let password = match get_kitty_password() {
@@ -278,8 +273,8 @@ impl KittyRegistry {
 
             if self.config.verbose {
                 eprintln!(
-                    "Sending command to PID {} (kitty: {}): {:?}",
-                    pid, kitty_pid, cmd
+                    "Sending font adjustment {}{} to PID {} (kitty: {})",
+                    op, amount, pid, kitty_pid
                 );
             }
 
@@ -288,8 +283,10 @@ impl KittyRegistry {
 
             if self.config.verbose {
                 eprintln!(
-                    "Font command result for PID {} (kitty: {}): {:?}",
-                    pid, kitty_pid, result
+                    "Font command reply for PID {} (kitty: {}): received={}",
+                    pid,
+                    kitty_pid,
+                    result.is_ok()
                 );
             }
             match result {
@@ -308,15 +305,15 @@ impl KittyRegistry {
                         .error
                         .unwrap_or_else(|| "Unknown error".to_string());
                     eprintln!(
-                        "Kitty returned error for PID {} (kitty: {}): {}",
-                        pid, kitty_pid, error_msg
+                        "Kitty refused font command for PID {} (kitty: {})",
+                        pid, kitty_pid
                     );
                     last_error = Some(error_msg);
                 }
                 Err(e) => {
                     eprintln!(
-                        "Error executing font command for PID {} (kitty: {}): {}",
-                        pid, kitty_pid, e
+                        "Error executing font command for PID {} (kitty: {})",
+                        pid, kitty_pid
                     );
                     last_error = Some(e.to_string());
                 }
@@ -387,7 +384,7 @@ impl KittyRegistry {
                 c
             }
             Err(e) => {
-                eprintln!("Failed to connect to kitty PID {}: {}", pid, e);
+                eprintln!("Failed to connect to kitty PID {}", pid);
                 self.set_status(pid, KittyConnectionStatus::Failed).await;
                 return Err(e.to_string());
             }

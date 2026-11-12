@@ -1,14 +1,63 @@
+use super::backend::Backend;
 use crate::config::{Config, Verbosity};
 use futures::StreamExt;
-use tokio::sync::mpsc;
+use std::{io, time::Duration};
+use tokio::sync::{mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
-use zk_desktop::{Backend, SourceId};
+use zk_desktop::{Observer, SourceId};
 use zk_zoomer::KittyResizer;
 
 mod focus;
 
+enum Source {
+    #[cfg(feature = "niri")]
+    Niri(zk_niri::Source),
+    #[cfg(feature = "umbriel")]
+    Umbriel(zk_umbriel::Source),
+}
+
+impl Source {
+    async fn subscribe(backend: Backend) -> Result<(Self, Observer), Box<dyn std::error::Error>> {
+        backend.require()?;
+        match backend {
+            #[cfg(feature = "niri")]
+            Backend::Niri => {
+                let (source, observer) = zk_niri::subscribe_env(
+                    SourceId::new(zk_desktop::Backend::Niri, "zoomer"),
+                    zk_niri::Options::default(),
+                )
+                .await?;
+                Ok((Self::Niri(source), observer))
+            }
+            #[cfg(feature = "umbriel")]
+            Backend::Umbriel => {
+                let endpoint = zk_umbriel::Discovery::from_env().resolve()?;
+                let (source, observer) = zk_umbriel::subscribe(
+                    endpoint,
+                    SourceId::new(zk_desktop::Backend::Umbriel, "zoomer"),
+                    zk_umbriel::Options::default(),
+                )
+                .await?;
+                Ok((Self::Umbriel(source), observer))
+            }
+            #[allow(unreachable_patterns)]
+            _ => unreachable!("backend checked before discovery"),
+        }
+    }
+
+    async fn shutdown(self) -> Result<(), tokio::task::JoinError> {
+        match self {
+            #[cfg(feature = "niri")]
+            Self::Niri(source) => source.shutdown().await,
+            #[cfg(feature = "umbriel")]
+            Self::Umbriel(source) => source.shutdown().await,
+        }
+    }
+}
+
 /// Run focus tracking for a specific app with configurable font adjustments
 pub async fn run_zoomer(
+    backend: Backend,
     app_id: String,
     verbosity: Verbosity,
     config: Config,
@@ -38,17 +87,13 @@ pub async fn run_zoomer(
             }
             eprintln!("Step size: {}", config.zoom.step_size);
         } else {
-            eprintln!("Warning: No zoom configuration set, using default additive +6");
+            eprintln!("No zoom configuration set; font adjustments disabled");
         }
     }
 
     // Subscribe before starting output work, and retain the actual source owner
     // until every exit path has joined its receive task.
-    let (source, observer) = zk_niri::subscribe_env(
-        SourceId::new(Backend::Niri, "zoomer"),
-        zk_niri::Options::default(),
-    )
-    .await?;
+    let (source, observer) = Source::subscribe(backend).await?;
     let registry_config = config.to_registry_config();
     let kitty_registry = crate::kitty::KittyRegistry::new(registry_config);
     kitty_registry.start_reaper().await;
@@ -59,15 +104,32 @@ pub async fn run_zoomer(
     // block observation behind kitty I/O or silently coalesce skipped focuses.
     let (sender, receiver) = mpsc::channel(focus::QUEUE_CAPACITY);
     let events = ReceiverStream::new(receiver).flat_map(futures::stream::iter);
-    let result = tokio::select! {
-        biased;
-        signal = tokio::signal::ctrl_c() => signal.map_err(Into::into),
-        result = focus::feed(observer, &app_id, sender) => result.map_err(Into::into),
-        result = zoomer.process_events(events) => result,
-    };
-    // Cancellation/loss drops pending effects; neither is evidence of blur.
-    // Commands already sent to kitty may have taken effect; no rollback claimed.
-    let shutdown = source.shutdown().await;
-    shutdown?;
-    result
+    let (stop, stopped) = oneshot::channel();
+    let result = async {
+        let processing = zoomer.process_events_until(events, async {
+            let _ = stopped.await;
+        });
+        tokio::pin!(processing);
+        tokio::select! {
+            biased;
+            signal = tokio::signal::ctrl_c() => {
+                signal?;
+                // Explicit shutdown, not invented desktop blur. Stop intake,
+                // settle the one in-flight command, reverse acknowledged effects.
+                let _ = stop.send(());
+                tokio::time::timeout(Duration::from_secs(15), &mut processing)
+                    .await
+                    .map_err(|_| io::Error::new(io::ErrorKind::TimedOut,
+                        "zoomer restore deadline elapsed; font state may need manual correction"))?
+            }
+            result = focus::feed(observer, &app_id, sender) => result.map_err(Into::into),
+            result = &mut processing => result,
+        }
+    }
+    .await;
+    // Source loss still drops pending effects, without speculative restoration.
+    let shutdown = tokio::time::timeout(Duration::from_secs(3), source.shutdown())
+        .await
+        .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "focus source shutdown deadline"))?;
+    result.and(shutdown.map_err(Into::into))
 }
