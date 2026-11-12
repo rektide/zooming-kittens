@@ -231,15 +231,18 @@ impl Control {
         let mut responses = Vec::new();
         for (native_key, group) in &c.groups {
             if !(2..=128).contains(&group.members.len()) {
+                self.slots.remove(native_key);
                 continue;
             }
             let axis = group
                 .secondary_axis
                 .or_else(|| self.slots.get(native_key).map(|s| s.axis));
             let Some(axis) = axis else {
+                self.slots.remove(native_key);
                 continue;
             };
             let Some(mut raw) = raw_group(c, group, axis, &self.config) else {
+                self.slots.remove(native_key);
                 continue;
             };
             if !matches!(

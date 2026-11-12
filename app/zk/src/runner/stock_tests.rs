@@ -1019,6 +1019,24 @@ fn reacquiring_fresh_families_does_not_mark_the_new_epoch_lost_again() {
     assert_eq!(control.feedback.input().unwrap().source.epoch, 2);
 }
 
+#[test]
+fn unprojectable_group_retires_its_expired_acquisition_timer_instead_of_spinning() {
+    for missing_geometry in [false, true] {
+        let mut control = super::feedback::Control::new(&config(), 1500).unwrap();
+        let mut c = capture(1, false, &[450., 450.]);
+        control.install(&c, 0).unwrap();
+        assert_eq!(control.next_deadline(false), Some(10));
+        c.version.0 += 1;
+        if missing_geometry {
+            c.windows.values_mut().next().unwrap().geometry.content_size = None;
+        } else {
+            c.groups.values_mut().next().unwrap().members.pop();
+        }
+        control.install(&c, 20).unwrap();
+        assert_eq!(control.next_deadline(false), None);
+    }
+}
+
 #[tokio::test]
 async fn incompatible_client_commit_during_own_response_is_not_taught_as_user_share() {
     let (result, rows, _, _) = scripted(
