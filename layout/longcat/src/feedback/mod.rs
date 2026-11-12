@@ -5,6 +5,7 @@
 //! pure: native geometry/gain/attribution are adapter facts; clocks and futures
 //! belong to the application. See [`Feedback::observe`] and [`Feedback::begin_command`].
 
+pub mod edges;
 mod preferences;
 mod types;
 

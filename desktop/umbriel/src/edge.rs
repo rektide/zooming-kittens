@@ -93,6 +93,28 @@ pub fn prepare(
     capture: &DesktopCapture,
     request: &RelativeEdgeRequest,
 ) -> Result<QualifiedSizing, String> {
+    prepare_inner(capture, request, None)
+}
+
+/// Mixed-time own progress may temporarily hide the candidate axis. Only a
+/// validated frozen model token can replace that one check; all other current
+/// presentation, family, context and adjacency admission still applies.
+pub fn prepare_frozen(
+    capture: &DesktopCapture,
+    request: &RelativeEdgeRequest,
+    authority: &crate::geometry::FrozenAuthority,
+) -> Result<QualifiedSizing, String> {
+    if !authority.validates(capture, request) {
+        return Err("invalid frozen geometry authority".into());
+    }
+    prepare_inner(capture, request, Some(authority))
+}
+
+fn prepare_inner(
+    capture: &DesktopCapture,
+    request: &RelativeEdgeRequest,
+    authority: Option<&crate::geometry::FrozenAuthority>,
+) -> Result<QualifiedSizing, String> {
     if !capture.is_ready()
         || capture.scope.source.backend != Backend::Umbriel
         || request.group.workspace.scope != capture.scope
@@ -107,8 +129,9 @@ pub fn prepare(
         .get(&request.group)
         .ok_or("unknown edge group")?;
     if group.membership != Evidence::Reported
-        || group.edge_eligibility != EdgeEligibility::Eligible
-        || group.secondary_axis != Some(request.axis)
+        || (authority.is_none()
+            && (group.edge_eligibility != EdgeEligibility::Eligible
+                || group.secondary_axis != Some(request.axis)))
         || !group
             .members
             .windows(2)
@@ -155,10 +178,26 @@ impl EdgeActuator {
     /// after admission even if observation changes; retain its lasting outcome.
     /// Local freshness is rechecked after connect, but is not server atomicity.
     pub async fn execute(&self, request: RelativeEdgeRequest) -> Transmission {
+        self.execute_inner(request, None).await
+    }
+
+    pub async fn execute_frozen(&self, edge: crate::geometry::CompiledEdge) -> Transmission {
+        self.execute_inner(edge.request, Some(edge.authority)).await
+    }
+
+    async fn execute_inner(
+        &self,
+        request: RelativeEdgeRequest,
+        authority: Option<crate::geometry::FrozenAuthority>,
+    ) -> Transmission {
         let Ok(_permit) = self.serial.try_acquire() else {
             return Transmission::Unsent("edge actuator busy".into());
         };
-        let action = match prepare(&self.current.borrow(), &request) {
+        let compile = |capture: &DesktopCapture| match authority.as_ref() {
+            Some(authority) => prepare_frozen(capture, &request, authority),
+            None => prepare(capture, &request),
+        };
+        let action = match compile(&self.current.borrow()) {
             Ok(action) => action,
             Err(error) => return Transmission::Unsent(error),
         };
@@ -170,6 +209,7 @@ impl EdgeActuator {
                     capture.is_ready()
                         && capture.scope == self.scope
                         && capture.version == request.basis
+                        && compile(&capture).is_ok()
                 }
             })
             .await

@@ -21,8 +21,75 @@ pub struct Source {
     stop: Option<oneshot::Sender<()>>,
     task: Option<JoinHandle<()>>,
     edge: Option<crate::edge::Factory>,
+    refresh: Option<WindowsRefresh>,
+}
+
+/// Read-only handle bound to one semantic source owner, not a source keepalive.
+/// Clones share a no-queue refresh permit. Dropping Source still shuts native I/O.
+#[derive(Clone)]
+pub struct WindowsRefresh {
+    native: umbriel_client::Subscription,
+    current: tokio::sync::watch::Receiver<std::sync::Arc<DesktopCapture>>,
+    serial: std::sync::Arc<tokio::sync::Semaphore>,
+}
+impl WindowsRefresh {
+    /// Timed one-off query through the native stream owner. Tracker installs its
+    /// normalized reply in receive order. Return only after that position (or a
+    /// later windows census) is visible; a reply alone never means installation.
+    pub async fn refresh(
+        &self,
+        scope: &Scope,
+        timeout: std::time::Duration,
+    ) -> Result<std::sync::Arc<DesktopCapture>, String> {
+        let _permit = self
+            .serial
+            .try_acquire()
+            .map_err(|_| "windows refresh busy")?;
+        tokio::time::timeout(timeout, async {
+            if self.current.has_changed().is_err()
+                || !self.current.borrow().is_ready()
+                || self.current.borrow().scope != *scope
+            {
+                return Err("windows refresh source unavailable".into());
+            }
+            let reply = self
+                .native
+                .refresh_windows(scope.epoch.0, timeout)
+                .await
+                .map_err(|e| e.to_string())?;
+            // Remote errors and malformed native payloads remain errors, not a
+            // successful freshness signal. Tracker independently validates rows.
+            reply
+                .decode::<umbriel_protocol::model::Windows>()
+                .map_err(|e| e.to_string())?;
+            let position = reply.local_receive_position();
+            let mut current = self.current.clone();
+            loop {
+                let capture = current.borrow_and_update().clone();
+                if capture.scope != *scope || !capture.is_ready() {
+                    return Err("windows refresh lost source authority".into());
+                }
+                if capture
+                    .windows_status
+                    .stamp
+                    .is_some_and(|stamp| stamp.epoch == scope.epoch && stamp.position >= position)
+                {
+                    return Ok(capture);
+                }
+                current
+                    .changed()
+                    .await
+                    .map_err(|_| "windows refresh source closed")?;
+            }
+        })
+        .await
+        .map_err(|_| "windows refresh deadline elapsed".to_string())?
+    }
 }
 impl Source {
+    pub fn windows_refresh(&self) -> Option<WindowsRefresh> {
+        self.refresh.clone()
+    }
     /// Explicit stock capability check using an impossible stale ID; never a
     /// focused resize. Reverify after native epoch changes. Observation itself
     /// remains read-only and never implicitly probes the command surface.
@@ -137,6 +204,11 @@ async fn subscribe_inner(
         options: edge_options,
         serial: std::sync::Arc::new(tokio::sync::Semaphore::new(1)),
     });
+    let refresh = (!layout).then(|| WindowsRefresh {
+        native: native.clone(),
+        current: publisher.watch(),
+        serial: std::sync::Arc::new(tokio::sync::Semaphore::new(1)),
+    });
     let (stop, mut stopped) = oneshot::channel();
     let task = tokio::spawn(async move {
         let origin = Instant::now();
@@ -167,6 +239,7 @@ async fn subscribe_inner(
             stop: Some(stop),
             task: Some(task),
             edge,
+            refresh,
         },
         observer,
     ))
