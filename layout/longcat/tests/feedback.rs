@@ -107,6 +107,51 @@ fn acquired() -> (Feedback, FeedbackInput, FeedbackGoal, u64) {
 }
 
 #[test]
+fn focus_retirement_keeps_owned_geometry_quiet_wakeup_without_another_event() {
+    let (mut feedback, mut input, goal, _) = acquired();
+    let generation = feedback.preference_generation();
+    let before = feedback.preferences().to_vec();
+    let key = submit(&mut feedback, &input, &goal, 500);
+    feedback.record_outcome(key, CommandOutcome::Handled).unwrap();
+    let values: Vec<_> = extents(&goal).into_iter().map(f64::from).collect();
+    geometry(&mut input, &values, Motion::Owned(key));
+    feedback.observe(input.clone(), 510).unwrap();
+    feedback
+        .record_response(
+            key,
+            EdgeResponse {
+                observed_version: input.version,
+                kind: ResponseKind::Progress,
+            },
+        )
+        .unwrap();
+    wait(
+        feedback.reconsider(510).unwrap(),
+        FeedbackPhase::Driving,
+        WaitReason::Quiet,
+    );
+    input.version += 1;
+    input.focus = focus("b");
+    feedback.observe(input, 520).unwrap();
+    assert_eq!(
+        feedback.take_completed().unwrap().result.unwrap().end,
+        AttemptEnd::Retired(RetirementReason::FocusChanged)
+    );
+    wait(
+        feedback.reconsider(520).unwrap(),
+        FeedbackPhase::Acquiring,
+        WaitReason::Quiet,
+    );
+    // Stock dedup need not publish another identical committed snapshot. The old
+    // attempt has ended, but its geometry still has a real quiet obligation.
+    assert_eq!(feedback.next_reconsideration(), Some(1010));
+    let next = drive(feedback.reconsider(1010).unwrap());
+    assert_eq!(next.inputs.active.as_deref(), Some("b"));
+    assert_eq!(feedback.preference_generation(), generation);
+    assert_eq!(feedback.preferences(), before);
+}
+
+#[test]
 fn no_command_replacement_retains_previous_cumulative_motion_identity() {
     let (mut feedback, mut input, goal, mut now) = acquired();
     let key = settle(&mut feedback, &mut input, &goal, &mut now);
