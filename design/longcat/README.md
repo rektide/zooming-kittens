@@ -7,6 +7,8 @@ status: active
 updated: { at: 2026-11-12, by: 'model:openai/gpt-6.1-sol#high' }
 generated: { at: 2026-10-22, by: 'model:openai/gpt-6-astra#medium' }
 sources:
+  - resource: opencode://ses_e32e12889ffeQe51yGGtHKv78g
+    title: Deliver slice C geometry and native corrective evidence with the D call-sequence handoff
   - resource: opencode://ses_e32f7f45bffeBxw1TzZXDmkXk2
     title: Deliver pure feedback slice B and link its implemented public contracts and C/D continuation
   - resource: opencode://ses_e331fea99ffeEcIAeJ9F8pM2aK
@@ -38,8 +40,9 @@ separately. The [feedback-loop design](feedback0.gpt6a.md) selects a concrete
 implementation path on that surface, including user-guided preferences and
 dispatchable assignments. Its implementation is commissioned: the
 [stock boundary slice A](implementation-a0.gpt61s.md) and
-[pure feedback slice B](implementation-b0.gpt61s.md) are checkpointed; corrective
-execution and application integration (C/D) remain. This is not yet an accepted
+[pure feedback slice B](implementation-b0.gpt61s.md), and
+[corrective geometry slice C](implementation-c0.gpt61s.md) are checkpointed;
+application integration (D) remains. This is not yet an accepted
 or usable end-to-end stock controller.
 
 The [composed deployment candidate](deployment-candidate0.gpt6a.md) is prepared
@@ -121,13 +124,21 @@ does not select a font-policy change.
 
 ## Delivered related integration
 
+- [Frozen geometry and corrective edges](implementation-c0.gpt61s.md)
+  (2026-11-12): measured strips/frozen content budget, two-axis qualified edges,
+  validated mixed-time native authority, pure donor-ready correction, empirical
+  scale, contextual blockage and a timed same-stream refresh through Tracker.
+  The 178-test ZK scope and eight real headless geometry scenarios pass, including
+  exact committed vectors, mixed bars, struts, delayed clients and bounded native
+  constraints. Typed runner mapping is available; ordinary stock composition,
+  user-guidance acceptance and final application/service acceptance remain D.
 - [Pure feedback preferences and attempt lifecycle](implementation-b0.gpt61s.md)
   (2026-11-12): a new pure `Feedback` beside preserved `Episode`, selected guidance
   formulas and contextual floors, full-census topology reconciliation, quiet/yield
   timers, current-preference neutral restore, finite attempt/receipt evidence and
   explicit limited outcomes. Thirty-four new pure fixtures and the 164-test scoped
   suite pass. The receipt documents public DTOs and C/D composition obligations;
-  native geometry compilation, corrective execution and runner routing remain.
+  C now supplies geometry compilation/corrective evidence; runner composition remains D.
 - [Stock observation and qualified command boundary](implementation-a0.gpt61s.md)
   (2026-11-11): upstream typed layout/output fields and independent freshness,
   reported ordered groups, inferred two-axis geometry, presentation admission,
