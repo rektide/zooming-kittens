@@ -114,7 +114,14 @@ fn no_command_replacement_retains_previous_cumulative_motion_identity() {
     input.version += 1;
     input.focus = focus("b");
     let replacement = drive(feedback.observe(input.clone(), now + 1).unwrap());
-    feedback.limit_current(replacement.id, LimitReason::Executor { reason: "no native intent admitted".into() }).unwrap();
+    feedback
+        .limit_current(
+            replacement.id,
+            LimitReason::Executor {
+                reason: "no native intent admitted".into(),
+            },
+        )
+        .unwrap();
     feedback.reconsider(now + 2).unwrap();
     assert!(feedback.take_completed().unwrap().commands.is_empty());
     input.version += 1;

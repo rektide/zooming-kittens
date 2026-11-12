@@ -731,28 +731,29 @@ async fn enabled_backends_acquire_read_only_through_real_native_subscriptions() 
             records.push(value);
             Ok(())
         };
-        let config=LongcatConfig::default();
-        let stop=async move { receiver.await.map_err(io::Error::other) }.boxed();
-        tokio::time::timeout(Duration::from_secs(2),async {
-            #[cfg(feature="umbriel")]
-            if let native::Owner::Umbriel(source)=&owner {
-                return stock::drive(observer,stock::Services::native(source),&cmd,&config,&mut sink,stop).await;
+        let config = LongcatConfig::default();
+        let stop = async move { receiver.await.map_err(io::Error::other) }.boxed();
+        tokio::time::timeout(Duration::from_secs(2), async {
+            #[cfg(feature = "umbriel")]
+            if let native::Owner::Umbriel(source) = &owner {
+                return stock::drive(
+                    observer,
+                    stock::Services::native(source),
+                    &cmd,
+                    &config,
+                    &mut sink,
+                    stop,
+                )
+                .await;
             }
-            drive(
-                observer,
-                None,
-                &cmd,
-                &config,
-                &mut sink,
-                stop,
-            ).await
+            drive(observer, None, &cmd, &config, &mut sink, stop).await
         })
         .await
         .unwrap()
         .unwrap();
         assert!(records.iter().any(|r| r["ready"] == true));
         if backend == "umbriel" {
-            assert!(records.iter().any(|r|r["type"]=="longcat-feedback"));
+            assert!(records.iter().any(|r| r["type"] == "longcat-feedback"));
         }
         owner.shutdown().await.unwrap();
         release.send(()).unwrap();

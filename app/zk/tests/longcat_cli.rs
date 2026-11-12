@@ -6,10 +6,15 @@ use std::{
 };
 
 fn invoke(config: &str, environment_minimum: Option<&str>, args: &[&str]) -> Output {
-    invoke_env(config,environment_minimum,None,args)
+    invoke_env(config, environment_minimum, None, args)
 }
 
-fn invoke_env(config: &str, environment_minimum: Option<&str>, width:Option<&str>, args: &[&str]) -> Output {
+fn invoke_env(
+    config: &str,
+    environment_minimum: Option<&str>,
+    width: Option<&str>,
+    args: &[&str],
+) -> Output {
     let directory = tempfile::tempdir().unwrap();
     let config_directory = directory.path().join("kitty-focus-tracker");
     fs::create_dir(&config_directory).unwrap();
@@ -24,7 +29,9 @@ fn invoke_env(config: &str, environment_minimum: Option<&str>, width:Option<&str
     if let Some(value) = environment_minimum {
         command.env("ZK_LONGCAT__MINIMUM_HEIGHT", value);
     }
-    if let Some(value)=width {command.env("ZK_LONGCAT__MINIMUM_WIDTH",value);}
+    if let Some(value) = width {
+        command.env("ZK_LONGCAT__MINIMUM_WIDTH", value);
+    }
     command.args(["longcat", "--backend", "umbriel"]);
     if !args.contains(&"--socket") {
         command
@@ -61,10 +68,18 @@ fn invalid_configuration_is_not_silently_replaced_by_defaults() {
 
 #[test]
 fn minimum_width_uses_file_environment_cli_precedence_without_redefining_height() {
-    let config="[longcat]\nminimum_width = -1\nminimum_height = 91\n";
-    assert!(error(invoke_env(config,None,None,&[])).contains("minimum-width must be positive"));
-    assert!(error(invoke_env(config,None,Some("83"),&[])).contains("Connect("));
-    assert!(error(invoke_env(config,None,Some("-2"),&["--minimum-width","84"])).contains("Connect("));
+    let config = "[longcat]\nminimum_width = -1\nminimum_height = 91\n";
+    assert!(error(invoke_env(config, None, None, &[])).contains("minimum-width must be positive"));
+    assert!(error(invoke_env(config, None, Some("83"), &[])).contains("Connect("));
+    assert!(
+        error(invoke_env(
+            config,
+            None,
+            Some("-2"),
+            &["--minimum-width", "84"]
+        ))
+        .contains("Connect(")
+    );
 }
 
 #[test]
