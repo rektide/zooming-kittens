@@ -96,6 +96,10 @@ pub struct FeedbackInput {
     /// Monotonic local capture order, not a server revision or causal token.
     pub version: u64,
     pub live_members: Vec<LiveMember>,
+    /// Geometrically projectable groups. Omit an unknown-axis/unknown-geometry
+    /// group rather than inventing an axis or budget; its live census still
+    /// retains preferences. Use `unavailable` for a previously projected group
+    /// that is temporarily parked with known geometry.
     pub groups: Vec<FeedbackGroup>,
     pub focus: Focus,
 }
@@ -201,6 +205,19 @@ pub struct EdgeEvidence {
     pub outcome: Option<CommandOutcome>,
     /// A reply is not a position response. Both are required before another edge.
     pub response: Option<EdgeResponse>,
+    /// Frozen model estimates adjacent to this boundary at response time. None
+    /// means that model/scope was no longer available, not a fabricated bound.
+    pub response_estimates: Option<[f64; 2]>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct BlockedEdge {
+    pub command: CommandKey,
+    pub boundary: usize,
+    pub positive_travel: bool,
+    pub adjacent_estimates: Option<[f64; 2]>,
+    pub observed_version: u64,
+    pub reason: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -237,6 +254,7 @@ pub struct AttemptResult {
     pub end: AttemptEnd,
     /// Actual last geometry in this attempt's scope, never the desired vector.
     pub achieved: Option<FeedbackGroup>,
+    pub blocked_edges: Vec<BlockedEdge>,
     pub finished_at_ms: u64,
 }
 

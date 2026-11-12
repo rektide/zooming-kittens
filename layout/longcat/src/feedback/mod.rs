@@ -13,7 +13,7 @@ pub use types::*;
 use serde::Serialize;
 use zk_layout::{Emphasis, Gaps, Member, Request, allocate};
 
-use crate::{CommandOutcome, Focus, Target};
+use crate::{CommandOutcome, Focus, GroupKey, Target};
 
 #[derive(Clone, Debug, Serialize)]
 struct Reference {
@@ -38,6 +38,7 @@ struct GroupState {
     /// Frozen prediction identity retained for delayed owned client commits,
     /// including after completion evidence has been handed to the application.
     owned: Option<CommandKey>,
+    owned_reference_pending: bool,
     last_guidance: Option<Guidance>,
 }
 
@@ -112,6 +113,22 @@ impl Feedback {
         self.restore_requested
     }
 
+    /// Per-group quiet deadline for geometry reacquisition in C. A past deadline
+    /// does not itself prove coherence or drain a pending command. Inspect those
+    /// independent facts before rebuilding a frozen native model.
+    pub fn quiet_deadline_ms(&self, group: &GroupKey) -> Option<u64> {
+        self.groups
+            .iter()
+            .find(|state| state.observed.key == *group)
+            .map(|state| self.quiet_at(state))
+    }
+
+    pub fn awaiting_guidance(&self, group: &GroupKey) -> bool {
+        self.groups
+            .iter()
+            .any(|state| state.observed.key == *group && state.yielding.is_some())
+    }
+
     pub fn guidance(&self) -> impl Iterator<Item = &Guidance> {
         self.groups.iter().filter_map(|g| g.last_guidance.as_ref())
     }
@@ -161,11 +178,16 @@ impl Feedback {
         for group in &input.groups {
             if let Motion::Owned(key) | Motion::Unattributed(key) = group.motion {
                 let known = self.current.as_ref().is_some_and(|a| {
-                    a.goal.inputs.group == group.key && a.commands.iter().any(|e| e.key == key)
-                }) || self
-                    .groups
-                    .iter()
-                    .any(|g| g.observed.key == group.key && g.owned == Some(key));
+                    a.goal.inputs.group == group.key
+                        && a.goal.inputs.context == group.context
+                        && same_members(group, &a.goal.inputs)
+                        && a.commands.iter().any(|e| e.key == key)
+                }) || self.groups.iter().any(|g| {
+                    g.observed.key == group.key
+                        && same_topology(&g.observed, group)
+                        && same_context(&g.observed, group)
+                        && g.owned == Some(key)
+                });
                 if !known || self.input.as_ref().is_none_or(|i| i.source != input.source) {
                     return Err(FeedbackError::UnknownCommand);
                 }
@@ -210,6 +232,9 @@ impl Feedback {
                     if !same_geometry(&state.observed, group, 0) {
                         state.last_motion_ms = now_ms;
                         let own = matches!(group.motion, Motion::Owned(_));
+                        if own {
+                            state.owned_reference_pending = true;
+                        }
                         let compatible = state.reference.as_ref().is_some_and(|r| {
                             same_geometry(&r.geometry, group, self.policy.geometry_tolerance)
                         });
@@ -223,7 +248,11 @@ impl Feedback {
                             // visible during ambiguous overlapping motion.
                             if let Some(attempt) = &self.current
                                 && attempt.goal.inputs.group == group.key
-                                && !attempt.commands.is_empty()
+                                && attempt.commands.iter().any(|edge| {
+                                    edge.outcome
+                                        .as_ref()
+                                        .is_none_or(CommandOutcome::may_have_effect)
+                                })
                             {
                                 reference.emphasized.clone_from(&attempt.goal.inputs.active);
                             }
@@ -342,6 +371,7 @@ impl Feedback {
             return Ok(FeedbackDecision::Drive(Box::new(attempt.goal.clone())));
         }
         self.acquire_and_learn(now_ms);
+        self.clear_changed_limitations();
         let input = self.input.as_ref().expect("current input");
         if input.focus == Focus::Unknown && !self.restore_requested {
             return Ok(self.wait(FeedbackPhase::Unavailable, WaitReason::FocusUnknown));
@@ -508,6 +538,7 @@ impl Feedback {
             created_at_ms: now_ms,
             outcome: None,
             response: None,
+            response_estimates: None,
         });
         self.counters.submissions += 1;
         Ok(key)
@@ -537,8 +568,24 @@ impl Feedback {
         response: EdgeResponse,
     ) -> Result<(), FeedbackError> {
         let version = self.input.as_ref().map(|i| i.version);
+        let estimates = self
+            .current
+            .as_ref()
+            .filter(|a| a.goal.id == key.attempt)
+            .and_then(|attempt| {
+                let edge = attempt.commands.iter().find(|e| e.key == key)?;
+                let group = self.groups.iter().find(|g| {
+                    g.observed.key == attempt.goal.inputs.group
+                        && same_members(&g.observed, &attempt.goal.inputs)
+                })?;
+                let extents = group.observed.target_extents.as_ref()?;
+                Some([
+                    extents[edge.intent.boundary],
+                    extents[edge.intent.boundary + 1],
+                ])
+            });
         let edge = self.edge_mut(key)?;
-        if version.is_none_or(|v| response.observed_version > v)
+        if version != Some(response.observed_version)
             || response.observed_version < edge.intent.basis_version
             || (matches!(response.kind, ResponseKind::Progress)
                 && response.observed_version == edge.intent.basis_version)
@@ -549,6 +596,7 @@ impl Feedback {
             return Err(FeedbackError::ContradictoryEvidence);
         }
         edge.response = Some(response);
+        edge.response_estimates = estimates;
         Ok(())
     }
 
@@ -711,7 +759,7 @@ impl Feedback {
             return;
         };
         let state = &self.groups[index];
-        let reason = if !eligible(&state.observed) {
+        let reason = if !eligible(&state.observed) || state.observed.target_extents.is_none() {
             Some(RetirementReason::Unavailable)
         } else if !same_members(&state.observed, &attempt.goal.inputs) {
             Some(RetirementReason::TopologyChanged)
@@ -785,7 +833,31 @@ impl Feedback {
                     emphasized: yielding.expected.emphasized,
                 });
                 state.limited = None;
+                state.owned_reference_pending = false;
                 self.counters.guidance += 1;
+            } else if state.owned_reference_pending {
+                // Final/limited/retired commands may have slow client commits.
+                // Refresh expected geometry only after coherent quiet settlement;
+                // retain the preference parameters and actual emphasized member.
+                if let Some(reference) = &mut state.reference {
+                    reference.geometry = group.clone();
+                }
+                state.owned_reference_pending = false;
+            }
+        }
+    }
+
+    fn clear_changed_limitations(&mut self) {
+        for index in 0..self.groups.len() {
+            if self.groups[index].acquired
+                && self.groups[index]
+                    .limited
+                    .as_ref()
+                    .is_some_and(|limited| *limited != self.goal_inputs(index))
+            {
+                // A → B → A is three focus generations, not revival of the old
+                // A limitation merely because the input vector happens to recur.
+                self.groups[index].limited = None;
             }
         }
     }
@@ -796,6 +868,8 @@ impl Feedback {
         let state = self.groups.iter_mut().find(|g| {
             g.observed.key == attempt.goal.inputs.group
                 && same_members(&g.observed, &attempt.goal.inputs)
+                && g.observed.context == attempt.goal.inputs.context
+                && g.acquired
         });
         let achieved = state.as_ref().map(|g| g.observed.clone());
         if let Some(state) = state {
@@ -842,6 +916,24 @@ impl Feedback {
         attempt.result = Some(AttemptResult {
             end,
             achieved,
+            blocked_edges: attempt
+                .commands
+                .iter()
+                .filter_map(|edge| {
+                    let response = edge.response.as_ref()?;
+                    let ResponseKind::Blocked { reason } = &response.kind else {
+                        return None;
+                    };
+                    Some(BlockedEdge {
+                        command: edge.key,
+                        boundary: edge.intent.boundary,
+                        positive_travel: edge.intent.travel > 0.0,
+                        adjacent_estimates: edge.response_estimates,
+                        observed_version: response.observed_version,
+                        reason: reason.clone(),
+                    })
+                })
+                .collect(),
             finished_at_ms: now_ms,
         });
         self.completed = Some(attempt);
@@ -858,6 +950,7 @@ impl GroupState {
             yielding: None,
             limited: None,
             owned: None,
+            owned_reference_pending: false,
             last_guidance: None,
         }
     }

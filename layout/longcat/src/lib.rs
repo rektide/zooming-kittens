@@ -1,4 +1,7 @@
-//! Pure Longcat episode decisions; native observation and execution stay outside.
+//! Pure Longcat policy; native observation and execution stay outside.
+//!
+//! [`Feedback`] owns revisable preferences and finite stock-control attempts.
+//! The existing [`Episode`] contract remains immutable and topology-bound.
 //!
 //! [`Episode::preview`] is non-mutating dry-run planning. [`Episode::decide`]
 //! records intent, never fabricated execution. A runner records actual command

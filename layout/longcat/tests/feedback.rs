@@ -384,6 +384,7 @@ fn manual_small_extent_lowers_only_contextual_floor_and_is_not_bounced() {
     input.version += 1;
     input.live_members[2].context = "new-presentation".into();
     input.groups[0].context = "new-presentation".into();
+    input.groups[0].motion = Motion::Unclassified;
     f.observe(input.clone(), now).unwrap();
     assert_eq!(preference(&f, "c").manual_floor, None);
 }
@@ -980,4 +981,285 @@ fn horizontal_secondary_axis_uses_the_same_scalar_taffy_allocation() {
     let goal = drive(f.reconsider(500).unwrap());
     assert_eq!(goal.inputs.group.axis, Axis::Horizontal);
     assert_eq!(extents(&goal), [630, 162, 108]);
+}
+
+#[test]
+fn returning_to_an_old_focus_is_a_new_generation_not_an_old_limitation() {
+    let (mut f, mut input, goal, mut now) = acquired();
+    f.limit_current(
+        goal.id,
+        LimitReason::Executor {
+            reason: "clamp".into(),
+        },
+    )
+    .unwrap();
+    f.reconsider(now).unwrap();
+    f.take_completed().unwrap();
+    wait(
+        f.reconsider(now).unwrap(),
+        FeedbackPhase::Limited,
+        WaitReason::Limited,
+    );
+    input.version += 1;
+    input.focus = focus("b");
+    let other = drive(f.observe(input.clone(), now).unwrap());
+    settle(&mut f, &mut input, &other, &mut now);
+    input.version += 1;
+    input.focus = focus("a");
+    let returned = drive(f.observe(input, now).unwrap());
+    assert_eq!(returned.inputs.active.as_deref(), Some("a"));
+    assert_eq!(returned.id, 3);
+}
+
+#[test]
+fn late_owned_commit_after_limitation_refreshes_expected_geometry_not_preferences() {
+    let (mut f, mut input, goal, mut now) = acquired();
+    let key = submit(&mut f, &input, &goal, now);
+    geometry(&mut input, &[500.0, 240.0, 160.0], Motion::Owned(key));
+    now += 10;
+    f.observe(input.clone(), now).unwrap();
+    f.record_outcome(key, CommandOutcome::Handled).unwrap();
+    f.limit_current(
+        goal.id,
+        LimitReason::Executor {
+            reason: "slow client deadline".into(),
+        },
+    )
+    .unwrap();
+    f.reconsider(now).unwrap();
+    f.take_completed().unwrap();
+    let generation = f.preference_generation();
+    geometry(&mut input, &[630.0, 162.0, 108.0], Motion::Owned(key));
+    now += 1;
+    f.observe(input.clone(), now).unwrap();
+    now += 500;
+    f.reconsider(now).unwrap();
+    assert_eq!(f.preference_generation(), generation);
+    // Editing only a sibling boundary must NOT infer an active-share edit by
+    // comparing against the stale partial 500px reference.
+    geometry(&mut input, &[630.0, 180.0, 90.0], Motion::Unclassified);
+    now += 1;
+    f.observe(input.clone(), now).unwrap();
+    now += 500;
+    wait(
+        f.reconsider(now).unwrap(),
+        FeedbackPhase::Ready,
+        WaitReason::Stable,
+    );
+    assert_eq!(preference(&f, "a").active_share, None);
+    assert_eq!(preference(&f, "a").neutral_weight, 400.0);
+    assert!(
+        (preference(&f, "b").neutral_weight / preference(&f, "c").neutral_weight - 2.0).abs()
+            < 1e-9
+    );
+}
+
+#[test]
+fn lost_geometry_model_stops_a_goal_instead_of_driving_from_committed_fallback() {
+    let (mut f, mut input, goal, now) = acquired();
+    input.version += 1;
+    input.groups[0].target_extents = None;
+    f.observe(input.clone(), now).unwrap();
+    let done = f.take_completed().unwrap();
+    assert_eq!(
+        done.result.unwrap().end,
+        AttemptEnd::Retired(RetirementReason::Unavailable)
+    );
+    assert!(
+        f.begin_command(
+            goal.id,
+            EdgeIntent {
+                basis_version: input.version,
+                boundary: 0,
+                travel: 1.0
+            },
+            now
+        )
+        .is_err()
+    );
+    wait(
+        f.reconsider(now).unwrap(),
+        FeedbackPhase::Acquiring,
+        WaitReason::CoherentGeometry,
+    );
+    input.version += 1;
+    input.groups[0].target_extents = Some(vec![400.0, 300.0, 200.0]);
+    assert_eq!(drive(f.observe(input, now).unwrap()).id, 2);
+}
+
+#[test]
+fn unsent_focus_attempt_does_not_claim_an_emphasis_when_later_neutral_guidance_arrives() {
+    let (mut f, mut input, goal, mut now) = acquired();
+    let key = submit(&mut f, &input, &goal, now);
+    f.record_outcome(key, CommandOutcome::Unsent).unwrap();
+    f.reconsider(now).unwrap();
+    f.take_completed().unwrap();
+    geometry(&mut input, &[360.0, 300.0, 240.0], Motion::Unclassified);
+    now += 1;
+    f.observe(input.clone(), now).unwrap();
+    now += 500;
+    let new = drive(f.reconsider(now).unwrap());
+    assert_eq!(f.guidance().next().unwrap().emphasized, None);
+    assert_eq!(preference(&f, "a").neutral_weight, 360.0);
+    assert_eq!(preference(&f, "a").active_share, None);
+    assert_eq!(extents(&new), [630, 150, 120]);
+}
+
+#[test]
+fn outer_envelope_resize_preserving_active_share_does_not_teach_hidden_neutral_weight() {
+    let (mut f, mut input, mut now) = settled();
+    geometry(&mut input, &[315.0, 81.0, 54.0], Motion::Unclassified);
+    now += 1;
+    f.observe(input.clone(), now).unwrap();
+    now += 500;
+    wait(
+        f.reconsider(now).unwrap(),
+        FeedbackPhase::Ready,
+        WaitReason::Stable,
+    );
+    assert_eq!(preference(&f, "a").active_share, None);
+    assert_eq!(preference(&f, "a").neutral_weight, 400.0);
+    assert_eq!(preference(&f, "b").neutral_weight, 300.0);
+    assert_eq!(preference(&f, "c").neutral_weight, 200.0);
+    assert_eq!(preference(&f, "c").manual_floor, Some(54));
+}
+
+#[test]
+fn unknown_focus_never_means_blur_and_infeasible_inputs_do_not_create_native_intent() {
+    let mut f = controller();
+    let mut input = input();
+    input.focus = Focus::Unknown;
+    f.observe(input.clone(), 0).unwrap();
+    wait(
+        f.reconsider(500).unwrap(),
+        FeedbackPhase::Unavailable,
+        WaitReason::FocusUnknown,
+    );
+    assert!(f.current().is_none());
+    input.version += 1;
+    input.focus = focus("a");
+    for member in &mut input.groups[0].members {
+        member.minimum_extent = 400;
+    }
+    f.observe(input, 501).unwrap();
+    assert!(matches!(
+        f.reconsider(1001).unwrap(),
+        FeedbackDecision::Infeasible {
+            error: zk_layout::Error::Infeasible(_),
+            ..
+        }
+    ));
+    assert_eq!(f.counters().submissions, 0);
+    assert!(f.current().is_none());
+}
+
+#[test]
+fn empty_group_projection_preserves_live_preferences_then_automatically_reacquires() {
+    let (mut f, mut input, mut now) = settled();
+    let preferences = f.preferences().to_vec();
+    let mut group = input.groups.pop().unwrap();
+    group.motion = Motion::Unclassified;
+    input.version += 1;
+    f.observe(input.clone(), now).unwrap();
+    assert_eq!(f.preferences(), preferences);
+    assert_eq!(f.phase(), FeedbackPhase::Unavailable);
+    input.version += 1;
+    input.groups.push(group);
+    now += 1;
+    f.observe(input.clone(), now).unwrap();
+    now += 500;
+    wait(
+        f.reconsider(now).unwrap(),
+        FeedbackPhase::Ready,
+        WaitReason::Stable,
+    );
+    assert_eq!(f.preferences(), preferences);
+}
+
+#[test]
+fn two_group_focus_transition_restores_old_group_before_emphasizing_new_group() {
+    let (mut f, mut input, mut now) = settled();
+    for id in ["d", "e"] {
+        input.live_members.push(LiveMember {
+            id: id.into(),
+            workspace: "ws".into(),
+            context: "normal".into(),
+        });
+    }
+    input
+        .groups
+        .insert(0, group(&["d", "e"], &[450.0, 450.0], "new"));
+    input.version += 1;
+    input.groups[1].motion = Motion::Unclassified;
+    now += 1;
+    f.observe(input.clone(), now).unwrap();
+    now += 500;
+    f.reconsider(now).unwrap();
+    input.version += 1;
+    input.focus = focus("d");
+    let restore = drive(f.observe(input.clone(), now).unwrap());
+    assert_eq!(restore.inputs.group.topology, "0");
+    assert_eq!(restore.inputs.active, None);
+    assert_eq!(extents(&restore), [400, 300, 200]);
+}
+
+#[test]
+fn response_blockage_retains_adjacent_geometry_without_inventing_a_client_minimum() {
+    let (mut f, input, goal, now) = acquired();
+    let key = submit(&mut f, &input, &goal, now);
+    f.record_outcome(key, CommandOutcome::Handled).unwrap();
+    f.record_response(
+        key,
+        EdgeResponse {
+            observed_version: input.version,
+            kind: ResponseKind::Blocked {
+                reason: "observed clamp".into(),
+            },
+        },
+    )
+    .unwrap();
+    f.limit_current(
+        goal.id,
+        LimitReason::Executor {
+            reason: "no route".into(),
+        },
+    )
+    .unwrap();
+    f.reconsider(now).unwrap();
+    let done = f.take_completed().unwrap();
+    let result = done.result.unwrap();
+    assert_eq!(
+        result.blocked_edges,
+        [BlockedEdge {
+            command: key,
+            boundary: 0,
+            positive_travel: true,
+            adjacent_estimates: Some([400.0, 300.0]),
+            observed_version: input.version,
+            reason: "observed clamp".into()
+        }]
+    );
+    assert!(f.preferences().iter().all(|p| p.manual_floor.is_none()));
+}
+
+#[test]
+fn context_retirement_retains_receipt_but_not_old_prediction_authority() {
+    let (mut f, mut input, goal, now) = acquired();
+    let key = submit(&mut f, &input, &goal, now);
+    input.version += 1;
+    input.groups[0].context = "new-output".into();
+    f.observe(input.clone(), now + 1).unwrap();
+    assert_eq!(
+        f.current().unwrap().stopping,
+        Some(AttemptEnd::Retired(RetirementReason::ContextChanged))
+    );
+    f.record_outcome(key, CommandOutcome::Handled).unwrap();
+    f.reconsider(now + 2).unwrap();
+    assert_eq!(f.take_completed().unwrap().result.unwrap().achieved, None);
+    input.version += 1;
+    input.groups[0].motion = Motion::Owned(key);
+    assert_eq!(
+        f.observe(input, now + 3),
+        Err(FeedbackError::UnknownCommand)
+    );
 }
