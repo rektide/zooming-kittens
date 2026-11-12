@@ -6,6 +6,12 @@ resource: app/zk/src/runner/README.md
 status: implemented
 generated: { at: 2026-10-15, by: 'model:openai/gpt-6.1-sol#medium' }
 sources:
+  - resource: opencode://ses_e32a69b8cffeuqz3k5ZZz9V1oM
+    title: Verify the ordinary executable on isolated native Umbriel, fix retired quiet wakeups and residual-tail constraint classification, and exercise real reconnect/probes
+  - resource: ../../../../design/longcat/implementation-e0.gpt61s.md
+    title: End-to-end native acceptance receipt, exact commands, constraint evidence and remaining limits
+  - resource: ../../tests/headless/umbriel_stock_feedback.sh
+    title: Ordinary stock executable under the existing native harness and reused native clients
   - resource: opencode://ses_e32c4da49ffekNe2490gCdHuLp
     title: Implement ordinary stock Feedback runner, qualified-edge scheduling, fresh-epoch recovery, bounded shutdown and scripted acceptance
   - resource: ../../../../design/longcat/implementation-d0.gpt61s.md
@@ -91,6 +97,9 @@ one same-stream windows refresh with a 32–250ms configured-timeout-derived bou
 the second geometry timer cannot classify absence while that future is pending.
 Its reply installs through Tracker at its actual native receive position. The
 runner drains history and assesses latest geometry, not a returned older capture.
+Future quiet deadlines remain armed for acquired groups after a focus change
+retires their owned attempt; a deduplicated final snapshot cannot strand the
+replacement in quiet waiting.
 
 Independent movement yields immediately, drains the owned future and reacquires
 after quietness. Overlap/reversal while a receipt is outstanding can become
@@ -101,6 +110,16 @@ and ignores late commit-only changes as preferences. It cannot reacquire/retry
 merely because the same failed geometry became quiet; independent target movement,
 focus, topology or context can release it. This is conservative geometric
 classification, not a stock causal tag or a claim to know client constraints.
+Native arrangement can also keep a recipient stationary while subtracting the
+transfer from its donor and compensating in the residual last row. Reasserting a
+donor floor can instead reverse a small transfer with that donor stationary.
+During an unresolved positive edge, the narrow rigid-suffix signatures in
+`residual_tail_compensation` are treated as conservative execution limitations,
+not guidance. Neither invents a reported bound. A coincident external edit with
+the same signature can be limited too; isolated reversals still yield, including
+in three-member groups and either reply order. A later independent input can
+release the hold. Arbitrary unreported constraint behavior is not identifiable
+with certainty from stock geometry.
 
 Quiet accepted guidance teaches the emphasized member's focus share and visible
 sibling ratios, not its hidden neutral weight. Owned cumulative late commits
@@ -265,12 +284,46 @@ receipt ordering, topology/focus cancellation, loss/fresh acquisition, same-epoc
 loss holds, current-preference resize/blur/focus return, cumulative late commits,
 coupled constraints, output changes, >64 focus changes and bounded shutdown/output
 failure drain. These are scripted peers, **not integrated native acceptance**.
-The full ordinary stock application-to-native user-guidance check remains open;
-A/C's isolated native boundary/geometry tests are separate receipts.
+The separate ordinary stock application-to-native check now passes the native
+matrix below. A/C's boundary/geometry and the historical conditional checks
+remain separate receipts, not substitutes for the ordinary executable test.
 
 ### Isolated native integration
 
-The added Umbriel check runs the real ZK executable against the separately built
+The ordinary stock check runs the real executable on the existing
+`~/src/umbriel-working` harness, reusing A/C's constrained/delayed xdg client and
+the native virtual-pointer client. It has no fixture-owned corrective loop and
+uses no bespoke allocation family. The default 500ms quiet policy is exercised
+for resize/guidance; the churn stress explicitly uses the supported 40ms override.
+
+```sh
+cargo build --locked -p zooming-kittens --no-default-features --features umbriel
+meson compile -C ../umbriel-working/build-debug umbriel harness-clients
+ZK_TEST_BIN="$PWD/target/debug/zk" CHECK_DIR="$PWD/app/zk/tests/headless" \
+  bash ../umbriel-working/tests/harness/check.sh \
+  ../umbriel-working/build-debug/umbriel umbriel_stock_feedback -j 1 -v
+```
+
+Verified on Umbriel **0.1.0 (`d34b33c77752`)**: exact committed Taffy emphasis,
+accepted resize, current-neutral blur, learned focus return, continuous action
+motion and a held pointer resize grab with zero corrective writes during motion,
+reorder/expel/rejoin/open/close, stale qualified targets, both axes, mixed title
+bars, measured gaps/nonzero outer gaps, both strut signs, seat activation and
+unrelated-column preservation. Seventy focus changes and 34 open/join/close cycles
+remain usable without preference drift or the old historical veto. A 120ms client
+commits coherently without teaching; fixed/min/max fixtures stop limited with
+unchanged preferences and no quiet retries. A transparent harness-only relay
+drops the real subscription; fresh three-family acquisition and qualified probes
+occur in epoch 2 before continued native execution. It does not synthesize events.
+
+The full check took 70.28s and 70.58s (over the native harness's advisory eight-second budget,
+within its 120s cap). Each run preserves JSONL, client/compositor logs and config
+under `.test-agent/longcat-feedback-e/native.*`. `ZK_STOCK_CASE` optionally selects
+`basic`, `churn`, `matrix` or `reconnect`; omission runs all. Full details and honest
+remaining limits: [E receipt](../../../../design/longcat/implementation-e0.gpt61s.md).
+No running desktop, installed service or compositor source was changed.
+
+The **historical conditional** check runs the real executable against the separately built
 native extension, under Umbriel's contained headless harness. It enables forced
 title bars and nonzero edge gaps, verifies focus-driven emphasis and intra-group switching, restores
 exact original raw weights on shutdown, and confirms a same-pixel external weight

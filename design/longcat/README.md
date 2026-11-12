@@ -7,6 +7,8 @@ status: active
 updated: { at: 2026-11-12, by: 'model:openai/gpt-6.1-sol#high' }
 generated: { at: 2026-10-22, by: 'model:openai/gpt-6-astra#medium' }
 sources:
+  - resource: opencode://ses_e32a69b8cffeuqz3k5ZZz9V1oM
+    title: Complete ordinary-executable native acceptance and preserve the two discovered corrections, contracts and parent-review boundary
   - resource: opencode://ses_e32c4da49ffekNe2490gCdHuLp
     title: Implement stock production composition and scripted acceptance, retain explicit conditional routing and hand off integrated native acceptance
   - resource: opencode://ses_e32e12889ffeQe51yGGtHKv78g
@@ -45,8 +47,10 @@ dispatchable assignments. Its implementation is commissioned: the
 [pure feedback slice B](implementation-b0.gpt61s.md), and
 [corrective geometry slice C](implementation-c0.gpt61s.md) and
 [production composition slice D](implementation-d0.gpt61s.md) are checkpointed.
-Ordinary stock routing and scripted runner acceptance are implemented; integrated
-native user-guidance acceptance and parent acceptance remain open.
+Ordinary stock routing and scripted runner acceptance are implemented.
+[Native completion E](implementation-e0.gpt61s.md) now verifies the full executable
+loop and fixes its discovered timer/constraint gaps. Parent acceptance and any
+desktop/service transition remain separate.
 
 The [composed deployment candidate](deployment-candidate0.gpt6a.md) is prepared
 and verified, **not installed**. Candidate `96b118cf8b11` in
@@ -126,13 +130,21 @@ does not select a font-policy change.
 
 ## Delivered related integration
 
+- [Ordinary-executable native completion](implementation-e0.gpt61s.md) (2026-11-12):
+  exact committed Taffy emphasis, accepted user resizing/current-neutral restore,
+  focus return, held native pointer drag, topology and >64 focus/acquisition churn,
+  both axes/strut signs, slow/min/max/fixed clients, stale targets and actual source
+  reconnect/reprobes. Fixes a quiet timer lost on focus retirement and narrowly
+  classifies native residual-tail compensation as limited without learning failed
+  targets. Affected Rust checks and all ten feature configurations pass. Isolated
+  native implementation completion is not parent acceptance or deployment.
 - [Stock production composition](implementation-d0.gpt61s.md) (2026-11-12): ordinary
   Umbriel now composes A–C rather than selecting the old policy by extension
   presence. Includes independent intake, history-gated admission, owned receipts,
   quiet/progress/refresh timers, fresh-epoch recovery, bounded diagnostics/shutdown,
   explicit coupled-response holds and distinct width/height minima. Scripted
-  acceptance and the feature matrix are checkpointed; a fresh Sol session must
-  still run integrated native user-guidance acceptance before product acceptance.
+  acceptance and the feature matrix are checkpointed; E supplies the subsequent
+  integrated native acceptance and corrections before parent product review.
 - [Frozen geometry and corrective edges](implementation-c0.gpt61s.md)
   (2026-11-12): measured strips/frozen content budget, two-axis qualified edges,
   validated mixed-time native authority, pure donor-ready correction, empirical

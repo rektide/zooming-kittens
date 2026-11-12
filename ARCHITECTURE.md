@@ -6,6 +6,10 @@ resource: ARCHITECTURE.md
 status: maintained
 generated: { at: 2026-10-15, by: 'model:openai/gpt-6-astra#high' }
 sources:
+  - resource: opencode://ses_e32a69b8cffeuqz3k5ZZz9V1oM
+    title: Complete ordinary-executable isolated native acceptance and correct quiet retirement and native residual-tail classification
+  - resource: design/longcat/implementation-e0.gpt61s.md
+    title: Native implementation-completion evidence and remaining review/deployment boundaries
   - resource: opencode://ses_e32c4da49ffekNe2490gCdHuLp
     title: Production stock Feedback composition, recovery/limitation boundaries and scripted application acceptance
   - resource: opencode://ses_e9a70a796ffelZmIZrb9Zxlb4f
@@ -151,6 +155,10 @@ one command future, one ordered refresh and fresh-epoch reprobes. Coupled native
 responses are limited and held, not taught or retried via geometry reacquisition.
 Cumulative late keys, completion-mailbox persistence and bounded diagnostics replace
 stock's old 32/64 historical veto. Source loss never replays a possibly-sent delta.
+An acquired group retains a future quiet wakeup after its owned attempt retires.
+Narrow residual-last-row compensation patterns during unresolved native edges are
+also limited rather than learned; this is conservative geometry classification,
+not discovery of hidden client bounds or a causal user-action signal.
 
 Episode restoration requires still-valid identities/context and compatible
 effects. Source loss, changed topology and conflicting geometry invalidate that
@@ -189,8 +197,11 @@ the live desktop; live convergence is a separate verification claim.
 Historical conditional integration passed real ZK/native headless emphasis,
 switching, raw-weight restoration and external-edit checks. A/C additionally
 verified the stock boundary and geometry against an isolated native working-line
-compositor. D composes the ordinary stock runner with scripted acceptance and the
-ten-configuration feature matrix; the new route's **integrated native user-guidance
-acceptance is still open**. See the [D receipt](design/longcat/implementation-d0.gpt61s.md)
-for exact counts/commands and the next fresh-session native work. No running
-desktop, installed service or compositor source was changed by D.
+compositor. D composes the ordinary stock runner with scripted acceptance. E's
+ordinary-binary native check now verifies exact committed emphasis, accepted user
+resize and continued focus behavior, pointer-drag yielding, topology/membership
+churn, both axes/strut signs, finite constraint limits and real-source recovery with
+fresh probes. The ten-configuration feature matrix still passes after corrections.
+See the [E receipt](design/longcat/implementation-e0.gpt61s.md) for exact commands,
+scoped evidence and remaining uncertainty. Parent acceptance and any installation
+remain separate; no running desktop, installed service or compositor source changed.

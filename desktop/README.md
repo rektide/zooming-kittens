@@ -7,6 +7,10 @@ status: implemented-baseline
 updated: { at: 2026-11-12, by: 'model:openai/gpt-6.1-sol#high' }
 generated: { at: 2026-10-15, by: 'model:openai/gpt-6.1-sol#xhigh' }
 sources:
+  - resource: opencode://ses_e32a69b8cffeuqz3k5ZZz9V1oM
+    title: Verify stock geometry and qualified transport through the ordinary executable, including real-source epoch recovery and renewed probes
+  - resource: /design/longcat/implementation-e0.gpt61s.md
+    title: Native application acceptance, finite constraint results and exact verification limits
   - resource: opencode://ses_e32c4da49ffekNe2490gCdHuLp
     title: Compose ordinary stock source, epoch-bound qualified execution, timed refresh and native-owner recovery in the production runner
   - resource: opencode://ses_e331fea99ffeEcIAeJ9F8pM2aK
@@ -41,17 +45,18 @@ sources:
     title: Existing independent native receive ownership and bounded observers
 verification:
   method: Scoped nextest, strict all-target clippy and package formatting checks.
-  result: Historical conditional integration passed native restoration checks; A/C verified stock boundary/geometry natively. D passes the expanded 200-test desktop/layout/application scope, strict Clippy and owned formatting with ordinary stock composition.
-  limits: No mutation or restart of the running desktop. D's integrated native user-guidance acceptance is still open; the lower stock boundary/geometry and preserved conditional checks are separate evidence.
+  result: Historical conditional and A/C boundary/geometry checks are preserved. E verifies the ordinary stock executable on native Umbriel, both axes/strut signs, constraints/slow clients, user guidance, churn and real-source reconnect/probes; 99 affected Rust tests and ten feature configurations pass.
+  limits: Isolated headless acceptance, not mutation/restart of the running desktop or deployment. Native clamp recognition remains conservative geometry, not reported client bounds or proof of causality; parent acceptance is separate.
 ---
 
 # Desktop observation and native control boundaries
 
 Stock observation, pure policy, frozen geometry and ordinary application
-composition are implemented across A–D. Native boundary/geometry checks and
-scripted production-runner checks are distinct from still-open integrated native
-user-guidance acceptance. [D receipt](../design/longcat/implementation-d0.gpt61s.md)
-links the checkpoints and exact verification limits.
+composition are implemented across A–D. [E's ordinary-executable acceptance](../design/longcat/implementation-e0.gpt61s.md)
+now verifies the native subscription → Taffy → qualified edge → committed result →
+user-guidance loop, distinct from A/C's lower boundary/geometry fixtures and D's
+scripted composition checks. No native adapter API or server authority is weakened
+by E's quiet-timer and conservative application-level constraint corrections.
 
 ## Integration contract
 

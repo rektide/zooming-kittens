@@ -8,6 +8,10 @@ generated:
   at: 2026-10-15
   by: model:openai/gpt-6.1-sol#xhigh
 sources:
+  - resource: opencode://ses_e32a69b8cffeuqz3k5ZZz9V1oM
+    title: Preserve quiet timer authority after owned focus retirement and verify ordinary native Feedback acceptance without learning clamped targets
+  - resource: ../design/longcat/implementation-e0.gpt61s.md
+    title: Native executable acceptance and the scoped pure timer correction
   - resource: opencode://ses_e32c4da49ffekNe2490gCdHuLp
     title: Compose Feedback in production, preserve cumulative motion identity across no-command replacements and document actual runner boundaries
   - resource: opencode://ses_e9a70297dffe6dQ5UJP0up8m7T
@@ -26,8 +30,8 @@ sources:
     title: Taffy 0.10.1 feature selection for real Flexbox calculation
 verification:
   method: Scoped nextest, clippy with warnings denied, and rustfmt checks.
-  result: Original 46-test pure baseline is preserved; Feedback and production composition now pass the 200-test desktop/layout/application scope, strict Clippy and owned-file formatting.
-  limits: Pure/scripted evidence is not native convergence. Earlier conditional and stock geometry native checks are separate; D integrated native user-guidance acceptance remains open. No running-desktop mutation.
+  result: Original pure baseline is preserved. D's 200-test desktop/layout/application checkpoint is followed by E's 99 affected pure/runner/CLI tests, native ordinary-executable acceptance and the ten-configuration feature matrix.
+  limits: Native success is scoped to the isolated fixtures in the E receipt, not arbitrary client constraints or causal attribution. No running-desktop mutation or installation; parent acceptance is separate.
 ---
 
 # Layout
@@ -89,6 +93,10 @@ and position response. Install the corresponding capture before that response.
 generation change; rebuilding geometry alone cannot justify retrying failed goals.
 The same cumulative prediction key survives a replacement that admitted no new
 command. Topology/context retirement is classified before missing-model waiting.
+Every eligible group's future quiet deadline remains exposed even after its
+attempt retires on focus change. The group can be acquired and non-yielding while
+still owing quietness from its last owned geometry. Expired quiet deadlines are
+not rearmed; stable captures cannot cause an idle retry loop.
 
 See [B's API sequence](../design/longcat/implementation-b0.gpt61s.md#public-call-sequence-for-cd),
 [C's geometry sequence](../design/longcat/implementation-c0.gpt61s.md#d-call-sequence-and-boundaries)
