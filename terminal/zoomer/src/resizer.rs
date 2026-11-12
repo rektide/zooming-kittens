@@ -130,8 +130,17 @@ impl<E: FontPort> ZoomResizer<E> {
                         .apply_commands(pid, &commands, &mut effects, stop.as_mut())
                         .await;
                     stopping = stopped;
+                    // The planner's `from` includes its documented baseline
+                    // fallback, including when kitty.conf had no font size.
+                    let before = WindowState {
+                        font: Some(from),
+                        ..*window_state
+                    };
 
                     if applied == commands.len() {
+                        if let Some(effect) = applied_effect(&commands, &before, applied) {
+                            window_state.linear_offset = effect.linear_offset;
+                        }
                         window_state.font = Some(target);
                         if let Some(factor) = target_factor {
                             window_state.factor = factor;
@@ -147,7 +156,7 @@ impl<E: FontPort> ZoomResizer<E> {
                     } else if applied > 0 {
                         // Partially applied: commit only the acknowledged
                         // portion so the next event plans from the real size.
-                        match applied_effect(&commands, &window_state, applied) {
+                        match applied_effect(&commands, &before, applied) {
                             Some(effect) => {
                                 eprintln!(
                                     "Kitty window {} (PID {}): transition interrupted after {} of {} command(s), font tracked at {}",
@@ -159,6 +168,7 @@ impl<E: FontPort> ZoomResizer<E> {
                                 );
                                 window_state.font = Some(effect.font);
                                 window_state.factor = effect.factor;
+                                window_state.linear_offset = effect.linear_offset;
                             }
                             None => {
                                 eprintln!(

@@ -81,6 +81,9 @@ pub struct WindowState {
     pub font: Option<f64>,
     /// Last known zoom factor relative to the configured baseline.
     pub factor: f64,
+    /// Net acknowledged linear adjustment owned by this run. A configured
+    /// baseline alone is never evidence that focus zoom was applied.
+    pub linear_offset: f64,
 }
 
 impl WindowState {
@@ -88,6 +91,7 @@ impl WindowState {
         Self {
             font: baseline,
             factor: 1.0,
+            linear_offset: 0.0,
         }
     }
 }
@@ -162,6 +166,7 @@ pub struct AppliedEffect {
     pub font: f64,
     /// Factor after the applied multiplicative commands.
     pub factor: f64,
+    pub linear_offset: f64,
 }
 
 /// Compute the effect of the first `applied` commands on `state`.
@@ -176,18 +181,29 @@ pub fn applied_effect(
 ) -> Option<AppliedEffect> {
     let mut font = state.font?;
     let mut factor = state.factor;
+    let mut linear_offset = state.linear_offset;
     for adjustment in commands.iter().take(applied) {
         match adjustment.op {
-            FontOp::Add => font += adjustment.amount,
-            FontOp::Sub => font -= adjustment.amount,
+            FontOp::Add => {
+                font += adjustment.amount;
+                linear_offset += adjustment.amount;
+            }
+            FontOp::Sub => {
+                font -= adjustment.amount;
+                linear_offset -= adjustment.amount;
+            }
             FontOp::Mul => factor *= adjustment.amount,
             FontOp::Div => factor /= adjustment.amount,
         }
     }
-    if !font.is_finite() || !factor.is_finite() {
+    if !font.is_finite() || !factor.is_finite() || !linear_offset.is_finite() {
         return None;
     }
-    Some(AppliedEffect { font, factor })
+    Some(AppliedEffect {
+        font,
+        factor,
+        linear_offset,
+    })
 }
 
 fn valid_config(config: &ZoomConfig) -> bool {
@@ -244,11 +260,17 @@ fn plan_additive(
         return ZoomPlan::Noop;
     };
     let current = effective_font(state, baseline);
-    let signed = match event {
+    if !state.linear_offset.is_finite() {
+        return ZoomPlan::Invalid("tracked linear zoom offset is unusable".into());
+    }
+    let desired_offset = match event {
         PlanEvent::Focus => amount,
-        PlanEvent::Blur => -amount,
+        PlanEvent::Blur => 0.0,
     };
-    additive_transition(current, current + signed, config.step_size, None)
+    // Focus completes the requested offset; blur removes only what was
+    // acknowledged. Failed/partial focus must never borrow from user settings.
+    let delta = desired_offset - state.linear_offset;
+    additive_transition(current, current + delta, config.step_size, None)
 }
 
 fn plan_multiplicative(
@@ -429,6 +451,7 @@ mod tests {
         WindowState {
             font: Some(font),
             factor: 1.0,
+            linear_offset: 0.0,
         }
     }
 
@@ -520,11 +543,52 @@ mod tests {
     #[test]
     fn additive_blur_subtracts_the_same_amount() {
         let config = config_with(6.0);
-        let plan = plan_transition(&config, PlanEvent::Blur, &state(18.0), Some(12.0));
+        let zoomed = WindowState {
+            linear_offset: 6.0,
+            ..state(18.0)
+        };
+        let plan = plan_transition(&config, PlanEvent::Blur, &zoomed, Some(12.0));
 
         let (commands, target) = transition(plan);
         assert_eq!(commands, vec![adjust(FontOp::Sub, 1.0); 6]);
         assert_eq!(target, 12.0);
+    }
+
+    #[test]
+    fn additive_blur_requires_owned_offset_and_focus_resumes_only_the_remainder() {
+        let config = config_with(6.0);
+        assert_eq!(
+            plan_transition(&config, PlanEvent::Blur, &state(12.0), Some(12.0)),
+            ZoomPlan::Noop
+        );
+        let partial = WindowState {
+            linear_offset: 4.0,
+            ..state(16.0)
+        };
+        let (commands, target) = transition(plan_transition(
+            &config,
+            PlanEvent::Blur,
+            &partial,
+            Some(12.0),
+        ));
+        assert_eq!(command_sum(&commands), -4.0);
+        assert_eq!(target, 12.0);
+        let (commands, target) = transition(plan_transition(
+            &config,
+            PlanEvent::Focus,
+            &partial,
+            Some(12.0),
+        ));
+        assert_eq!(command_sum(&commands), 2.0);
+        assert_eq!(target, 18.0);
+        let full = WindowState {
+            linear_offset: 6.0,
+            ..state(18.0)
+        };
+        assert_eq!(
+            plan_transition(&config, PlanEvent::Focus, &full, Some(12.0)),
+            ZoomPlan::Noop
+        );
     }
 
     #[test]
@@ -587,6 +651,7 @@ mod tests {
         let zoomed = WindowState {
             font: Some(18.0),
             factor: 1.5,
+            linear_offset: 0.0,
         };
         let plan = plan_transition(&config, PlanEvent::Blur, &zoomed, Some(12.0));
 
@@ -682,6 +747,7 @@ mod tests {
         let bad = WindowState {
             font: Some(f64::NAN),
             factor: 1.0,
+            linear_offset: 0.0,
         };
         let (commands, target) =
             transition(plan_transition(&config, PlanEvent::Focus, &bad, Some(12.0)));
@@ -717,9 +783,11 @@ mod tests {
 
         let effect = applied_effect(&commands, &state(12.0), 2).unwrap();
         assert_eq!(effect.font, 16.0); // two +2 commands applied
+        assert_eq!(effect.linear_offset, 4.0);
 
         let full = applied_effect(&commands, &state(12.0), 3).unwrap();
         assert_eq!(full.font, 18.0); // +2 +2 +2
+        assert_eq!(full.linear_offset, 6.0);
     }
 
     #[test]
@@ -728,6 +796,7 @@ mod tests {
         let untracked = WindowState {
             font: None,
             factor: 1.0,
+            linear_offset: 0.0,
         };
         assert!(applied_effect(&commands, &untracked, 2).is_none());
     }

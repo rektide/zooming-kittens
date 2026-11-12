@@ -121,10 +121,8 @@ fn additive_focus_and_blur_apply_exact_symmetric_totals() {
 #[test]
 fn failed_command_stops_the_plan_and_advances_state_by_the_applied_portion() {
     // +6 with step 2 plans three +2 commands. The third is refused, so the
-    // tracked size must advance by 4 (to 16), not 6. The following blur
-    // therefore plans -6 from 16 (three -2 commands, target 10) instead of
-    // -6 from a phantom 18: honest bookkeeping, where the inherited code
-    // recorded the full +6 regardless of the failure.
+    // tracked size and owned offset must advance by 4, not 6. Blur removes
+    // exactly that acknowledged +4, never an extra 2 points of the user's font.
     let port = ScriptedPort::new(vec![
         success(),
         success(),
@@ -152,8 +150,8 @@ fn failed_command_stops_the_plan_and_advances_state_by_the_applied_portion() {
     let calls = port.calls();
     assert_eq!(
         calls.len(),
-        6,
-        "3rd focus command refused (still recorded), blur replans from 16"
+        5,
+        "3rd focus command refused (still recorded), blur reverses only +4"
     );
     assert!(
         calls[..3]
@@ -206,6 +204,95 @@ fn not_configured_first_command_leaves_state_untouched() {
         calls[1..]
             .iter()
             .all(|(_, adj)| adj.op == FontOp::Add && adj.amount == 1.0)
+    );
+}
+
+#[test]
+fn failed_focus_then_blur_never_subtracts_the_users_font() {
+    // A later connection may recover. That must not turn a refused +3 into an
+    // acknowledged -3 on blur. The configured baseline isn't an applied zoom.
+    let port = ScriptedPort::new(vec![Ok(ZoomingResult::ConnectionFailed), success()]);
+    run_with_handle(
+        &port,
+        ZoomConfig {
+            additive: Some(3.0),
+            step_size: 3.0,
+            ..ZoomConfig::default()
+        },
+        vec![
+            FocusEvent::Focus { window: target(7) },
+            FocusEvent::Blur { window: target(7) },
+        ],
+    )
+    .unwrap();
+    assert_eq!(
+        port.calls(),
+        vec![(
+            7,
+            FontAdjustment {
+                op: FontOp::Add,
+                amount: 3.0
+            }
+        )]
+    );
+}
+
+#[test]
+fn blur_without_an_acknowledged_focus_is_a_noop() {
+    let port = ScriptedPort::new(vec![success()]);
+    run_with_handle(
+        &port,
+        ZoomConfig {
+            additive: Some(3.0),
+            step_size: 3.0,
+            ..ZoomConfig::default()
+        },
+        vec![FocusEvent::Blur { window: target(7) }],
+    )
+    .unwrap();
+    assert!(port.calls().is_empty());
+}
+
+#[test]
+fn partial_blur_retry_removes_only_the_remaining_owned_offset() {
+    let port = ScriptedPort::new(vec![
+        success(),
+        success(),
+        success(),
+        success(),
+        Ok(ZoomingResult::ConnectionFailed),
+        success(),
+        success(),
+    ]);
+    run_with_handle(
+        &port,
+        ZoomConfig {
+            additive: Some(3.0),
+            ..ZoomConfig::default()
+        },
+        vec![
+            FocusEvent::Focus { window: target(7) },
+            FocusEvent::Blur { window: target(7) },
+            FocusEvent::Blur { window: target(7) },
+            FocusEvent::Blur { window: target(7) },
+        ],
+    )
+    .unwrap();
+    let calls = port.calls();
+    assert_eq!(
+        calls.len(),
+        7,
+        "three successful +1, one successful -1, one refused -1, two successful -1"
+    );
+    assert!(
+        calls[..3]
+            .iter()
+            .all(|(_, adjustment)| adjustment.op == FontOp::Add)
+    );
+    assert!(
+        calls[3..]
+            .iter()
+            .all(|(_, adjustment)| adjustment.op == FontOp::Sub)
     );
 }
 
