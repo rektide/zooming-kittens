@@ -141,3 +141,15 @@ fn known_recipient_maximum_and_bad_bases_are_not_ignored() {
         EdgeSelection::Limited { .. }
     ));
 }
+
+#[test]
+fn pixel_tolerance_does_not_turn_policy_floor_violation_into_convergence() {
+    let goal = goal(&[372, 100, 100], &[100, 100, 100]);
+    assert_eq!(
+        select_edge(&goal, &[372., 102., 98.], None),
+        EdgeSelection::Step(EdgeStep {
+            boundary: 1,
+            travel: -2.
+        })
+    );
+}

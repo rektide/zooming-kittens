@@ -296,7 +296,7 @@ impl FrozenGeometry {
             .min(self.step_cap)
             .min(scale * 0.9)
             .copysign(travel);
-        let fraction = travel / scale;
+        let fraction = (travel / scale).clamp(-0.9, 0.9);
         let request = RelativeEdgeRequest {
             group: self.context.group.clone(),
             target: self.context.members[boundary].clone(),
@@ -370,6 +370,9 @@ impl FrozenGeometry {
         }
         self.context.validate(capture, self.tolerance)?;
         let frame = self.read_frame(capture)?;
+        if frame.version == self.current.version && frame != self.current {
+            return Err("geometry changed without a new capture version".into());
+        }
         let mut response = None;
         let moved = frame
             .starts
@@ -378,6 +381,13 @@ impl FrozenGeometry {
             .any(|(a, b)| (a - b).abs() > 0.01);
         if moved {
             let pending = self.pending.as_mut().ok_or("unexplained target motion")?;
+            // Stock reports a presented target, not an animated current origin.
+            // Once that position response was captured, only client extents may
+            // catch up without a new intent. Do not swallow a later same-edge drag
+            // merely because it happens to travel in our former direction.
+            if pending.travel != 0.0 {
+                return Err("new target motion after completed edge response".into());
+            }
             let i = pending.edge.boundary;
             let travel = frame.starts[i + 1] - pending.edge.before.starts[i + 1];
             if travel * pending.edge.travel <= 0.0
@@ -440,6 +450,9 @@ impl FrozenGeometry {
     /// executes one bounded refresh; arm this again even when no event arrives.
     pub fn on_timer(&mut self, now_ms: u64) -> Result<TimerAction, String> {
         self.clock(now_ms)?;
+        if !self.valid {
+            return Ok(TimerAction::Idle);
+        }
         let Some(p) = self.pending.as_mut().filter(|p| !p.response) else {
             return Ok(TimerAction::Idle);
         };
@@ -457,6 +470,9 @@ impl FrozenGeometry {
     }
 
     pub fn next_deadline_ms(&self) -> Option<u64> {
+        if !self.valid {
+            return None;
+        }
         self.pending
             .as_ref()
             .filter(|p| !p.response)

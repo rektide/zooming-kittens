@@ -326,6 +326,7 @@ impl Feedback {
                 &group.observed,
                 &attempt.goal.targets,
                 self.policy.geometry_tolerance,
+                &attempt.goal.inputs.members,
             ) {
                 if now_ms < self.quiet_at(group) {
                     return Ok(self.wait(FeedbackPhase::Driving, WaitReason::Quiet));
@@ -360,6 +361,7 @@ impl Feedback {
                 &group.observed,
                 &attempt.goal.targets,
                 self.policy.geometry_tolerance,
+                &attempt.goal.inputs.members,
             ) {
                 return Ok(self.wait(FeedbackPhase::Driving, WaitReason::ClientCommit));
             }
@@ -420,7 +422,12 @@ impl Feedback {
                     });
                 }
             };
-            if converged(&state.observed, &targets, self.policy.geometry_tolerance) {
+            if converged(
+                &state.observed,
+                &targets,
+                self.policy.geometry_tolerance,
+                &inputs.members,
+            ) {
                 self.groups[index].reference = Some(Reference {
                     geometry: state.observed.clone(),
                     emphasized: inputs.active,
@@ -523,6 +530,7 @@ impl Feedback {
                 &group.observed,
                 &attempt.goal.targets,
                 self.policy.geometry_tolerance,
+                &attempt.goal.inputs.members,
             )
         {
             return Err(FeedbackError::NotDriving);
@@ -1004,18 +1012,44 @@ fn same_geometry(a: &FeedbackGroup, b: &FeedbackGroup, tolerance: u32) -> bool {
         })
 }
 
-fn positions_match(group: &FeedbackGroup, targets: &[Target], tolerance: u32) -> bool {
+fn within_bounds(extent: f64, member: &GoalMember) -> bool {
+    extent >= f64::from(member.minimum_extent)
+        && member
+            .maximum_extent
+            .is_none_or(|max| extent <= f64::from(max))
+}
+
+fn positions_match(
+    group: &FeedbackGroup,
+    targets: &[Target],
+    tolerance: u32,
+    members: &[GoalMember],
+) -> bool {
     group.target_extents.as_ref().is_some_and(|extents| {
         extents.len() == targets.len()
+            && extents
+                .iter()
+                .zip(members)
+                .all(|(extent, member)| within_bounds(*extent, member))
             && extents.iter().zip(targets).all(|(extent, target)| {
                 (extent - f64::from(target.extent)).abs() <= f64::from(tolerance)
             })
     })
 }
 
-fn converged(group: &FeedbackGroup, targets: &[Target], tolerance: u32) -> bool {
+fn converged(
+    group: &FeedbackGroup,
+    targets: &[Target],
+    tolerance: u32,
+    members: &[GoalMember],
+) -> bool {
     group.coherent
-        && positions_match(group, targets, tolerance)
+        && positions_match(group, targets, tolerance, members)
+        && group
+            .members
+            .iter()
+            .zip(members)
+            .all(|(m, b)| within_bounds(m.extent, b))
         && group.members.iter().zip(targets).all(|(m, t)| {
             m.id == t.member && (m.extent - f64::from(t.extent)).abs() <= f64::from(tolerance)
         })

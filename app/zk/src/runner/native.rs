@@ -21,6 +21,37 @@ pub enum Request {
     Height(HeightRequest),
     #[cfg_attr(not(feature = "umbriel"), allow(dead_code))]
     Group(zk_desktop::GroupAllocationRequest),
+    /// Stock feedback's one frozen, qualified internal-edge intent. The ordinary
+    /// startup route is deliberately not changed by the geometry slice.
+    #[cfg(feature = "umbriel")]
+    #[allow(dead_code)]
+    Edge(Box<zk_umbriel::geometry::CompiledEdge>),
+}
+
+/// D's stock composition can install this only after explicit epoch-bound native
+/// grammar verification. No endpoint shortcut, focus fallback or implicit probe.
+#[cfg(feature = "umbriel")]
+#[allow(dead_code)]
+pub fn stock_executor(actuator: zk_umbriel::edge::EdgeActuator) -> super::Executor {
+    std::sync::Arc::new(move |request| {
+        let actuator = actuator.clone();
+        async move {
+            let Request::Edge(edge) = request else {
+                return Transmission::Unsent("wrong stock backend request".into());
+            };
+            match actuator.execute_frozen(*edge).await {
+                zk_umbriel::edge::Transmission::Unsent(message) => Transmission::Unsent(message),
+                zk_umbriel::edge::Transmission::Rejected(message) => {
+                    Transmission::Rejected(message)
+                }
+                zk_umbriel::edge::Transmission::Handled => Transmission::Handled,
+                zk_umbriel::edge::Transmission::PossiblySent(message) => {
+                    Transmission::PossiblySent(message)
+                }
+            }
+        }
+        .boxed()
+    })
 }
 
 #[derive(Debug)]

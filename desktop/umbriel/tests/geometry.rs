@@ -240,3 +240,193 @@ fn external_boundary_primary_envelope_and_topology_motion_revoke_frozen_model() 
         assert!(model.observe(&c, 10).is_err(), "{motion}");
     }
 }
+
+#[test]
+fn later_same_boundary_drag_is_not_unbounded_owned_progress() {
+    let (mut h, mut model) = initial(false);
+    let edge = model.compile(&h.reducer.capture(), 0, 100.).unwrap();
+    model
+        .begin(
+            MotionId {
+                attempt: 1,
+                sequence: 1,
+            },
+            &edge,
+            0,
+        )
+        .unwrap();
+    let c = census(&mut h, &[50., 186., 405.], &[116., 184., 300.], false);
+    assert!(model.observe(&c, 10).unwrap().frame.coherent);
+    let c = census(&mut h, &[50., 206., 405.], &[136., 164., 300.], false);
+    assert!(
+        model
+            .observe(&c, 20)
+            .unwrap_err()
+            .contains("after completed")
+    );
+}
+
+fn policy_input(
+    model: &FrozenGeometry,
+    owned: Option<MotionId>,
+) -> zk_longcat::feedback::FeedbackInput {
+    use zk_longcat::{
+        Axis as PolicyAxis, Focus, GroupKey as PolicyGroup, Source, WindowKey as PolicyWindow,
+        feedback::*,
+    };
+    let source = Source {
+        id: "stock".into(),
+        epoch: model.group().workspace.scope.epoch.0,
+    };
+    let ids: Vec<_> = model
+        .members()
+        .iter()
+        .map(|id| match &id.native {
+            NativeId::Text(id) => id.clone(),
+            _ => unreachable!(),
+        })
+        .collect();
+    FeedbackInput {
+        source: source.clone(),
+        version: model.frame().version.0,
+        live_members: ids
+            .iter()
+            .map(|id| LiveMember {
+                id: id.clone(),
+                workspace: "ws".into(),
+                context: "normal".into(),
+            })
+            .collect(),
+        groups: vec![FeedbackGroup {
+            key: PolicyGroup {
+                source: source.clone(),
+                workspace: "ws".into(),
+                topology: "0".into(),
+                axis: match model.axis() {
+                    Axis::Vertical => PolicyAxis::Vertical,
+                    Axis::Horizontal => PolicyAxis::Horizontal,
+                },
+            },
+            context: "normal".into(),
+            unavailable: None,
+            members: ids
+                .iter()
+                .enumerate()
+                .map(|(i, id)| FeedbackMember {
+                    id: id.clone(),
+                    start: model.frame().starts[i],
+                    extent: model.frame().committed[i],
+                    minimum_extent: 60,
+                    maximum_extent: None,
+                })
+                .collect(),
+            content_budget: model.content_budget(),
+            target_extents: Some(model.frame().target_extents.clone()),
+            coherent: model.frame().coherent,
+            motion: owned.map_or(Motion::Unclassified, |id| {
+                Motion::Owned(CommandKey {
+                    attempt: id.attempt,
+                    sequence: id.sequence,
+                })
+            }),
+        }],
+        focus: Focus::Window(PolicyWindow {
+            source,
+            workspace: "ws".into(),
+            id: ids[0].clone(),
+        }),
+    }
+}
+
+#[test]
+fn real_model_classification_drives_b_without_teaching_partial_or_late_commits() {
+    use zk_longcat::{CommandOutcome, feedback::edges::*, feedback::*};
+    let (mut h, mut model) = initial(false);
+    let mut feedback = Feedback::new(FeedbackPolicy::default()).unwrap();
+    feedback.observe(policy_input(&model, None), 0).unwrap();
+    let FeedbackDecision::Drive(goal) = feedback.reconsider(500).unwrap() else {
+        panic!("expected goal")
+    };
+    let preferences = feedback.preferences().to_vec();
+    let generation = feedback.preference_generation();
+    let mut now = 500;
+    let mut last = None;
+    loop {
+        match select_edge(&goal, &model.frame().target_extents, feedback.current()) {
+            EdgeSelection::Step(step) => {
+                let c = h.reducer.capture();
+                let compiled = model.compile(&c, step.boundary, step.travel).unwrap();
+                let key = feedback
+                    .begin_command(
+                        goal.id,
+                        EdgeIntent {
+                            basis_version: c.version.0,
+                            boundary: step.boundary,
+                            travel: compiled.travel,
+                        },
+                        now,
+                    )
+                    .unwrap();
+                let id = MotionId {
+                    attempt: key.attempt,
+                    sequence: key.sequence,
+                };
+                model.begin(id, &compiled, now).unwrap();
+                feedback
+                    .record_outcome(key, CommandOutcome::Handled)
+                    .unwrap();
+                let mut starts = model.frame().starts.clone();
+                starts[step.boundary + 1] += compiled.travel.round();
+                let c = census(&mut h, &starts, &[100., 200., 300.], false);
+                now += 10;
+                let assessment = model.observe(&c, now).unwrap();
+                assert_eq!(assessment.owned, Some(id));
+                // Capture installation precedes response evidence, as required by B.
+                feedback
+                    .observe(policy_input(&model, assessment.owned), now)
+                    .unwrap();
+                let Some(PositionResponse::Progress { version, .. }) = assessment.response else {
+                    panic!("missing position response")
+                };
+                feedback
+                    .record_response(
+                        key,
+                        EdgeResponse {
+                            observed_version: version.0,
+                            kind: ResponseKind::Progress,
+                        },
+                    )
+                    .unwrap();
+                feedback.reconsider(now).unwrap();
+                last = Some(id);
+            }
+            EdgeSelection::PositionsMatch => break,
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+    assert!(!model.frame().coherent);
+    let target = model.frame().target_extents.clone();
+    // Clients settle separately, after the final position response. Their mixed
+    // committed sum is neither the next budget nor accepted preference guidance.
+    let mut committed = vec![100., 200., 300.];
+    for i in 0..3 {
+        committed[i] = target[i];
+        let c = census(&mut h, &model.frame().starts.clone(), &committed, false);
+        now += 20;
+        let assessment = model.observe(&c, now).unwrap();
+        assert_eq!(assessment.owned, last);
+        feedback
+            .observe(policy_input(&model, assessment.owned), now)
+            .unwrap();
+        assert_eq!(feedback.preferences(), preferences);
+        assert_eq!(feedback.preference_generation(), generation);
+        assert_eq!(model.content_budget(), 600.);
+    }
+    assert!(model.frame().coherent);
+    feedback.reconsider(now + 500).unwrap();
+    assert_eq!(
+        feedback.completed().unwrap().result.as_ref().unwrap().end,
+        AttemptEnd::Settled
+    );
+    assert_eq!(feedback.preferences(), preferences);
+}

@@ -106,6 +106,50 @@ fn acquired() -> (Feedback, FeedbackInput, FeedbackGoal, u64) {
     (feedback, input, goal, 500)
 }
 
+#[test]
+fn native_rounding_below_policy_floor_still_allows_sub_tolerance_correction() {
+    let mut feedback = controller();
+    let mut input = input();
+    geometry(&mut input, &[200., 200., 200.], Motion::Unclassified);
+    for member in &mut input.groups[0].members {
+        member.minimum_extent = 100;
+    }
+    feedback.observe(input.clone(), 0).unwrap();
+    let goal = drive(feedback.reconsider(500).unwrap());
+    assert_eq!(extents(&goal), [400, 100, 100]);
+    let generation = feedback.preference_generation();
+    let key = submit(&mut feedback, &input, &goal, 500);
+    feedback
+        .record_outcome(key, CommandOutcome::Handled)
+        .unwrap();
+    // Seen on the real positive-strut headless fixture: tolerance must not turn
+    // its 98px donor into a declared success against a 100px effective floor.
+    geometry(&mut input, &[400., 102., 98.], Motion::Owned(key));
+    feedback.observe(input.clone(), 510).unwrap();
+    feedback
+        .record_response(
+            key,
+            EdgeResponse {
+                observed_version: input.version,
+                kind: ResponseKind::Progress,
+            },
+        )
+        .unwrap();
+    drive(feedback.reconsider(510).unwrap());
+    feedback
+        .begin_command(
+            goal.id,
+            EdgeIntent {
+                basis_version: input.version,
+                boundary: 1,
+                travel: -2.,
+            },
+            510,
+        )
+        .unwrap();
+    assert_eq!(feedback.preference_generation(), generation);
+}
+
 fn geometry(input: &mut FeedbackInput, values: &[f64], motion: Motion) {
     input.version += 1;
     let group = &mut input.groups[0];

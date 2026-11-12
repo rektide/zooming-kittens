@@ -43,10 +43,17 @@ pub fn select_edge(
         return limited("invalid or retired donor basis");
     }
     let tolerance = f64::from(goal.geometry_tolerance);
-    if estimates
-        .iter()
-        .zip(&goal.targets)
-        .all(|(t, d)| (t - f64::from(d.extent)).abs() <= tolerance)
+    let within_bounds = |i: usize| {
+        estimates[i] >= f64::from(goal.inputs.members[i].minimum_extent)
+            && goal.inputs.members[i]
+                .maximum_extent
+                .is_none_or(|max| estimates[i] <= f64::from(max))
+    };
+    if (0..n).all(within_bounds)
+        && estimates
+            .iter()
+            .zip(&goal.targets)
+            .all(|(t, d)| (t - f64::from(d.extent)).abs() <= tolerance)
     {
         return EdgeSelection::PositionsMatch;
     }
@@ -54,7 +61,9 @@ pub fn select_edge(
     let mut best: Option<EdgeStep> = None;
     for i in 0..n - 1 {
         residual += f64::from(goal.targets[i].extent) - estimates[i];
-        if residual.abs() <= tolerance {
+        if residual.abs() < 0.01
+            || residual.abs() <= tolerance && within_bounds(i) && within_bounds(i + 1)
+        {
             continue;
         }
         let positive = residual > 0.0;
