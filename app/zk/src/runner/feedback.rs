@@ -109,6 +109,42 @@ struct Hold {
     starts: Vec<f64>,
 }
 
+/// Native arrange can clamp an upper recipient while still subtracting the
+/// transfer from its donor, returning the excess to the residual last row. It
+/// can also reassert a donor floor whose normalized native weight is already
+/// inconsistent with its committed size, reversing a small transfer. Both have
+/// a rigid opposite-shifting suffix and a stationary adjacent member. Treat only
+/// these narrow unresolved-command fingerprints as execution limitation, not
+/// arbitrary unrelated or isolated reversing user motion.
+/// Stock has no causal tag: coincident external motion with this exact signature
+/// is conservatively limited too. It does not establish a reported client bound.
+fn residual_tail_compensation(group: &FeedbackGroup, before: &[f64], edge: &EdgeEvidence) -> bool {
+    let suffix = edge.intent.boundary + 2;
+    if edge.intent.travel <= 0.0 || suffix >= group.members.len() {
+        return false;
+    }
+    let rigid_suffix = |at: usize, shift: f64| {
+        group
+            .members
+            .iter()
+            .zip(before)
+            .enumerate()
+            .all(|(i, (m, b))| {
+                let expected = if i < at { 0.0 } else { shift };
+                (m.start - b - expected).abs() <= 2.0
+            })
+    };
+    let tail_shift = group.members[suffix].start - before[suffix];
+    let boundary_shift = group.members[suffix - 1].start - before[suffix - 1];
+    let recipient_clamp = tail_shift < -2.0
+        && (tail_shift + edge.intent.travel).abs() <= 2.0
+        && rigid_suffix(suffix, tail_shift);
+    let donor_floor = boundary_shift < -2.0
+        && -boundary_shift <= edge.intent.travel + 2.0
+        && rigid_suffix(suffix - 1, boundary_shift);
+    recipient_clamp || donor_floor
+}
+
 #[derive(Debug)]
 struct Slot {
     axis: d::Axis,
@@ -327,14 +363,13 @@ impl Control {
                             let i = edge.intent.boundary;
                             let before = &model.frame().starts;
                             edge.response.is_none()
-                                && (raw.members[i + 1].start - before[i + 1]) * edge.intent.travel
+                                && (((raw.members[i + 1].start - before[i + 1])
+                                    * edge.intent.travel
                                     > 0.0
-                                && raw
-                                    .members
-                                    .iter()
-                                    .zip(before)
-                                    .enumerate()
-                                    .any(|(j, (m, b))| j != i + 1 && (m.start - b).abs() > 2.0)
+                                    && raw.members.iter().zip(before).enumerate().any(
+                                        |(j, (m, b))| j != i + 1 && (m.start - b).abs() > 2.0,
+                                    ))
+                                    || residual_tail_compensation(&raw, before, edge))
                         });
                         let commit_only_execution = slot.owned.is_some()
                             && (edge.is_some() || !slot.observed.coherent)

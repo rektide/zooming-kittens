@@ -746,48 +746,50 @@ async fn cumulative_late_commits_keep_budget_and_latest_motion_key_without_learn
 
 #[tokio::test]
 async fn clamped_recipient_tail_compensation_is_limited_without_teaching_siblings() {
-    for reply_first in [false, true] {
-        let (result, rows, _, _) = scripted(
-            capture(1, false, &[400., 300., 200.]),
-            config(),
-            &[],
-            0,
-            move |peer, mut calls, stop, _| async move {
-                let first = call(&mut calls).await;
-                let mut reply = Some(first.reply);
-                if reply_first {
-                    reply.take().unwrap().send(Transmission::Handled).unwrap();
-                }
-                // Real native recipient maximum: its boundary does not move,
-                // but the requested donor loses the 16px and the residual last
-                // row gets it. This must not teach a fresh sibling ratio and
-                // acquire another 16px attempt against the same native clamp.
-                peer.vector(&[400., 284., 216.]);
-                if let Some(reply) = reply {
-                    reply.send(Transmission::Handled).unwrap();
-                }
-                quiet(&mut calls, 120).await;
-                stop.send(()).unwrap();
-                while let Some(call) = calls.recv().await {
-                    handled(&peer, call, true);
-                }
-            },
-        )
-        .await;
-        result.unwrap();
-        assert_eq!(rows.last().unwrap()["counters"]["guidance"], 0);
-        assert_eq!(rows.last().unwrap()["counters"]["submissions"], 1);
-        let end = &completed(&rows)[0]["result"]["end"];
-        assert!(end["Limited"]["Executor"].is_object(), "{end}");
-        for (p, expected) in rows.last().unwrap()["preferences"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .zip([400., 300., 200.])
-        {
-            assert_eq!(p["neutral_weight"], expected);
-            assert!(p["active_share"].is_null());
-            assert!(p["manual_floor"].is_null());
+    for constrained in [[400., 284., 216.], [392., 300., 208.]] {
+        for reply_first in [false, true] {
+            let (result, rows, _, _) = scripted(
+                capture(1, false, &[400., 300., 200.]),
+                config(),
+                &[],
+                0,
+                move |peer, mut calls, stop, _| async move {
+                    let first = call(&mut calls).await;
+                    let mut reply = Some(first.reply);
+                    if reply_first {
+                        reply.take().unwrap().send(Transmission::Handled).unwrap();
+                    }
+                    // Real native recipient maximum: its boundary does not move,
+                    // but the requested donor loses the 16px and the residual last
+                    // row gets it. This must not teach a fresh sibling ratio and
+                    // acquire another 16px attempt against the same native clamp.
+                    peer.vector(&constrained);
+                    if let Some(reply) = reply {
+                        reply.send(Transmission::Handled).unwrap();
+                    }
+                    quiet(&mut calls, 120).await;
+                    stop.send(()).unwrap();
+                    while let Some(call) = calls.recv().await {
+                        handled(&peer, call, true);
+                    }
+                },
+            )
+            .await;
+            result.unwrap();
+            assert_eq!(rows.last().unwrap()["counters"]["guidance"], 0);
+            assert_eq!(rows.last().unwrap()["counters"]["submissions"], 1);
+            let end = &completed(&rows)[0]["result"]["end"];
+            assert!(end["Limited"]["Executor"].is_object(), "{end}");
+            for (p, expected) in rows.last().unwrap()["preferences"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .zip([400., 300., 200.])
+            {
+                assert_eq!(p["neutral_weight"], expected);
+                assert!(p["active_share"].is_null());
+                assert!(p["manual_floor"].is_null());
+            }
         }
     }
 }
@@ -993,49 +995,56 @@ async fn seventy_focus_changes_have_no_historical_lifetime_veto_or_neutral_drift
 
 #[tokio::test]
 async fn overlapping_independent_motion_is_unattributed_guidance_after_receipt_drain() {
-    for reply_first in [false, true] {
-        let mut cfg = config();
-        cfg.resize_debounce_ms = 25;
-        let (result, rows, _, _) = scripted(
-            capture(1, false, &[450., 450.]),
-            cfg,
-            &[],
-            0,
-            move |peer, mut calls, stop, _| async move {
-                let first = call(&mut calls).await;
-                let mut reply = Some(first.reply);
-                if reply_first {
-                    reply.take().unwrap().send(Transmission::Handled).unwrap();
-                }
-                // The requested edge was positive. Reversal is independent/ambiguous,
-                // not a coupled native clamp to be held indefinitely.
-                peer.vector(&[420., 480.]);
-                quiet(&mut calls, 40).await;
-                if let Some(reply) = reply {
-                    reply.send(Transmission::Handled).unwrap();
-                }
-                quiet(&mut calls, 50).await;
-                stop.send(()).unwrap();
-                while let Some(call) = calls.recv().await {
-                    handled(&peer, call, true);
-                }
-            },
-        )
-        .await;
-        result.unwrap();
-        assert!(
-            rows.iter()
-                .flat_map(|r| r["guidance"].as_array().into_iter().flatten())
-                .any(|g| g["reason"] == "UnattributedOverlap")
-        );
-        assert!(
-            (rows.last().unwrap()["preferences"][0]["active_share"]
-                .as_f64()
-                .unwrap()
-                - 420. / 900.)
-                .abs()
-                < 1e-9
-        );
+    for (initial, manual) in [
+        (vec![450., 450.], vec![420., 480.]),
+        (vec![400., 300., 200.], vec![370., 330., 200.]),
+    ] {
+        for reply_first in [false, true] {
+            let mut cfg = config();
+            cfg.resize_debounce_ms = 25;
+            let manual = manual.clone();
+            let share = manual[0] / manual.iter().sum::<f64>();
+            let (result, rows, _, _) = scripted(
+                capture(1, false, &initial),
+                cfg,
+                &[],
+                0,
+                move |peer, mut calls, stop, _| async move {
+                    let first = call(&mut calls).await;
+                    let mut reply = Some(first.reply);
+                    if reply_first {
+                        reply.take().unwrap().send(Transmission::Handled).unwrap();
+                    }
+                    // The requested edge was positive. Reversal is independent/ambiguous,
+                    // not a coupled native clamp to be held indefinitely.
+                    peer.vector(&manual);
+                    quiet(&mut calls, 40).await;
+                    if let Some(reply) = reply {
+                        reply.send(Transmission::Handled).unwrap();
+                    }
+                    quiet(&mut calls, 50).await;
+                    stop.send(()).unwrap();
+                    while let Some(call) = calls.recv().await {
+                        handled(&peer, call, true);
+                    }
+                },
+            )
+            .await;
+            result.unwrap();
+            assert!(
+                rows.iter()
+                    .flat_map(|r| r["guidance"].as_array().into_iter().flatten())
+                    .any(|g| g["reason"] == "UnattributedOverlap")
+            );
+            assert!(
+                (rows.last().unwrap()["preferences"][0]["active_share"]
+                    .as_f64()
+                    .unwrap()
+                    - share)
+                    .abs()
+                    < 1e-9
+            );
+        }
     }
 }
 
