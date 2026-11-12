@@ -669,15 +669,11 @@ impl Feedback {
         let quiet = self
             .groups
             .iter()
-            .filter(|g| {
-                eligible(&g.observed)
-                    && (g.yielding.is_some()
-                        || !g.acquired
-                        || self
-                            .current
-                            .as_ref()
-                            .is_some_and(|a| a.goal.inputs.group == g.observed.key))
-            })
+            // An acquired group can still owe quietness after its owned attempt
+            // retires on focus change. No current/yielding/acquiring marker then
+            // remains to wake a deduplicated stream. Keep every eligible future
+            // quiet deadline; the strict `at > now` below prevents idle retries.
+            .filter(|g| eligible(&g.observed))
             .map(|g| self.quiet_at(g))
             .filter(|&at| at > now)
             .min();

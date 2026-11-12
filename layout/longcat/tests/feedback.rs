@@ -112,7 +112,9 @@ fn focus_retirement_keeps_owned_geometry_quiet_wakeup_without_another_event() {
     let generation = feedback.preference_generation();
     let before = feedback.preferences().to_vec();
     let key = submit(&mut feedback, &input, &goal, 500);
-    feedback.record_outcome(key, CommandOutcome::Handled).unwrap();
+    feedback
+        .record_outcome(key, CommandOutcome::Handled)
+        .unwrap();
     let values: Vec<_> = extents(&goal).into_iter().map(f64::from).collect();
     geometry(&mut input, &values, Motion::Owned(key));
     feedback.observe(input.clone(), 510).unwrap();
