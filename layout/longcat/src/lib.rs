@@ -12,6 +12,9 @@ use serde::{Deserialize, Serialize};
 pub use zk_layout::{Allocation, Gaps};
 use zk_layout::{Emphasis, Member, Request, allocate};
 
+pub mod feedback;
+pub use feedback::Feedback;
+
 /// Caller-assigned source identity and non-resumable acquisition epoch.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct Source {
