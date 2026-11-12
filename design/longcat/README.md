@@ -4,9 +4,11 @@ title: Bringing Longcat back
 description: Window-sizing work, upstream research and separately tracked activity and entity integrations.
 resource: design/longcat/README.md
 status: active
-updated: { at: 2026-11-11, by: 'model:openai/gpt-6.1-sol#high' }
+updated: { at: 2026-11-12, by: 'model:openai/gpt-6.1-sol#high' }
 generated: { at: 2026-10-22, by: 'model:openai/gpt-6-astra#medium' }
 sources:
+  - resource: opencode://ses_e32f7f45bffeBxw1TzZXDmkXk2
+    title: Deliver pure feedback slice B and link its implemented public contracts and C/D continuation
   - resource: opencode://ses_e331fea99ffeEcIAeJ9F8pM2aK
     title: Deliver stock observation and qualified internal-edge slice A and link its B–D continuation
   - resource: opencode://ses_e33541051ffeer2RcnuC2Rn4rj
@@ -35,9 +37,10 @@ sizing is integrated in `working-20261110`, while the bespoke family is preserve
 separately. The [feedback-loop design](feedback0.gpt6a.md) selects a concrete
 implementation path on that surface, including user-guided preferences and
 dispatchable assignments. Its implementation is commissioned: the
-[stock boundary slice A](implementation-a0.gpt61s.md) is checkpointed; pure
-feedback preferences, corrective execution and application integration (B–D)
-remain. This is not yet an accepted or usable end-to-end stock controller.
+[stock boundary slice A](implementation-a0.gpt61s.md) and
+[pure feedback slice B](implementation-b0.gpt61s.md) are checkpointed; corrective
+execution and application integration (C/D) remain. This is not yet an accepted
+or usable end-to-end stock controller.
 
 The [composed deployment candidate](deployment-candidate0.gpt6a.md) is prepared
 and verified, **not installed**. Candidate `96b118cf8b11` in
@@ -118,6 +121,13 @@ does not select a font-policy change.
 
 ## Delivered related integration
 
+- [Pure feedback preferences and attempt lifecycle](implementation-b0.gpt61s.md)
+  (2026-11-12): a new pure `Feedback` beside preserved `Episode`, selected guidance
+  formulas and contextual floors, full-census topology reconciliation, quiet/yield
+  timers, current-preference neutral restore, finite attempt/receipt evidence and
+  explicit limited outcomes. Thirty-four new pure fixtures and the 164-test scoped
+  suite pass. The receipt documents public DTOs and C/D composition obligations;
+  native geometry compilation, corrective execution and runner routing remain.
 - [Stock observation and qualified command boundary](implementation-a0.gpt61s.md)
   (2026-11-11): upstream typed layout/output fields and independent freshness,
   reported ordered groups, inferred two-axis geometry, presentation admission,
