@@ -366,7 +366,12 @@ impl Control {
                                 focus: current_focus.clone(),
                                 starts: raw.members.iter().map(|m| m.start).collect(),
                             });
-                        } else if let Some(edge) = edge.filter(|e| e.outcome.is_none()) {
+                        } else if let Some(edge) = edge.filter(|e| {
+                            (e.outcome.is_none() || e.response.is_none())
+                                && e.outcome
+                                    .as_ref()
+                                    .is_none_or(p::CommandOutcome::may_have_effect)
+                        }) {
                             raw.motion = Motion::Unattributed(edge.key);
                         }
                         if self.assessment.len() < 32 {

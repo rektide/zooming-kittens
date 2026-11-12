@@ -945,42 +945,50 @@ async fn seventy_focus_changes_have_no_historical_lifetime_veto_or_neutral_drift
 
 #[tokio::test]
 async fn overlapping_independent_motion_is_unattributed_guidance_after_receipt_drain() {
-    let mut cfg = config();
-    cfg.resize_debounce_ms = 25;
-    let (result, rows, _, _) = scripted(
-        capture(1, false, &[450., 450.]),
-        cfg,
-        &[],
-        0,
-        |peer, mut calls, stop, _| async move {
-            let first = call(&mut calls).await;
-            // The requested edge was positive. Reversal is independent/ambiguous,
-            // not a coupled native clamp to be held indefinitely.
-            peer.vector(&[420., 480.]);
-            quiet(&mut calls, 40).await;
-            first.reply.send(Transmission::Handled).unwrap();
-            quiet(&mut calls, 50).await;
-            stop.send(()).unwrap();
-            while let Some(call) = calls.recv().await {
-                handled(&peer, call, true);
-            }
-        },
-    )
-    .await;
-    result.unwrap();
-    assert!(
-        rows.iter()
-            .flat_map(|r| r["guidance"].as_array().into_iter().flatten())
-            .any(|g| g["reason"] == "UnattributedOverlap")
-    );
-    assert!(
-        (rows.last().unwrap()["preferences"][0]["active_share"]
-            .as_f64()
-            .unwrap()
-            - 420. / 900.)
-            .abs()
-            < 1e-9
-    );
+    for reply_first in [false, true] {
+        let mut cfg = config();
+        cfg.resize_debounce_ms = 25;
+        let (result, rows, _, _) = scripted(
+            capture(1, false, &[450., 450.]),
+            cfg,
+            &[],
+            0,
+            move |peer, mut calls, stop, _| async move {
+                let first = call(&mut calls).await;
+                let mut reply = Some(first.reply);
+                if reply_first {
+                    reply.take().unwrap().send(Transmission::Handled).unwrap();
+                }
+                // The requested edge was positive. Reversal is independent/ambiguous,
+                // not a coupled native clamp to be held indefinitely.
+                peer.vector(&[420., 480.]);
+                quiet(&mut calls, 40).await;
+                if let Some(reply) = reply {
+                    reply.send(Transmission::Handled).unwrap();
+                }
+                quiet(&mut calls, 50).await;
+                stop.send(()).unwrap();
+                while let Some(call) = calls.recv().await {
+                    handled(&peer, call, true);
+                }
+            },
+        )
+        .await;
+        result.unwrap();
+        assert!(
+            rows.iter()
+                .flat_map(|r| r["guidance"].as_array().into_iter().flatten())
+                .any(|g| g["reason"] == "UnattributedOverlap")
+        );
+        assert!(
+            (rows.last().unwrap()["preferences"][0]["active_share"]
+                .as_f64()
+                .unwrap()
+                - 420. / 900.)
+                .abs()
+                < 1e-9
+        );
+    }
 }
 
 #[test]
