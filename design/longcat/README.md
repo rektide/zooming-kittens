@@ -7,6 +7,8 @@ status: active
 updated: { at: 2026-11-12, by: 'model:openai/gpt-6.1-sol#high' }
 generated: { at: 2026-10-22, by: 'model:openai/gpt-6-astra#medium' }
 sources:
+  - resource: opencode://ses_e310e7816ffeno1fBCUgYLykPq
+    title: Link the live manual-resize snapback correction and its two-axis quietness and native corner-grab evidence
   - resource: opencode://ses_e32a69b8cffeuqz3k5ZZz9V1oM
     title: Complete ordinary-executable native acceptance and preserve the two discovered corrections, contracts and parent-review boundary
   - resource: opencode://ses_e32c4da49ffekNe2490gCdHuLp
@@ -130,6 +132,13 @@ does not select a font-policy change.
 
 ## Delivered related integration
 
+- [Two-axis manual-guidance correction](manual-guidance-fix0.gpt61s.md)
+  (2026-11-12): fixes live snapback when width/x and height change together.
+  Primary motion revokes frozen execution, not the settled preference reference;
+  both axes must become quiet before reacquisition and guidance. Width-only edits
+  teach no share; pending receipts and real output/presentation resets stay gated.
+  Scripted regressions and the extended isolated native corner-drag/basic slice
+  pass. Parent live confirmation remains separate.
 - [Ordinary-executable native completion](implementation-e0.gpt61s.md) (2026-11-12):
   exact committed Taffy emphasis, accepted user resizing/current-neutral restore,
   focus return, held native pointer drag, topology and >64 focus/acquisition churn,

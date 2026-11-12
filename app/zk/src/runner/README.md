@@ -6,6 +6,8 @@ resource: app/zk/src/runner/README.md
 status: implemented
 generated: { at: 2026-10-15, by: 'model:openai/gpt-6.1-sol#medium' }
 sources:
+  - resource: opencode://ses_e310e7816ffeno1fBCUgYLykPq
+    title: Fix live-discovered two-axis resize snapback by separating preference context from execution geometry; verify quietness, pending receipt safety and native corner drag
   - resource: opencode://ses_e32a69b8cffeuqz3k5ZZz9V1oM
     title: Verify the ordinary executable on isolated native Umbriel, fix retired quiet wakeups and residual-tail constraint classification, and exercise real reconnect/probes
   - resource: ../../../../design/longcat/implementation-e0.gpt61s.md
@@ -73,8 +75,18 @@ Episode routes do not learn resizes. It is **not** the convergence deadline.
 `zk_longcat::Feedback`. Source/epoch-qualified identities retain neutral weights,
 learned focus shares and contextual manual floors across ordinary reorder/moves.
 Only reported ordered untabbed groups of 2–128 members with a meaningful physical
-axis enter execution. Output/presentation/primary geometry are independent context;
-title, activation and secondary outer-envelope edits are not context resets.
+axis enter execution. Output/presentation are preference context; title, activation
+and ordinary geometry edits on either axis are not preference-context resets.
+Primary coordinates/extents remain **execution geometry**: any change discards the
+frozen model, calibration, position timer and coupled-response hold, but retains
+B's settled expected secondary vector and emphasized identity. Both axes restart
+the adapter's trailing quiet timer, including width-only motion. Until quiet
+reacquisition after receipt drain, no targets/coherence are supplied: stale geometry
+cannot admit an old tail, and guidance cannot be accepted early. Secondary edits
+can then teach the chosen share; primary-only edits do not invent one. The pure
+Feedback API and frozen native admission checks are unchanged. The
+[manual-guidance correction](../../../../design/longcat/manual-guidance-fix0.gpt61s.md)
+records the live failure and narrower acceptance evidence.
 
 Relevant geometry must be quiet before `FrozenGeometry::acquire`. Its measured
 content budget B and inter-content strips survive own partial commits, focus
@@ -322,6 +334,15 @@ under `.test-agent/longcat-feedback-e/native.*`. `ZK_STOCK_CASE` optionally sele
 `basic`, `churn`, `matrix` or `reconnect`; omission runs all. Full details and honest
 remaining limits: [E receipt](../../../../design/longcat/implementation-e0.gpt61s.md).
 No running desktop, installed service or compositor source was changed.
+
+The subsequent manual-guidance correction extends `basic` to a **corner** grab:
+primary width really changes (480 → 519), alongside `[290,163,62]` → `[238,215,62]`
+secondary contents. It verifies zero corrective writes through continued motion,
+one quiet accepted guidance event, current-neutral blur and learned focus return.
+The earlier middle-bottom grab exercised only the secondary axis, not this case.
+The affected basic slice passes in 14.86s; the full historical matrix was not rerun
+for this correction. Live interactive confirmation remains the parent session's
+separate bounded retest, not something established by the headless fixture.
 
 The **historical conditional** check runs the real executable against the separately built
 native extension, under Umbriel's contained headless harness. It enables forced
