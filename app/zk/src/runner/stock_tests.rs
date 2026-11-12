@@ -262,6 +262,27 @@ impl Peer {
             }
         });
     }
+    fn primary(&self, start: f64, extent: f64) {
+        self.edit(Continuity::Continuous, |c| {
+            let group = c.groups.values().next().unwrap();
+            let axis = group.secondary_axis.unwrap();
+            for id in &group.members {
+                let geometry = &mut c.windows.get_mut(id).unwrap().geometry;
+                let position = geometry.target_position.as_mut().unwrap();
+                let size = geometry.content_size.as_mut().unwrap();
+                match axis {
+                    Axis::Vertical => {
+                        position.x = start;
+                        size.width = extent;
+                    }
+                    Axis::Horizontal => {
+                        position.y = start;
+                        size.height = extent;
+                    }
+                }
+            }
+        });
+    }
 }
 struct Call {
     request: Request,
@@ -695,6 +716,133 @@ async fn continuous_motion_yields_then_teaches_share_and_blur_uses_current_prefe
     assert_eq!(pref["neutral_weight"], 450.);
     assert!((pref["active_share"].as_f64().unwrap() - 0.6).abs() < 1e-9);
     assert_eq!(rows.last().unwrap()["counters"]["guidance"], 1);
+}
+
+#[tokio::test]
+async fn two_axis_drag_retains_settled_reference_until_both_axes_are_quiet() {
+    let mut cfg = config();
+    cfg.resize_debounce_ms = 30;
+    let (result, rows, _, _) = scripted(
+        capture(1, false, &[1064., 1064.]),
+        cfg,
+        &[],
+        0,
+        |peer, mut calls, stop, _| async move {
+            // Live stack: equal 1064px contents settle to 1490/638 emphasis.
+            handled(&peer, call(&mut calls).await, true);
+            handled(&peer, call(&mut calls).await, true);
+            quiet(&mut calls, 45).await;
+            for (i, a) in [1400., 1300., 1200.].into_iter().enumerate() {
+                peer.primary(1926. - i as f64 * 20., 1904. + i as f64 * 30.);
+                peer.vector(&[a, 2128. - a]);
+                quiet(&mut calls, 15).await;
+            }
+            // Secondary motion stops, but width/x movement continues past its
+            // quiet deadline. This must neither write nor accept guidance yet.
+            for i in 0..5 {
+                peer.primary(1800. - i as f64 * 10., 2000. + i as f64 * 20.);
+                quiet(&mut calls, 15).await;
+            }
+            quiet(&mut calls, 55).await;
+            peer.focus(None);
+            handled(&peer, call(&mut calls).await, true);
+            handled(&peer, call(&mut calls).await, true);
+            quiet(&mut calls, 45).await;
+            peer.focus(Some(0));
+            handled(&peer, call(&mut calls).await, true);
+            quiet(&mut calls, 45).await;
+            assert_eq!(
+                peer.current.lock().unwrap().windows.values().next().unwrap()
+                    .geometry.content_size.unwrap().height,
+                1200.
+            );
+            stop.send(()).unwrap();
+            handled(&peer, call(&mut calls).await, true);
+        },
+    )
+    .await;
+    result.unwrap();
+    let final_row = rows.last().unwrap();
+    assert_eq!(final_row["counters"]["acquisitions"], 1);
+    assert_eq!(final_row["counters"]["guidance"], 1);
+    let pref = &final_row["preferences"][0];
+    assert_eq!(pref["neutral_weight"], 1064.);
+    assert!((pref["active_share"].as_f64().unwrap() - 1200. / 2128.).abs() < 1e-9);
+    let accepted = rows.iter().find(|r| r["counters"]["guidance"] == 1).unwrap();
+    assert_eq!(accepted["version"], 14, "guidance before final primary movement");
+}
+
+#[tokio::test]
+async fn primary_only_drag_defers_focus_execution_without_teaching_share() {
+    for horizontal in [false, true] {
+        let mut cfg = config();
+        cfg.resize_debounce_ms = 30;
+        let (result, rows, _, _) = scripted(
+            capture(1, horizontal, &[450., 450.]),
+            cfg,
+            &[],
+            0,
+            |peer, mut calls, stop, _| async move {
+                handled(&peer, call(&mut calls).await, true);
+                handled(&peer, call(&mut calls).await, true);
+                quiet(&mut calls, 45).await;
+                for i in 0..8 {
+                    peer.primary(20. + i as f64, 810. + i as f64 * 10.);
+                    if i == 0 {
+                        peer.focus(Some(1));
+                    }
+                    quiet(&mut calls, 15).await;
+                }
+                let fresh = call(&mut calls).await;
+                let Request::Edge(edge) = &fresh.request else { panic!() };
+                assert_eq!(edge.travel, -16., "reused the old empirical scale");
+                handled(&peer, fresh, true);
+                handled(&peer, call(&mut calls).await, true);
+                quiet(&mut calls, 45).await;
+                stop.send(()).unwrap();
+                handled(&peer, call(&mut calls).await, true);
+            },
+        )
+        .await;
+        result.unwrap();
+        assert_eq!(rows.last().unwrap()["counters"]["acquisitions"], 1);
+        assert_eq!(rows.last().unwrap()["counters"]["guidance"], 0);
+        for p in rows.last().unwrap()["preferences"].as_array().unwrap() {
+            assert_eq!(p["neutral_weight"], 450.);
+            assert!(p["active_share"].is_null());
+        }
+    }
+}
+
+#[tokio::test]
+async fn primary_change_during_pending_command_drains_before_learning_new_geometry() {
+    let mut cfg = config();
+    cfg.resize_debounce_ms = 25;
+    let (result, rows, _, _) = scripted(
+        capture(1, false, &[450., 450.]),
+        cfg,
+        &[],
+        0,
+        |peer, mut calls, stop, _| async move {
+            let first = call(&mut calls).await;
+            peer.primary(100., 1100.);
+            peer.vector(&[420., 480.]);
+            quiet(&mut calls, 60).await;
+            first.reply.send(Transmission::Handled).unwrap();
+            quiet(&mut calls, 60).await;
+            stop.send(()).unwrap();
+            while let Some(call) = calls.recv().await {
+                handled(&peer, call, true);
+            }
+        },
+    )
+    .await;
+    result.unwrap();
+    assert_eq!(completed(&rows)[0]["commands"].as_array().unwrap().len(), 1);
+    assert!(rows.iter().flat_map(|r| r["guidance"].as_array().into_iter().flatten())
+        .any(|g| g["reason"] == "UnattributedOverlap"));
+    assert!((rows.last().unwrap()["preferences"][0]["active_share"].as_f64().unwrap()
+        - 420. / 900.).abs() < 1e-9);
 }
 
 #[tokio::test]
