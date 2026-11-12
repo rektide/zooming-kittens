@@ -49,17 +49,23 @@ fn member_context(capture: &d::DesktopCapture, w: &d::WindowView) -> String {
     )
 }
 
+struct RawGroup {
+    feedback: FeedbackGroup,
+    primary: Vec<(f64, f64)>,
+}
+
 fn raw_group(
     capture: &d::DesktopCapture,
     group: &d::GroupView,
     axis: d::Axis,
     config: &LongcatConfig,
-) -> Option<FeedbackGroup> {
+) -> Option<RawGroup> {
     let minimum = match axis {
         d::Axis::Vertical => config.minimum_height,
         d::Axis::Horizontal => config.minimum_width,
     } as u32;
     let mut members = Vec::new();
+    let mut primary = Vec::new();
     let mut context = format!("{axis:?}");
     for id in &group.members {
         let w = capture.windows.get(id)?;
@@ -77,10 +83,10 @@ fn raw_group(
         {
             return None;
         }
-        context.push_str(&format!(
-            "|{}|{primary_start}|{primary_extent}",
-            member_context(capture, w)
-        ));
+        // Preference context is presentation/output, not execution geometry.
+        // A two-axis manual drag must retain its settled secondary reference.
+        context.push_str(&format!("|{}", member_context(capture, w)));
+        primary.push((primary_start, primary_extent));
         members.push(FeedbackMember {
             id: bridge::native_id(&id.native),
             start,
@@ -89,15 +95,18 @@ fn raw_group(
             maximum_extent: None,
         });
     }
-    Some(FeedbackGroup {
-        key: key(&group.key, axis),
-        context,
-        unavailable: None,
-        content_budget: members.iter().map(|m| m.extent).sum(),
-        members,
-        target_extents: None,
-        coherent: false,
-        motion: Motion::Unclassified,
+    Some(RawGroup {
+        primary,
+        feedback: FeedbackGroup {
+            key: key(&group.key, axis),
+            context,
+            unavailable: None,
+            content_budget: members.iter().map(|m| m.extent).sum(),
+            members,
+            target_extents: None,
+            coherent: false,
+            motion: Motion::Unclassified,
+        },
     })
 }
 
@@ -150,6 +159,7 @@ struct Slot {
     axis: d::Axis,
     members: Vec<d::WindowKey>,
     observed: FeedbackGroup,
+    primary: Vec<(f64, f64)>,
     model: Option<FrozenGeometry>,
     last_motion_ms: u64,
     acquire_failed: bool,
@@ -277,7 +287,11 @@ impl Control {
                 self.slots.remove(native_key);
                 continue;
             };
-            let Some(mut raw) = raw_group(c, group, axis, &self.config) else {
+            let Some(RawGroup {
+                feedback: mut raw,
+                primary,
+            }) = raw_group(c, group, axis, &self.config)
+            else {
                 self.slots.remove(native_key);
                 continue;
             };
@@ -298,6 +312,7 @@ impl Control {
                         axis,
                         members: group.members.clone(),
                         observed: raw.clone(),
+                        primary: primary.clone(),
                         model: None,
                         last_motion_ms: now,
                         acquire_failed: false,
@@ -307,15 +322,40 @@ impl Control {
                 );
             }
             let slot = self.slots.get_mut(native_key).expect("slot installed");
+            let primary_changed = slot.primary != primary;
             let geometry_changed = slot
                 .observed
                 .members
                 .iter()
                 .zip(&raw.members)
                 .any(|(a, b)| a.start != b.start || a.extent != b.extent);
-            if geometry_changed {
+            if geometry_changed || primary_changed {
                 slot.last_motion_ms = now;
                 slot.acquire_failed = false;
+            }
+            if primary_changed {
+                // Revoke prediction, calibration and any unresolved position
+                // timer BEFORE observing this new envelope. Do not classify it
+                // with a stale model's coupled-response fingerprint. Pure B keeps
+                // the settled preference reference, but no targets/coherence are
+                // supplied until both axes are quiet and the receipt has drained.
+                slot.model = None;
+                slot.hold = None;
+                slot.owned = None;
+                if let Some(edge) = self
+                    .feedback
+                    .current()
+                    .filter(|a| a.goal.inputs.group == raw.key)
+                    .and_then(|a| a.commands.last())
+                    .filter(|e| {
+                        (e.outcome.is_none() || e.response.is_none())
+                            && e.outcome
+                                .as_ref()
+                                .is_none_or(p::CommandOutcome::may_have_effect)
+                    })
+                {
+                    raw.motion = Motion::Unattributed(edge.key);
+                }
             }
             if slot.hold.as_ref().is_some_and(|h| {
                 h.focus != current_focus
@@ -451,6 +491,7 @@ impl Control {
                 }
             }
             slot.observed = raw.clone();
+            slot.primary = primary;
             groups.push(raw);
         }
         let live_members = c

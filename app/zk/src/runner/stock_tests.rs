@@ -251,6 +251,9 @@ impl Peer {
         });
     }
     fn vector(&self, extents: &[f64]) {
+        self.resize(extents, None);
+    }
+    fn resize(&self, extents: &[f64], primary: Option<(f64, f64)>) {
         self.edit(Continuity::Continuous, |c| {
             let ids = c.groups.values().next().unwrap().members.clone();
             let mut start = 50.;
@@ -258,6 +261,10 @@ impl Peer {
                 let w = c.windows.get_mut(id).unwrap();
                 w.geometry.target_position.as_mut().unwrap().y = start;
                 w.geometry.content_size.as_mut().unwrap().height = *extent;
+                if let Some((origin, width)) = primary {
+                    w.geometry.target_position.as_mut().unwrap().x = origin;
+                    w.geometry.content_size.as_mut().unwrap().width = width;
+                }
                 start += extent + if i % 2 == 0 { 20. } else { 35. };
             }
         });
@@ -733,8 +740,10 @@ async fn two_axis_drag_retains_settled_reference_until_both_axes_are_quiet() {
             handled(&peer, call(&mut calls).await, true);
             quiet(&mut calls, 45).await;
             for (i, a) in [1400., 1300., 1200.].into_iter().enumerate() {
-                peer.primary(1926. - i as f64 * 20., 1904. + i as f64 * 30.);
-                peer.vector(&[a, 2128. - a]);
+                peer.resize(
+                    &[a, 2128. - a],
+                    Some((1926. - i as f64 * 20., 1904. + i as f64 * 30.)),
+                );
                 quiet(&mut calls, 15).await;
             }
             // Secondary motion stops, but width/x movement continues past its
@@ -752,8 +761,17 @@ async fn two_axis_drag_retains_settled_reference_until_both_axes_are_quiet() {
             handled(&peer, call(&mut calls).await, true);
             quiet(&mut calls, 45).await;
             assert_eq!(
-                peer.current.lock().unwrap().windows.values().next().unwrap()
-                    .geometry.content_size.unwrap().height,
+                peer.current
+                    .lock()
+                    .unwrap()
+                    .windows
+                    .values()
+                    .next()
+                    .unwrap()
+                    .geometry
+                    .content_size
+                    .unwrap()
+                    .height,
                 1200.
             );
             stop.send(()).unwrap();
@@ -768,8 +786,14 @@ async fn two_axis_drag_retains_settled_reference_until_both_axes_are_quiet() {
     let pref = &final_row["preferences"][0];
     assert_eq!(pref["neutral_weight"], 1064.);
     assert!((pref["active_share"].as_f64().unwrap() - 1200. / 2128.).abs() < 1e-9);
-    let accepted = rows.iter().find(|r| r["counters"]["guidance"] == 1).unwrap();
-    assert_eq!(accepted["version"], 14, "guidance before final primary movement");
+    let accepted = rows
+        .iter()
+        .find(|r| r["counters"]["guidance"] == 1)
+        .unwrap();
+    assert_eq!(
+        accepted["version"], 11,
+        "guidance before final primary movement"
+    );
 }
 
 #[tokio::test]
@@ -794,7 +818,9 @@ async fn primary_only_drag_defers_focus_execution_without_teaching_share() {
                     quiet(&mut calls, 15).await;
                 }
                 let fresh = call(&mut calls).await;
-                let Request::Edge(edge) = &fresh.request else { panic!() };
+                let Request::Edge(edge) = &fresh.request else {
+                    panic!()
+                };
                 assert_eq!(edge.travel, -16., "reused the old empirical scale");
                 handled(&peer, fresh, true);
                 handled(&peer, call(&mut calls).await, true);
@@ -825,8 +851,7 @@ async fn primary_change_during_pending_command_drains_before_learning_new_geomet
         0,
         |peer, mut calls, stop, _| async move {
             let first = call(&mut calls).await;
-            peer.primary(100., 1100.);
-            peer.vector(&[420., 480.]);
+            peer.resize(&[420., 480.], Some((100., 1100.)));
             quiet(&mut calls, 60).await;
             first.reply.send(Transmission::Handled).unwrap();
             quiet(&mut calls, 60).await;
@@ -839,10 +864,54 @@ async fn primary_change_during_pending_command_drains_before_learning_new_geomet
     .await;
     result.unwrap();
     assert_eq!(completed(&rows)[0]["commands"].as_array().unwrap().len(), 1);
-    assert!(rows.iter().flat_map(|r| r["guidance"].as_array().into_iter().flatten())
-        .any(|g| g["reason"] == "UnattributedOverlap"));
-    assert!((rows.last().unwrap()["preferences"][0]["active_share"].as_f64().unwrap()
-        - 420. / 900.).abs() < 1e-9);
+    assert!(
+        rows.iter()
+            .flat_map(|r| r["guidance"].as_array().into_iter().flatten())
+            .any(|g| g["reason"] == "UnattributedOverlap")
+    );
+    assert!(
+        (rows.last().unwrap()["preferences"][0]["active_share"]
+            .as_f64()
+            .unwrap()
+            - 420. / 900.)
+            .abs()
+            < 1e-9
+    );
+}
+
+#[test]
+fn presentation_or_output_change_resets_reference_instead_of_learning_context_resize() {
+    for presentation in [false, true] {
+        let mut control = super::feedback::Control::new(&config(), 1500).unwrap();
+        let mut c = capture(1, false, &[630., 270.]);
+        control.install(&c, 0).unwrap();
+        control.install(&c, 10).unwrap();
+        assert!(control.feedback.current().is_none());
+        c.version.0 += 1;
+        if presentation {
+            c.windows
+                .values_mut()
+                .next()
+                .unwrap()
+                .presentation
+                .title_bar = Some(false);
+        } else {
+            c.outputs.values_mut().next().unwrap().scale = Some(2.);
+        }
+        for (i, w) in c.windows.values_mut().enumerate() {
+            w.geometry.content_size.as_mut().unwrap().height = [540., 360.][i];
+            w.geometry.target_position.as_mut().unwrap().y = [50., 610.][i];
+        }
+        control.install(&c, 11).unwrap();
+        control.install(&c, 21).unwrap();
+        assert_eq!(control.feedback.counters().acquisitions, 2);
+        assert_eq!(control.feedback.counters().guidance, 0);
+        assert!(control.feedback.preferences()[0].active_share.is_none());
+        assert_eq!(
+            control.feedback.current().unwrap().goal.targets[0].extent,
+            630
+        );
+    }
 }
 
 #[tokio::test]

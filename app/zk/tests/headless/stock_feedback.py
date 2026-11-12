@@ -242,10 +242,12 @@ def anchor_box(anchor):
 def pointer_drag(run, ids):
     guidance = run.feedback()["counters"]["guidance"]
     upper = group(ids)[0]
-    x, y = upper["x"] + upper["w"] // 2, upper["y"] + upper["h"] - 2
+    # Umbriel proposes edges from thirds zones: the old middle-bottom grab
+    # resized only the secondary edge even when its pointer moved diagonally.
+    x, y = upper["x"] + upper["w"] - 2, upper["y"] + upper["h"] - 2
     sequence = ["move", x, y, "mod", "logo", "press", 273]
     for i in range(13):
-        sequence += ["move", x, y-4*(i+1), "mark", f"step-{i}", "hold"]
+        sequence += ["move", x+3*(i+1), y-4*(i+1), "mark", f"step-{i}", "hold"]
     sequence += ["release", 273, "mod", "none"]
     log_path = RUNTIME / "pointer-drag.log"
     with log_path.open("w") as log:
@@ -392,8 +394,21 @@ def basic():
     assert abs(preferences(run)[ids[0]]["active_share"]-drag[0]/sum(drag)) < 1e-9
     assert run.feedback()["counters"]["guidance"] == 3
     assert active_id() == ids[0] and anchor_box(anchor) == anchor_geometry
-    assert invariants(ids) == envelope
-    print("held virtual-pointer native resize grab / zero corrective writes", drag, flush=True)
+    diagonal = invariants(ids)
+    assert diagonal["primary"] != envelope["primary"], (diagonal, envelope)
+    assert {k: v for k, v in diagonal.items() if k != "primary"} == {
+        k: v for k, v in envelope.items() if k != "primary"}
+    retained_drag = preferences(run)
+    mark = run.mark()
+    focus(anchor)
+    check_vector(run.completed(None, mark), ids)
+    mark = run.mark()
+    focus(ids[0])
+    check_vector(run.completed("text:" + ids[0], mark), ids)
+    assert all(abs(a-b) <= 2 for a, b in zip(extents(ids), drag)), (extents(ids), drag)
+    assert preferences(run) == retained_drag
+    print("held two-axis pointer resize / zero writes during motion / learned focus return",
+          drag, flush=True)
 
     # Reorder and cross-group moves keep identity-owned weights/share, not the
     # emphasized pixels or ordinal column keys. All edits are native actions.
