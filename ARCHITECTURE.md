@@ -6,6 +6,8 @@ resource: ARCHITECTURE.md
 status: maintained
 generated: { at: 2026-10-15, by: 'model:openai/gpt-6-astra#high' }
 sources:
+  - resource: opencode://ses_e32c4da49ffekNe2490gCdHuLp
+    title: Production stock Feedback composition, recovery/limitation boundaries and scripted application acceptance
   - resource: opencode://ses_e9a70a796ffelZmIZrb9Zxlb4f
     title: Independent backend composition and application-owned execution boundary
   - resource: opencode://ses_ec3316eefffejmDBXbZ28spBd7
@@ -33,9 +35,9 @@ the `zk` executable. Library crates live beneath their owning domains:
 |---|---|---|
 | `desktop/model` | `zk-desktop` | Scoped IDs, semantic captures, readiness, geometry evidence, impact and bounded observation |
 | `desktop/niri` | `zk-niri` | Native event reduction, asynchronous IPC source and by-ID height commands |
-| `desktop/umbriel` | `zk-umbriel` | Reusable tracking, coherent native layout projection and conditional whole-column allocation |
+| `desktop/umbriel` | `zk-umbriel` | Stock tracking, frozen inferred geometry, qualified edges/refresh and explicit conditional allocation |
 | `layout/solver` | `zk-layout` | Taffy-based constrained secondary-axis allocation and conserving integer rounding |
-| `layout/longcat` | `zk-longcat` | Pure baseline/intent/observation episodes, decisions and retained effect evidence |
+| `layout/longcat` | `zk-longcat` | Pure revisable Feedback preferences/attempts and preserved baseline Episode control |
 | `terminal/kitty` | `zk-kitty` | Kitty remote control, connection/process discovery and configuration parsing |
 | `terminal/zoomer` | `zk-zoomer` | Font policy over neutral focus/blur inputs |
 | `inspection/export` | `zk-export` | Native niri JSON/JSONL records, filters, writers and export command |
@@ -63,9 +65,9 @@ checkouts. The application does not require the Umbriel Polars packages.
 1. **Observed desktop:** immutable captures of native facts, including freshness,
    source epoch and geometry meanings. A coherent local capture is not an atomic
    compositor-wide transaction.
-2. **Longcat episode:** the baseline, current intent, native command outcomes and
-   subsequent observed compatibility. Baseline state is not rewritten merely
-   because our own expansion changed the geometry.
+2. **Longcat policy:** stock Feedback's neutral preferences/learned shares, finite
+   current goal and command evidence; or a preserved immutable Episode for niri
+   and explicitly selected conditional control. Own emphasis is never preferences.
 3. **Solver tree:** derived Taffy input/output for an allocation calculation.
    A Taffy node is not a compositor identity or proof of an applied resize.
 
@@ -75,7 +77,7 @@ The intended composed path is:
 native event / family snapshot
   → native observed state and before/after capture
   → affected regions and timed reconsideration
-  → current facts + Longcat episode
+   → current facts + Longcat policy
   → Taffy allocation
   → native command preparation and submission
   → retained reply evidence + later geometry observations
@@ -84,9 +86,9 @@ native event / family snapshot
 The application now composes these domains through the
 [Longcat runner](app/zk/src/runner/README.md). Default font zoom and `zoomer` use
 the new native niri observation source; the legacy focus registry and the old
-Longcat implementation have been removed. Compatible Umbriel servers supply
-coherent layout observations and conditional whole-column mutation; older servers
-retain read-only observation under dry-run.
+Longcat implementation have been removed. Ordinary Umbriel now uses the working
+line's stock families and qualified internal-edge actions, independent of bespoke
+extension presence. Explicit `--umbriel-control conditional` preserves that route.
 
 ## Desktop sources
 
@@ -106,14 +108,15 @@ rejected, handled and possibly-sent outcomes. No automatic action replay or
 multiwindow transaction is implied.
 
 Umbriel composes `umbriel-client` and `umbriel-tracking`, retaining Inventory as
-the row owner. A read-only capability probe selects the version-1 `layout-state`
-extension when available. That coherent family supplies control focus, topology,
-constraints, native weights and target/committed geometry; independently arriving
-windows/workspaces are not mixed into its authority. Older servers expose legacy
-read-only inventory with unavailable grouping. Immediate control is distinct from
-the activity service's five-second accepted-identity policy.
+the row owner. Stock joins independently fresh windows/workspaces/outputs in one
+epoch, retaining reported order/presentation/output context and separately inferred
+physical axis. Missing older fields remain unavailable, not invented geometry.
+Impossible-ID down/right probes separately verify qualified action handling.
+The explicit conditional route instead uses only coherent `layout-state`; its
+authority is not mixed with stock families. Immediate control remains distinct
+from the activity service's five-second accepted-identity policy.
 
-The Umbriel executor submits one conditional whole-column request with one native
+The explicit conditional executor submits one whole-column request with one native
 receipt. Content budgets and bounds subtract titlebar decorations; rounded edge
 gaps are preserved. Original raw native weights and native restoration targets
 are retained separately from the Taffy baseline allocation. Subsequent writes
@@ -138,7 +141,18 @@ the runner supplies actual per-command outcomes and fresh observations. Handling
 a command is distinct from observing a compatible result. The runner must arm
 `next_reconsideration()` even if no further event arrives.
 
-Conditional restoration requires still-valid identities/context and compatible
+Stock `Feedback` is also pure. It learns active shares and visible sibling ratios
+only from accepted quiet guidance, reconciles topology by live identity and restores
+current neutral preferences. `zk-umbriel::FrozenGeometry` retains quiet content B
+and measured strips through own partial commits, estimates targets from positions
+and compiles one donor-ready qualified cross-end correction at a time. The app
+owns independent intake, receipt/response ordering, quiet/progress/deadline timers,
+one command future, one ordered refresh and fresh-epoch reprobes. Coupled native
+responses are limited and held, not taught or retried via geometry reacquisition.
+Cumulative late keys, completion-mailbox persistence and bounded diagnostics replace
+stock's old 32/64 historical veto. Source loss never replays a possibly-sent delta.
+
+Episode restoration requires still-valid identities/context and compatible
 effects. Source loss, changed topology and conflicting geometry invalidate that
 authority. Baseline restoration represents observed pixel allocation, not hidden
 native layout weights. Cancelling a waiter cannot undo a possibly-sent request.
@@ -172,9 +186,11 @@ The workspace-level test, feature and Clippy checks establish composition after
 integration. Scripted compositor peers verify protocol behavior without changing
 the live desktop; live convergence is a separate verification claim.
 
-The latest integration passed 107 scoped tests, strict Clippy, all ten application
-feature configurations and service-generation tests against real sibling checkouts.
-Real ZK/native headless checks cover emphasis, switching, native-weight restoration
-and external edits, including concurrent runs with decorations and gaps. The
-running desktop still requires the composed native build and session transition;
-headless verification is not a claim of deployed desktop sizing.
+Historical conditional integration passed real ZK/native headless emphasis,
+switching, raw-weight restoration and external-edit checks. A/C additionally
+verified the stock boundary and geometry against an isolated native working-line
+compositor. D composes the ordinary stock runner with scripted acceptance and the
+ten-configuration feature matrix; the new route's **integrated native user-guidance
+acceptance is still open**. See the [D receipt](design/longcat/implementation-d0.gpt61s.md)
+for exact counts/commands and the next fresh-session native work. No running
+desktop, installed service or compositor source was changed by D.

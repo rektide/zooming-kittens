@@ -94,13 +94,14 @@ step_size = 1.0
 # =============================================================================
 
 [longcat]
-# Manage window heights in niri columns based on focus
+# Manage window content in reported groups based on focus.
 # When a window gains focus in a column with multiple windows:
 #   - Active window receives active / (active + other) of the content budget.
 #   - Siblings share the remainder in their baseline-relative proportions.
 # Taffy applies constraints and conserving integer rounding.
-# Leaving the column conditionally restores a still-valid baseline.
-# Conflicting geometry suspends the episode; automatic resize learning is disabled.
+# Stock Umbriel yields during movement, accepts quiet resize guidance, and
+# restores current neutral preferences on blur/shutdown. Niri and explicit
+# conditional Umbriel retain immutable-baseline restoration instead.
 
 # Positive finite relative weight for the active window (default: 0.7)
 active_height_proportion = 0.7
@@ -111,7 +112,11 @@ other_height_proportion = 0.3
 # Minimum allocated content height for each window (default: 60).
 minimum_height = 60
 
-# Retained compatibility setting; resize learning is currently disabled.
+# Horizontal secondary content minimum on stock Umbriel (default: 60).
+# Does not redefine the existing vertical minimum_height.
+minimum_width = 60
+
+# Stock geometry quietness/acquisition and guidance interval (default: 500ms).
 # This is not the convergence deadline; use --convergence-timeout-ms for that.
 resize_debounce_ms = 500
 

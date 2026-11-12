@@ -1,11 +1,15 @@
 ---
 type: ImplementationContract
 title: Longcat application runner
-description: Native acquisition, history-gated admission, retained baseline budgets and bounded conditional shutdown.
+description: Stock Umbriel Feedback composition, history-gated owned edges and recovery, plus preserved niri and explicit conditional episodes.
 resource: app/zk/src/runner/README.md
 status: implemented
 generated: { at: 2026-10-15, by: 'model:openai/gpt-6.1-sol#medium' }
 sources:
+  - resource: opencode://ses_e32c4da49ffekNe2490gCdHuLp
+    title: Implement ordinary stock Feedback runner, qualified-edge scheduling, fresh-epoch recovery, bounded shutdown and scripted acceptance
+  - resource: ../../../../design/longcat/implementation-d0.gpt61s.md
+    title: Production composition receipts and remaining native acceptance
   - resource: opencode://ses_e9a70297dffe6dQ5UJP0up8m7T
     title: Integrate whole-group Umbriel control, coherent authority and native restoration; verify against isolated native compositor
   - resource: ../../tests/headless/umbriel_longcat.sh
@@ -34,15 +38,15 @@ cargo run -- longcat --backend umbriel --dry-run --socket /path/to/socket --limi
 ```
 
 `--limit` counts **ready** capture/decision records, not initial unseen-family
-waits, command receipts, admission refusals or final shutdown evidence. Niri and
-legacy Umbriel wait for both inventory families; control-capable Umbriel waits for
-its coherent layout family. A silent/unready peer still requires SIGINT;
-there is no periodic acquisition polling. `--socket` overrides native discovery.
-Umbriel probes the read-only `layout-state` query. A compatible version-1 server
-enables native conditional group control. An older server's explicit unsupported
-reply permits legacy read-only acquisition under `--dry-run`; mutation explains
-the missing extension and stops. Transport/protocol failure is not a reason to
-fall back or attempt a focus workaround.
+waits, receipts or final shutdown evidence. Stock Umbriel requires independently
+current windows, workspaces and outputs in one source epoch; niri requires its
+two families. An idle/unready peer still requires SIGINT. `--socket` overrides
+native discovery. No periodic acquisition query or focus workaround is used.
+
+Ordinary `--backend umbriel` now selects stock Feedback, regardless of whether a
+bespoke extension exists. `--umbriel-control conditional` explicitly selects the
+preserved `layout-state`/`layout-allocate` Episode route and requires that extension.
+Dry-run does not probe qualified actions or submit native mutations.
 
 ## Configuration
 
@@ -50,12 +54,86 @@ The app loads its existing file and `ZK_` environment configuration without glob
 CLI defaults, then applies only optional Longcat overrides. Invalid configuration
 is an error, never a fallback. The two positive finite active/other weights are
 normalized as `active / (active + other)`; for example `3` and `2` mean `.6`.
-`minimum_height` remains a per-member pixel minimum. `resize_debounce_ms` is
-preserved and reported, but automatic manual-resize learning is disabled. It is
-**not** reused as a convergence deadline. `--convergence-timeout-ms` is independent;
+`minimum_height` remains the vertical per-member content minimum; `minimum_width`
+is the horizontal secondary minimum (both default 60). Stock uses
+`resize_debounce_ms` (default 500) for trailing geometry quietness and guidance.
+Episode routes do not learn resizes. It is **not** the convergence deadline.
+`--convergence-timeout-ms` is independent;
 `--shutdown-timeout-ms` bounds conditional restoration and pending-receipt drain.
 
-## Observation and baseline bridge
+## Stock Feedback composition
+
+`feedback.rs` joins the full live census (including unsupported windows) to pure
+`zk_longcat::Feedback`. Source/epoch-qualified identities retain neutral weights,
+learned focus shares and contextual manual floors across ordinary reorder/moves.
+Only reported ordered untabbed groups of 2–128 members with a meaningful physical
+axis enter execution. Output/presentation/primary geometry are independent context;
+title, activation and secondary outer-envelope edits are not context resets.
+
+Relevant geometry must be quiet before `FrozenGeometry::acquire`. Its measured
+content budget B and inter-content strips survive own partial commits, focus
+changes and handled replies. Target extents remain model-derived; actual committed
+sizes and eventual coherence are separate. A disappearing mixed-time candidate
+axis can use only C's validated frozen authority, never a relaxed acquisition gate.
+
+`stock.rs` owns one command future, one optional timed windows refresh and one
+epoch-bound capability probe. It processes each history item (eight per catch-up
+turn), then verifies latest version/scope and an empty history immediately before
+admission. Completion has priority. Each edge follows: select donor-ready step →
+compile latest capture → B `begin_command` with **compiled capped travel** → model
+`begin` with that exact key → construct/poll IPC. A position capture is installed
+in B **before** its response; native receipt and position progress are independent
+gates. Completed attempts are persisted before the one-slot mailbox is taken.
+
+Real timers drive acquisition/guidance, geometry's 32ms position wait and B's
+convergence deadline even with no duplicate snapshots. A silent edge requests
+one same-stream windows refresh with a 32–250ms configured-timeout-derived bound;
+the second geometry timer cannot classify absence while that future is pending.
+Its reply installs through Tracker at its actual native receive position. The
+runner drains history and assesses latest geometry, not a returned older capture.
+
+Independent movement yields immediately, drains the owned future and reacquires
+after quietness. Overlap/reversal while a receipt is outstanding can become
+explicit **unattributed guidance**. A requested-boundary response coupled with
+other boundaries, or incompatible commit-only geometry during own unsettled
+execution, instead becomes limited. That hold retains the failed budget/reference
+and ignores late commit-only changes as preferences. It cannot reacquire/retry
+merely because the same failed geometry became quiet; independent target movement,
+focus, topology or context can release it. This is conservative geometric
+classification, not a stock causal tag or a claim to know client constraints.
+
+Quiet accepted guidance teaches the emphasized member's focus share and visible
+sibling ratios, not its hidden neutral weight. Owned cumulative late commits
+never teach. Blur and shutdown solve **current neutral preferences**, not original
+process-start pixels or native weights. Active user motion wins; bounded shutdown
+can leave achieved geometry in place. A shutdown/diagnostic failure revokes unsent
+work and drains the owned future within the remaining shutdown budget; expiry is
+recorded possibly-sent with no replay. An admitted intent whose future was never
+constructed is genuinely unsent.
+
+Transport recovery is native-owner reconnection (250ms delay, at most eight
+attempts per loss), with a fresh epoch and newly current families/probes. Old
+goals/preferences/geometry do not cross epochs. Fresh acquisition from pixels may
+contain an old emphasis; hidden neutral continuity is not claimed. Pending receipts
+and completion evidence drain **before** new capability/execution authority.
+Same-epoch healthy snapshots cannot undo a processed loss. Protocol/observer-lag
+terminal failures stop instead of silently regaining continuity.
+
+Stock has no 32-episode/64-effect lifetime veto: live preferences, live geometry,
+one finite attempt and completion mailbox plus cumulative counters replace the
+historical ledger. JSONL `longcat-feedback`, `longcat-edge-intent`,
+`longcat-edge-command`, `longcat-feedback-completed`, refresh/capability and stopped
+rows expose preferences, Taffy goal, reported versus inferred facts, native
+fraction, guidance, achieved geometry and limitation. Per-turn assessment strings
+are capped at 32 with an explicit omitted count. Dry-run uses a hypothetical
+controller lifetime with zero command/handling evidence, not executable work.
+
+## Episode routes: niri and explicit conditional control
+
+The following baseline/retention semantics apply to these preserved routes, not
+to ordinary stock Feedback.
+
+### Observation and baseline bridge
 
 The native source owner stays alive until joined shutdown. Its I/O drains
 independently. The app waits for current windows **and** workspaces, reported
@@ -76,7 +154,7 @@ is deliberately ignored as an independent context signal. Output-height changes
 not exposed independently cannot be proven from this feed; incompatible geometry
 or convergence expiry suspends rather than learns a replacement budget.
 
-### Umbriel native authority
+### Explicit conditional Umbriel native authority
 
 Umbriel's control capture subscribes only to `layout-state`, composed through the
 upstream reusable `Tracker`. Active identity, membership, committed sizes, native
@@ -144,7 +222,7 @@ reconnect or baseline acquisition across that gap is attempted.
   unconditionally. At the shutdown bound, an outstanding command is conservatively
   recorded as possibly sent, its tail remains unsent, and authority is revoked.
 
-Retention is explicit: at most 32 episodes, 128 members per group, 64 effects per
+Episode-route retention is explicit: at most 32 episodes, 128 members per group, 64 effects per
 episode; reaching a bound stops instead of pruning evidence or silently rebasing.
 Lost/conflicted episodes remain in the bounded runner lifetime. New groups may
 not acquire members overlapping retained possible effects unless restoration
@@ -182,6 +260,14 @@ mutation was performed. Native handling/compatible pixels alone do not prove
 causal attribution. Umbriel additionally validates a complete native basis for
 raw-weight restoration; niri retains its conditional pixel-restoration semantics.
 
+Stock runner scripts additionally cover both axes, deduplicated quiet timers,
+receipt ordering, topology/focus cancellation, loss/fresh acquisition, same-epoch
+loss holds, current-preference resize/blur/focus return, cumulative late commits,
+coupled constraints, output changes, >64 focus changes and bounded shutdown/output
+failure drain. These are scripted peers, **not integrated native acceptance**.
+The full ordinary stock application-to-native user-guidance check remains open;
+A/C's isolated native boundary/geometry tests are separate receipts.
+
 ### Isolated native integration
 
 The added Umbriel check runs the real ZK executable against the separately built
@@ -205,7 +291,7 @@ sizing, restoration and external-edit assertions still run. See the
 [prepared deployment record](../../../../design/longcat/deployment-candidate0.gpt6a.md).
 
 The native contract is in
-[`layout-control.md`](file:///home/rektide/src/umbriel-longcat-control/docs/user/layout-control.md).
+[`layout-control.md`](https://github.com/rektide/umbriel/blob/96b118cf/docs/user/layout-control.md).
 Carry into the user's composed compositor and the graphical-session transition
 remain `zk-longcat-return-native-deploy`; passing a headless test is not deployment.
 

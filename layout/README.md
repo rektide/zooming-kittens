@@ -1,13 +1,15 @@
 ---
 type: Reference
-title: Layout calculation and Longcat episodes
-description: Pure solver and episode APIs, separated from native desktop observations and command transport.
+title: Layout calculation, Feedback and Longcat episodes
+description: Pure Taffy allocation, revisable stock preferences and preserved Episode APIs, separated from native geometry and transport.
 resource: layout/README.md
 status: implemented
 generated:
   at: 2026-10-15
   by: model:openai/gpt-6.1-sol#xhigh
 sources:
+  - resource: opencode://ses_e32c4da49ffekNe2490gCdHuLp
+    title: Compose Feedback in production, preserve cumulative motion identity across no-command replacements and document actual runner boundaries
   - resource: opencode://ses_e9a70297dffe6dQ5UJP0up8m7T
     title: Add explicit whole-group execution evidence and native restoration targets independent of conserving allocation
   - resource: opencode://ses_ec2fec1aaffe5IDnmC0nIJUQ04
@@ -24,8 +26,8 @@ sources:
     title: Taffy 0.10.1 feature selection for real Flexbox calculation
 verification:
   method: Scoped nextest, clippy with warnings denied, and rustfmt checks.
-  result: 46 tests passed across zk-layout and zk-longcat; clippy and formatting passed.
-  limits: Original 46-test result is the pure baseline; the later whole-group/native-target integration is covered by the 107-test consumer scope and isolated headless check documented in the runner contract. No running-desktop mutation.
+  result: Original 46-test pure baseline is preserved; Feedback and production composition now pass the 200-test desktop/layout/application scope, strict Clippy and owned-file formatting.
+  limits: Pure/scripted evidence is not native convergence. Earlier conditional and stock geometry native checks are separate; D integrated native user-guidance acceptance remains open. No running-desktop mutation.
 ---
 
 # Layout
@@ -34,9 +36,9 @@ verification:
 from an ordered member list, baseline weights, optional emphasis and explicit
 gap treatment. Taffy is derived calculation state, not desktop truth.
 
-`longcat/` (`zk-longcat`) owns one group episode: immutable baseline, requested
-effect, latest observation and per-command execution evidence. The application
-bridges its native capture into pure inputs and serializes native mutations.
+`longcat/` (`zk-longcat`) owns revisable stock `Feedback` and the preserved
+`Episode` API for niri/explicit conditional control. The application bridges its
+native capture into pure inputs and serializes native mutations.
 There are no sockets, timers, scheduler tasks or Kubeless dependencies here.
 
 Native source and epoch, workspace, topology and ordered member identity must
@@ -67,6 +69,33 @@ Without emphasis, all members divide by baseline weight.
   minima/maxima return no allocation. A zero content budget is valid only when
   all minima permit it. Spans above `2^24` and weight ratios unrepresentable by
   the f32 engine are rejected rather than pretending exact integer geometry.
+
+## Feedback API and ongoing preferences
+
+Ordinary Umbriel uses `Feedback::new(FeedbackPolicy)` with full `FeedbackInput`
+censuses. Preferences, Taffy goals and observed/execution evidence are separate.
+Quiet resizing teaches persistent per-member focus shares and visible sibling
+neutral ratios; own partial/late commits never teach. Known identities carry
+neutral weights across topology edits rather than copying emphasized pixels.
+Blur/`request_restore` solves current neutral preferences. Source loss revokes
+unsent work and requires fresh-epoch acquisition after outstanding evidence drains.
+
+The app owns quiet geometry acquisition, donor-ready selection, native compilation,
+one future and all clocks. `observe`/`reconsider` produce a finite `Drive(goal)`;
+admit each real capped edge with `begin_command`, then separately record its outcome
+and position response. Install the corresponding capture before that response.
+`take_completed` is one-slot diagnostic backpressure, not a historical veto. Arm
+`next_reconsideration` on a real timer. Limited inputs hold until a meaningful
+generation change; rebuilding geometry alone cannot justify retrying failed goals.
+The same cumulative prediction key survives a replacement that admitted no new
+command. Topology/context retirement is classified before missing-model waiting.
+
+See [B's API sequence](../design/longcat/implementation-b0.gpt61s.md#public-call-sequence-for-cd),
+[C's geometry sequence](../design/longcat/implementation-c0.gpt61s.md#d-call-sequence-and-boundaries)
+and the [implemented stock runner](../app/zk/src/runner/README.md#stock-feedback-composition).
+Both physical axes use the same unchanged scalar Taffy allocation, with distinct
+configured width/height minima supplied by the application. Native geometry,
+gain, client bounds and causal attribution are not invented by this pure crate.
 
 ## Episode API and observation bridge
 

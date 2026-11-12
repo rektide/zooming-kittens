@@ -4,9 +4,11 @@ title: Desktop observation and native control boundaries
 description: Bounded native observation, stock Umbriel grouping and qualified relative edges, plus preserved conditional whole-group allocation.
 resource: /desktop/README.md
 status: implemented-baseline
-updated: { at: 2026-11-11, by: 'model:openai/gpt-6.1-sol#high' }
+updated: { at: 2026-11-12, by: 'model:openai/gpt-6.1-sol#high' }
 generated: { at: 2026-10-15, by: 'model:openai/gpt-6.1-sol#xhigh' }
 sources:
+  - resource: opencode://ses_e32c4da49ffekNe2490gCdHuLp
+    title: Compose ordinary stock source, epoch-bound qualified execution, timed refresh and native-owner recovery in the production runner
   - resource: opencode://ses_e331fea99ffeEcIAeJ9F8pM2aK
     title: Implement stock Tracker projection, independently fresh outputs, inferred axes and epoch-bound qualified internal-edge transmission
   - resource: /design/longcat/feedback0.gpt6a.md
@@ -39,16 +41,17 @@ sources:
     title: Existing independent native receive ownership and bounded observers
 verification:
   method: Scoped nextest, strict all-target clippy and package formatting checks.
-  result: Historical conditional integration passed 107 scoped tests and native restoration checks. Stock boundary slice A now passes the expanded 130-test desktop/layout/application scope, strict Clippy and isolated real native observation/probe/edge checks.
-  limits: No mutation or restart of the running desktop. The stock boundary check is not full feedback-loop acceptance; the conditional extension remains separately preserved.
+  result: Historical conditional integration passed native restoration checks; A/C verified stock boundary/geometry natively. D passes the expanded 200-test desktop/layout/application scope, strict Clippy and owned formatting with ordinary stock composition.
+  limits: No mutation or restart of the running desktop. D's integrated native user-guidance acceptance is still open; the lower stock boundary/geometry and preserved conditional checks are separate evidence.
 ---
 
 # Desktop observation and native control boundaries
 
-The stock observation/command boundary from feedback assignment A is implemented.
-The application feedback policy, geometry compiler and ordinary-route switch are
-separate B–D work; this boundary alone is not a running stock Longcat controller.
-[Implementation receipt and continuation](../design/longcat/implementation-a0.gpt61s.md).
+Stock observation, pure policy, frozen geometry and ordinary application
+composition are implemented across A–D. Native boundary/geometry checks and
+scripted production-runner checks are distinct from still-open integrated native
+user-guidance acceptance. [D receipt](../design/longcat/implementation-d0.gpt61s.md)
+links the checkpoints and exact verification limits.
 
 ## Integration contract
 
@@ -85,8 +88,8 @@ separate B–D work; this boundary alone is not a running stock Longcat controll
   committed geometry all come from that coherent family. Unrelated windows or
   workspaces events cannot alter control focus/readiness. `layout::execute`
   submits one conditional whole-column request and verifies its accepted receipt.
-  It cannot create a stock edge actuator. Existing application dispatch still
-  selects this extension when available; assignment D changes that default.
+   It cannot create a stock edge actuator. The application selects it only with
+   explicit `--umbriel-control conditional`; extension presence cannot choose it.
 
 Sibling development dependencies are explicit relative paths: from each desktop
 crate, `../../../umbriel-rs` and `../../../kubeless` resolve under `~/src`.
@@ -170,8 +173,8 @@ Unknown presentation flags also cannot authorize sizing.
 Physical axis is inferred only when ordered content rectangles are separated on
 one axis and overlap on the other. Ambiguity waits. This is candidate evidence,
 not quietness or an allocation basis: target positions and committed dimensions
-can describe different stages of a resize. A later geometry compiler must freeze
-quiet geometry constants rather than relearn them from mixed-time frames.
+can describe different stages of a resize. The geometry compiler freezes quiet
+constants rather than relearning them from mixed-time frames.
 Workspace-local `focused` does not become seat focus. Native Inventory retains
 source order; semantic maps iterate by key. Metadata-only window snapshots and
 unrelated output edits do not create affected group geometry. Relevant output
@@ -187,6 +190,24 @@ The CLI equivalent always has `--window`; IPC uses structured `cmd: action`,
 an action name, numeric `delta` and a nonempty `window` field. It does not send
 the historical `cmd: msg` text form. Positive and negative travel use the same
 target/end edge.
+
+`geometry::FrozenGeometry` implements that compiler: quiet B and measured strips,
+separate target estimates/committed extents, both physical axes, cumulative
+late-commit corridors and empirical scale. `compile`/`begin` precede native I/O;
+`observe` assesses only compatible own progress. `prepare_frozen`/`execute_frozen`
+can replace temporary candidate-axis ambiguity only with the private model token.
+They preserve all other current scope/context/adjacency checks. Incompatible
+geometry revokes the model; the application classifies guidance versus limitation.
+
+`Source::windows_refresh` supplies a no-queue timed stock handle. The existing
+subscription owner installs its normalized windows reply at its actual receive
+position through Tracker before returning success. It is not an atomic family
+snapshot or a cross-socket query splice. Geometry requests one refresh after 32ms
+without position progress, then one bounded blockage outcome. The application
+waits for the actual refresh future before that second timer. `Reconnect` is
+reexported with `SubscriptionOptions`; ordinary stock application startup explicitly
+enables the native owner's bounded transport retry policy, while library defaults
+remain no-reconnect. Every new epoch still needs new families and qualified probes.
 
 `EdgeActuator` is verified for one epoch, shares one no-queue command permit across
 clones, and rechecks local freshness after connection before sending any bytes.

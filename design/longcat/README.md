@@ -7,6 +7,8 @@ status: active
 updated: { at: 2026-11-12, by: 'model:openai/gpt-6.1-sol#high' }
 generated: { at: 2026-10-22, by: 'model:openai/gpt-6-astra#medium' }
 sources:
+  - resource: opencode://ses_e32c4da49ffekNe2490gCdHuLp
+    title: Implement stock production composition and scripted acceptance, retain explicit conditional routing and hand off integrated native acceptance
   - resource: opencode://ses_e32e12889ffeQe51yGGtHKv78g
     title: Deliver slice C geometry and native corrective evidence with the D call-sequence handoff
   - resource: opencode://ses_e32f7f45bffeBxw1TzZXDmkXk2
@@ -41,9 +43,10 @@ implementation path on that surface, including user-guided preferences and
 dispatchable assignments. Its implementation is commissioned: the
 [stock boundary slice A](implementation-a0.gpt61s.md) and
 [pure feedback slice B](implementation-b0.gpt61s.md), and
-[corrective geometry slice C](implementation-c0.gpt61s.md) are checkpointed;
-application integration (D) remains. This is not yet an accepted
-or usable end-to-end stock controller.
+[corrective geometry slice C](implementation-c0.gpt61s.md) and
+[production composition slice D](implementation-d0.gpt61s.md) are checkpointed.
+Ordinary stock routing and scripted runner acceptance are implemented; integrated
+native user-guidance acceptance and parent acceptance remain open.
 
 The [composed deployment candidate](deployment-candidate0.gpt6a.md) is prepared
 and verified, **not installed**. Candidate `96b118cf8b11` in
@@ -61,10 +64,9 @@ remain user decisions. The activity service is already running independently.
 
 - [Layout](../../layout/README.md) already implements constrained Taffy allocation,
   baseline-relative sibling weights and conserving integer rounding.
-- [Runner](../../app/zk/src/runner/README.md) joins native streams, decisions,
-  by-ID niri sizing and conditional restoration. Its integrated Umbriel path uses
-  coherent native layout state and conditional whole-column allocation; older
-  compositors retain read-only dry-run observation.
+- [Runner](../../app/zk/src/runner/README.md) joins native streams, Feedback,
+  quiet/progress timers, qualified stock edges and current-preference restoration.
+  Niri and explicit conditional Umbriel preserve their separate Episode routes.
 - [Remake map](../remake/README.md) preserves the earlier research and links to
   Umbriel's native layout-control requirements. That work supplies the baseline
   for checking current upstream capabilities.
@@ -124,6 +126,13 @@ does not select a font-policy change.
 
 ## Delivered related integration
 
+- [Stock production composition](implementation-d0.gpt61s.md) (2026-11-12): ordinary
+  Umbriel now composes A–C rather than selecting the old policy by extension
+  presence. Includes independent intake, history-gated admission, owned receipts,
+  quiet/progress/refresh timers, fresh-epoch recovery, bounded diagnostics/shutdown,
+  explicit coupled-response holds and distinct width/height minima. Scripted
+  acceptance and the feature matrix are checkpointed; a fresh Sol session must
+  still run integrated native user-guidance acceptance before product acceptance.
 - [Frozen geometry and corrective edges](implementation-c0.gpt61s.md)
   (2026-11-12): measured strips/frozen content budget, two-axis qualified edges,
   validated mixed-time native authority, pure donor-ready correction, empirical

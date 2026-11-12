@@ -5,6 +5,8 @@ description: Compositor-driven window sizing and terminal font automation.
 resource: README.md
 status: maintained
 sources:
+  - resource: opencode://ses_e32c4da49ffekNe2490gCdHuLp
+    title: Deliver ordinary stock Feedback application composition, explicit conditional routing, configuration and scripted acceptance
   - resource: opencode://ses_e9a70a796ffelZmIZrb9Zxlb4f
     title: Independent backend feature implementation and renewed Umbriel Longcat work
   - resource: opencode://ses_ec3316eefffejmDBXbZ28spBd7
@@ -17,8 +19,9 @@ sources:
 
 Zooming-kittens uses native desktop streams for focus-driven window sizing and
 [kitty](https://sw.kovidgoyal.net/kitty/) font control. Longcat supports
-[niri](https://github.com/YaLTeR/niri) by-ID height changes and conditional Umbriel
-column allocation through the sibling `umbriel-rs` libraries.
+[niri](https://github.com/YaLTeR/niri) by-ID height changes and stock Umbriel
+feedback through the sibling `umbriel-rs` libraries. Bespoke conditional Umbriel
+allocation remains an explicit alternative.
 
 ## Features
 
@@ -47,17 +50,21 @@ zk zoomer --zoom-multiplicative 1.5 --zoom-step-size 2
 
 ### Longcat
 
-Uses Taffy to allocate heights within reported compositor columns. The focused window
-gets an emphasized share; siblings retain their baseline-relative weights within
-the configured constraints. Leaving a column conditionally restores the baseline
-when identity, context and observed effects still agree. Conflicting changes
-suspend the episode rather than silently learning new proportions.
+Uses Taffy to allocate content space within reported compositor groups. The focused
+window gets an emphasized share; siblings retain neutral relative weights.
+Stock Umbriel supports both secondary axes, yields during movement and accepts
+quiet user resize guidance. Blur/shutdown solve current neutral preferences.
+Niri and explicitly selected conditional Umbriel keep immutable-baseline Episode
+semantics; conflicting changes suspend those routes rather than learning.
 
 ```bash
 zk longcat
 zk longcat --active-height-proportion 0.7 --other-height-proportion 0.3
 zk longcat --dry-run --limit 1
 zk longcat --backend umbriel --dry-run --limit 1
+zk longcat --backend umbriel --minimum-width 60
+# Only for the separately preserved bespoke extension:
+zk longcat --backend umbriel --umbriel-control conditional
 ```
 
 `--socket` selects an explicit native endpoint. `--limit` counts ready decisions,
@@ -66,18 +73,18 @@ as `active / (active + other)`; explicit CLI values override file/environment
 configuration. `--convergence-timeout-ms` and `--shutdown-timeout-ms` govern the
 effect and conditional-shutdown deadlines.
 
-Umbriel control requires the `layout-state` / `layout-allocate` extension in the
-[native control build](file:///home/rektide/src/umbriel-longcat-control/docs/user/layout-control.md).
-It uses one coherent snapshot, applies a whole column conditionally, and restores
-original native weights. Only supported untabbed groups with vertical secondary
-allocation are admitted. Older compositors retain read-only dry-run observation;
-mutation explains the missing extension. No polling or focus-switching workaround
-is used. `resize_debounce_ms` is retained for configuration compatibility;
-automatic resize learning is disabled.
+Ordinary Umbriel control needs the working-line stock layout/output fields and
+`--window`-qualified sizing, not the bespoke extension. It verifies that grammar
+without targeting a live window. Unsupported/tabbed/maximized/ambiguous groups
+wait; no focused fallback is used. `resize_debounce_ms` defaults to 500ms and is
+the trailing quiet interval, separate from convergence. Height and width minima
+remain distinct, both defaulting to 60. Native constraints can end a bounded
+attempt as limited, rather than looping or teaching the failed target.
 
-The integrated implementation has passed real headless compositor tests. The
-current desktop still needs the composed native build and a coordinated session
-transition; see the [deployment work](design/longcat/README.md).
+The stock runner is implemented and script-tested; its full integrated native
+user-guidance acceptance remains open. Earlier conditional and stock geometry
+headless checks are separate evidence. No installed desktop/service change is
+claimed; see the [delivery record](design/longcat/implementation-d0.gpt61s.md).
 
 See the [runner contract](app/zk/src/runner/README.md) for admission, retention
 limits, partial effects, loss handling and diagnostics. Use dry-run to inspect
@@ -190,8 +197,9 @@ the service's environment. All Longcat options are supported. The generated unit
 requires an already-running compositor, follows its session lifecycle, and sends
 SIGINT with a stop budget allowing conditional restoration. Generation only prints
 the unit; it does not install or start it. Bare `generate-systemd --output` retains
-the font-tracker service. Remove `--dry-run` for sizing only after running a
-compositor with the native allocation extension.
+the font-tracker service. Remove `--dry-run` only after checking the intended
+compositor's actual qualified stock capabilities and the acceptance record;
+explicit conditional mode still requires its native allocation extension.
 
 ## Architecture
 
