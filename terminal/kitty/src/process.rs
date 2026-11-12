@@ -32,7 +32,7 @@ fn find_master(shell_pid: i32, read_stat: impl Fn(i32) -> Option<String>) -> Opt
 }
 
 // comm may contain whitespace and ')'; field offsets begin AFTER the last ')'.
-fn parse_stat(stat: &str) -> Option<(&str, i32)> {
+pub(crate) fn parse_stat(stat: &str) -> Option<(&str, i32)> {
     let (_, rest) = stat.split_once('(')?;
     let (comm, fields) = rest.rsplit_once(')')?;
     let parent = fields.split_whitespace().nth(1)?.parse().ok()?;

@@ -1,6 +1,7 @@
 pub mod conf_parser;
 pub mod config;
 pub mod process;
+pub mod public_key;
 pub mod registry;
 pub mod types;
 pub mod util;

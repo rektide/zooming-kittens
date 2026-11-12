@@ -1,4 +1,5 @@
 use crate::config::RegistryConfig;
+use crate::public_key::{DiscoveryError, TargetPublicKey};
 use crate::types::{KittyConnectionStatus, ZoomingResult};
 use crate::util::{get_kitty_password, get_kitty_socket_path, is_process_alive};
 use kitty_rc::Kitty;
@@ -15,9 +16,107 @@ struct ManagedConnection {
     last_used: Instant,
 }
 
+struct ConnectionLease {
+    client: Arc<Mutex<Kitty>>,
+    target: Arc<TargetPublicKey>,
+}
+
+/// Only classifications escape library errors: arbitrary remote strings and
+/// protocol/encryption payloads can contain credentials and are never logged.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ConnectionFailure {
+    Discovery(DiscoveryError),
+    Io(std::io::ErrorKind),
+    Timeout,
+    Closed,
+    Encryption,
+    ExternalKeyHelper,
+    Protocol,
+    Command,
+    RemoteAuthorization,
+    RemoteRefused,
+}
+
+impl std::fmt::Display for ConnectionFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Discovery(error) => write!(f, "public-key discovery: {error}"),
+            Self::Io(kind) => write!(f, "socket/I/O error ({kind:?})"),
+            Self::Timeout => f.write_str("socket command/connection deadline elapsed"),
+            Self::Closed => f.write_str("socket peer closed the connection"),
+            Self::Encryption => {
+                f.write_str("public-key/encryption setup or command encryption failed")
+            }
+            Self::ExternalKeyHelper => {
+                f.write_str("external public-key helper unavailable (explicit target key required)")
+            }
+            Self::Protocol => f.write_str("invalid remote protocol response"),
+            Self::Command => f.write_str("remote command construction failed"),
+            Self::RemoteAuthorization => f.write_str("remote authorization refused"),
+            Self::RemoteRefused => f.write_str("remote command refused"),
+        }
+    }
+}
+
+impl ConnectionFailure {
+    fn from_library(error: &kitty_rc::KittyError) -> Self {
+        use kitty_rc::{ConnectionError as C, EncryptionError as E, KittyError as K};
+        match error {
+            K::Connection(C::ConnectionFailed(_, error)) | K::Io(error) => Self::Io(error.kind()),
+            K::Connection(C::TimeoutError(_)) => Self::Timeout,
+            K::Connection(C::ConnectionClosed) => Self::Closed,
+            K::Connection(C::PermissionDenied(_)) => Self::Io(std::io::ErrorKind::PermissionDenied),
+            K::Connection(C::SocketNotFound(_)) => Self::Io(std::io::ErrorKind::NotFound),
+            K::Connection(_) => Self::Io(std::io::ErrorKind::Other),
+            K::Encryption(E::PublicKeyDatabaseError(_)) => Self::ExternalKeyHelper,
+            K::Encryption(_) => Self::Encryption,
+            K::Protocol(_) => Self::Protocol,
+            K::Command(_) => Self::Command,
+        }
+    }
+
+    fn is_auth(self) -> bool {
+        matches!(
+            self,
+            Self::Discovery(
+                DiscoveryError::MissingKey
+                    | DiscoveryError::MalformedKey
+                    | DiscoveryError::MalformedEnvironment
+                    | DiscoveryError::AmbiguousKeys
+            ) | Self::Encryption
+                | Self::ExternalKeyHelper
+                | Self::RemoteAuthorization
+        )
+    }
+}
+
+async fn connect_target(
+    target: &TargetPublicKey,
+    socket_path: &PathBuf,
+    timeout: Duration,
+    password: &str,
+) -> Result<Kitty, ConnectionFailure> {
+    target.verify().map_err(ConnectionFailure::Discovery)?;
+    let client = Kitty::builder()
+        .socket_path(socket_path)
+        .timeout(timeout)
+        .password(password)
+        // Never let kitty-rc invoke kitty-pubkey-db or fall back to the
+        // caller's unrelated KITTY_PUBLIC_KEY / ~/.config/kitty/key.pub.
+        .public_key(target.public_key())
+        .connect()
+        .await
+        .map_err(|e| ConnectionFailure::from_library(&e))?;
+    target.verify().map_err(ConnectionFailure::Discovery)?;
+    Ok(client)
+}
+
 pub struct KittyRegistry {
     connections: Arc<Mutex<HashMap<i32, ManagedConnection>>>,
     statuses: Arc<Mutex<HashMap<i32, KittyConnectionStatus>>>,
+    // Keep instance guards even after connection reaping. A reused PID must
+    // not inherit an old run's credential or outstanding font-restoration debt.
+    targets: Mutex<HashMap<i32, Arc<TargetPublicKey>>>,
     config: RegistryConfig,
 }
 
@@ -26,6 +125,7 @@ impl KittyRegistry {
         Self {
             connections: Arc::new(Mutex::new(HashMap::new())),
             statuses: Arc::new(Mutex::new(HashMap::new())),
+            targets: Mutex::new(HashMap::new()),
             config,
         }
     }
@@ -222,6 +322,7 @@ impl KittyRegistry {
         let socket_path = get_kitty_socket_path(kitty_pid);
 
         if !socket_path.exists() {
+            eprintln!("Kitty PID {kitty_pid}: target socket is absent");
             self.set_status(pid, KittyConnectionStatus::NoSocket).await;
             return Ok(ZoomingResult::NotConfigured);
         }
@@ -235,14 +336,18 @@ impl KittyRegistry {
 
         let password = match get_kitty_password() {
             Ok(pw) => pw,
-            Err(_) => {
+            Err(error) => {
+                eprintln!(
+                    "Kitty PID {kitty_pid}: password file unavailable ({:?})",
+                    error.kind()
+                );
                 self.set_status(kitty_pid, KittyConnectionStatus::NotConfigured)
                     .await;
                 return Ok(ZoomingResult::NotConfigured);
             }
         };
 
-        let mut last_error = None;
+        let mut last_failure = None;
 
         for attempt in 0..self.config.max_retries {
             if attempt > 0 {
@@ -254,13 +359,19 @@ impl KittyRegistry {
                 sleep(delay).await;
             }
 
-            let client = match self
+            let lease = match self
                 .get_or_create_connection(kitty_pid, &socket_path, &password)
                 .await
             {
-                Ok(client) => client,
-                Err(e) => {
-                    last_error = Some(e);
+                Ok(lease) => lease,
+                Err(failure) => {
+                    eprintln!(
+                        "Kitty PID {kitty_pid}: connection/authentication unavailable: {failure}"
+                    );
+                    last_failure = Some(failure);
+                    if matches!(failure, ConnectionFailure::Discovery(_)) {
+                        break;
+                    }
                     continue;
                 }
             };
@@ -271,14 +382,18 @@ impl KittyRegistry {
                 .build()
                 .to_message()?;
 
+            let mut client = lease.client.lock().await;
+            if let Err(error) = lease.target.verify() {
+                eprintln!("Kitty PID {kitty_pid}: refusing stale connection: {error}");
+                last_failure = Some(ConnectionFailure::Discovery(error));
+                break;
+            }
             if self.config.verbose {
                 eprintln!(
-                    "Sending font adjustment {}{} to PID {} (kitty: {})",
+                    "Attempting font adjustment {}{} to PID {} (kitty: {})",
                     op, amount, pid, kitty_pid
                 );
             }
-
-            let mut client = client.lock().await;
             let result = client.execute(&cmd).await;
 
             if self.config.verbose {
@@ -301,30 +416,29 @@ impl KittyRegistry {
                             font_adjustment,
                         });
                     }
-                    let error_msg = response
-                        .error
-                        .unwrap_or_else(|| "Unknown error".to_string());
-                    eprintln!(
-                        "Kitty refused font command for PID {} (kitty: {})",
-                        pid, kitty_pid
-                    );
-                    last_error = Some(error_msg);
+                    let message = response.error.unwrap_or_default().to_ascii_lowercase();
+                    let failure = if message.contains("auth")
+                        || message.contains("password")
+                        || message.contains("permission")
+                    {
+                        ConnectionFailure::RemoteAuthorization
+                    } else {
+                        ConnectionFailure::RemoteRefused
+                    };
+                    eprintln!("Kitty PID {kitty_pid}: {failure}");
+                    last_failure = Some(failure);
                 }
                 Err(e) => {
-                    eprintln!(
-                        "Error executing font command for PID {} (kitty: {})",
-                        pid, kitty_pid
-                    );
-                    last_error = Some(e.to_string());
+                    let failure = ConnectionFailure::from_library(&e);
+                    eprintln!("Kitty PID {kitty_pid}: font command failed: {failure}");
+                    last_failure = Some(failure);
                 }
             }
         }
 
         self.set_status(pid, KittyConnectionStatus::Failed).await;
 
-        if let Some(err) = &last_error
-            && (err.contains("auth") || err.contains("password"))
-        {
+        if last_failure.is_some_and(ConnectionFailure::is_auth) {
             return Ok(ZoomingResult::AuthFailed);
         }
 
@@ -336,13 +450,29 @@ impl KittyRegistry {
         pid: i32,
         socket_path: &PathBuf,
         password: &str,
-    ) -> Result<Arc<Mutex<Kitty>>, String> {
+    ) -> Result<ConnectionLease, ConnectionFailure> {
+        let target = {
+            let mut targets = self.targets.lock().await;
+            let target = if let Some(target) = targets.get(&pid) {
+                Arc::clone(target)
+            } else {
+                let target =
+                    Arc::new(TargetPublicKey::discover(pid).map_err(ConnectionFailure::Discovery)?);
+                targets.insert(pid, Arc::clone(&target));
+                target
+            };
+            target.verify().map_err(ConnectionFailure::Discovery)?;
+            target
+        };
         {
             let mut connections = self.connections.lock().await;
 
             if let Some(conn) = connections.get_mut(&pid) {
                 conn.last_used = Instant::now();
-                return Ok(Arc::clone(&conn.client));
+                return Ok(ConnectionLease {
+                    client: Arc::clone(&conn.client),
+                    target,
+                });
             }
 
             if connections.len() >= self.config.max_connections {
@@ -370,12 +500,13 @@ impl KittyRegistry {
             );
         }
 
-        let client = match Kitty::builder()
-            .socket_path(socket_path)
-            .timeout(self.config.socket_timeout)
-            .password(password)
-            .connect()
-            .await
+        let client = match connect_target(
+            &target,
+            socket_path,
+            self.config.socket_timeout,
+            password,
+        )
+        .await
         {
             Ok(c) => {
                 if self.config.verbose {
@@ -383,10 +514,9 @@ impl KittyRegistry {
                 }
                 c
             }
-            Err(e) => {
-                eprintln!("Failed to connect to kitty PID {}", pid);
+            Err(failure) => {
                 self.set_status(pid, KittyConnectionStatus::Failed).await;
-                return Err(e.to_string());
+                return Err(failure);
             }
         };
 
@@ -400,7 +530,10 @@ impl KittyRegistry {
             },
         );
 
-        Ok(client_arc)
+        Ok(ConnectionLease {
+            client: client_arc,
+            target,
+        })
     }
 
     async fn update_last_used(&self, pid: i32) {
@@ -433,5 +566,140 @@ impl KittyRegistry {
         }
 
         self.statuses.lock().await.clear();
+        self.targets.lock().await.clear();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::public_key::tests::{Fixture, MASTER, key_a};
+
+    #[test]
+    fn explicit_target_key_connects_without_helper_and_ignores_caller_key() {
+        let directory = tempfile::tempdir().unwrap();
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "registry::tests::helper_free_connection_child",
+                "--nocapture",
+            ])
+            .env("ZK_TEST_HELPER_FREE_CONNECT", "1")
+            .env("PATH", directory.path())
+            .env("KITTY_PID", "999")
+            .env("KITTY_PUBLIC_KEY", "not-the-target-and-not-a-valid-key")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "isolated connection test failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    #[test]
+    fn helper_free_connection_child() {
+        if std::env::var_os("ZK_TEST_HELPER_FREE_CONNECT").is_none() {
+            return;
+        }
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let fixture = Fixture::new();
+            let target = fixture.discover().unwrap();
+            assert!(target.public_key() == key_a());
+            let socket_path = fixture.root.path().join(format!("kitty-{MASTER}.sock"));
+            let listener = tokio::net::UnixListener::bind(&socket_path).unwrap();
+            let accept = tokio::spawn(async move {
+                tokio::time::timeout(Duration::from_secs(1), listener.accept())
+                    .await
+                    .unwrap()
+                    .unwrap();
+            });
+            // Local fake socket only; no font command, live kitty or helper.
+            let client = connect_target(
+                &target,
+                &socket_path,
+                Duration::from_secs(1),
+                "synthetic-test-password",
+            )
+            .await;
+            assert!(
+                client.is_ok(),
+                "explicit target-key setup failed: {:?}",
+                client.err()
+            );
+            accept.await.unwrap();
+        });
+    }
+
+    #[test]
+    fn cached_target_guard_rejects_pid_reuse_before_any_new_connection() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let fixture = Fixture::new();
+            let registry = KittyRegistry::with_defaults();
+            registry
+                .targets
+                .lock()
+                .await
+                .insert(MASTER, Arc::new(fixture.discover().unwrap()));
+            fixture.stat(MASTER, "kitty", 1, 2000);
+            let result = registry
+                .get_or_create_connection(
+                    MASTER,
+                    &fixture.root.path().join("absent.sock"),
+                    "synthetic-test-password",
+                )
+                .await;
+            assert!(matches!(
+                result,
+                Err(ConnectionFailure::Discovery(DiscoveryError::ProcessChanged))
+            ));
+            assert!(registry.connections.lock().await.is_empty());
+        });
+    }
+
+    #[test]
+    fn library_failures_keep_actionable_classes_without_untrusted_error_text() {
+        let errors = [
+            (
+                kitty_rc::KittyError::Encryption(
+                    kitty_rc::EncryptionError::PublicKeyDatabaseError(
+                        "private-payload-marker".into(),
+                    ),
+                ),
+                ConnectionFailure::ExternalKeyHelper,
+            ),
+            (
+                kitty_rc::KittyError::Protocol(kitty_rc::ProtocolError::InvalidMessageFormat(
+                    "private-payload-marker".into(),
+                )),
+                ConnectionFailure::Protocol,
+            ),
+            (
+                kitty_rc::KittyError::Connection(kitty_rc::ConnectionError::TimeoutError(
+                    Duration::from_secs(1),
+                )),
+                ConnectionFailure::Timeout,
+            ),
+            (
+                kitty_rc::KittyError::Io(std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    "private-payload-marker",
+                )),
+                ConnectionFailure::Io(std::io::ErrorKind::PermissionDenied),
+            ),
+        ];
+        for (error, expected) in errors {
+            let class = ConnectionFailure::from_library(&error);
+            assert_eq!(class, expected);
+            assert!(!class.to_string().contains("private-payload-marker"));
+        }
     }
 }
