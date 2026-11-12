@@ -294,6 +294,21 @@ where
     F: FnOnce(Peer, mpsc::UnboundedReceiver<Call>, oneshot::Sender<()>, Arc<AtomicUsize>) -> Fut,
     Fut: Future<Output = ()>,
 {
+    scripted_output(initial, config, extra, refresh_delay, false, script).await
+}
+
+async fn scripted_output<F, Fut>(
+    initial: DesktopCapture,
+    config: LongcatConfig,
+    extra: &[&str],
+    refresh_delay: u64,
+    fail_pending_output: bool,
+    script: F,
+) -> (io::Result<()>, Vec<Value>, usize, usize)
+where
+    F: FnOnce(Peer, mpsc::UnboundedReceiver<Call>, oneshot::Sender<()>, Arc<AtomicUsize>) -> Fut,
+    Fut: Future<Output = ()>,
+{
     let (publisher, observer) = Publisher::new(Arc::new(initial.clone()), 64);
     let peer = Peer {
         publisher: Arc::new(publisher),
@@ -334,7 +349,21 @@ where
     let (stop, stopped) = oneshot::channel();
     let command = command(extra);
     let mut rows = Vec::new();
-    let mut sink = |row| {
+    let mut failed = false;
+    let mut sink = |row: Value| {
+        if fail_pending_output
+            && !failed
+            && row["type"] == "longcat-feedback"
+            && row["current"]["commands"]
+                .as_array()
+                .is_some_and(|commands| !commands.is_empty())
+        {
+            failed = true;
+            return Err(io::Error::new(
+                io::ErrorKind::BrokenPipe,
+                "scripted diagnostic failure",
+            ));
+        }
         rows.push(row);
         Ok(())
     };
@@ -354,6 +383,62 @@ where
         probes.load(Ordering::SeqCst),
         refreshes.load(Ordering::SeqCst),
     )
+}
+
+#[tokio::test]
+async fn diagnostic_failure_revokes_tail_but_drains_the_owned_receipt() {
+    let (result, rows, _, _) = scripted_output(
+        capture(1, false, &[450., 450.]),
+        config(),
+        &[],
+        0,
+        true,
+        |peer, mut calls, stop, _| async move {
+            let _keep_stop = stop;
+            let first = call(&mut calls).await;
+            peer.apply(&first.request, true);
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            first
+                .reply
+                .send(Transmission::Handled)
+                .expect("runner must still own receipt after sink failure");
+            assert!(
+                calls.recv().await.is_none(),
+                "diagnostic failure must not admit a tail"
+            );
+        },
+    )
+    .await;
+    assert_eq!(result.unwrap_err().kind(), io::ErrorKind::BrokenPipe);
+    assert_eq!(completed(&rows)[0]["commands"][0]["outcome"], "Handled");
+    assert_eq!(rows.last().unwrap()["counters"]["submissions"], 1);
+}
+
+#[tokio::test]
+async fn queued_loss_then_healthy_same_epoch_never_restores_authority() {
+    let (result, rows, probes, _) = scripted(
+        capture(1, false, &[450., 450.]),
+        config(),
+        &[],
+        0,
+        |peer, mut calls, stop, _| async move {
+            let first = call(&mut calls).await;
+            peer.edit(Continuity::Discontinuous(LossReason::Disconnected), |c| {
+                c.connected = false
+            });
+            peer.edit(Continuity::Continuous, |c| c.connected = true);
+            first.reply.send(Transmission::Handled).unwrap();
+            quiet(&mut calls, 70).await;
+            stop.send(()).unwrap();
+        },
+    )
+    .await;
+    result.unwrap();
+    assert_eq!(probes, 1);
+    assert_eq!(rows.last().unwrap()["counters"]["submissions"], 1);
+    assert!(rows.iter().any(|r| r["type"] == "longcat-feedback"
+        && r["ready"] == false
+        && r["version"].as_u64().is_some_and(|v| v > 1)));
 }
 fn config() -> LongcatConfig {
     LongcatConfig {

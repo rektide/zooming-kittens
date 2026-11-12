@@ -51,6 +51,8 @@ fn longcat_services_select_native_session_and_preserve_sizing_arguments() {
             "2",
             "--minimum-height",
             "80",
+            "--minimum-width",
+            "82",
             "--resize-debounce-ms",
             "400",
             "--convergence-timeout-ms",
@@ -87,6 +89,7 @@ fn longcat_services_select_native_session_and_preserve_sizing_arguments() {
             ("active-height-proportion", "3"),
             ("other-height-proportion", "2"),
             ("minimum-height", "80"),
+            ("minimum-width", "82"),
             ("resize-debounce-ms", "400"),
             ("convergence-timeout-ms", "2000"),
             ("shutdown-timeout-ms", "60000"),
@@ -104,6 +107,21 @@ fn longcat_services_select_native_session_and_preserve_sizing_arguments() {
         assert!(!unit.contains("niri.target"));
         assert!(!unit.contains("zoomer"));
     }
+}
+
+#[test]
+#[cfg(feature = "umbriel")]
+fn explicit_conditional_route_survives_service_generation() {
+    let unit = text(invoke(&[
+        "generate-systemd",
+        "--output",
+        "longcat",
+        "--backend",
+        "umbriel",
+        "--umbriel-control",
+        "conditional",
+    ]));
+    assert!(unit.contains("\"--umbriel-control\" \"conditional\""));
 }
 
 #[test]
