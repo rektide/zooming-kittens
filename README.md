@@ -5,6 +5,8 @@ description: Compositor-driven window sizing and terminal font automation.
 resource: README.md
 status: maintained
 sources:
+  - resource: opencode://ses_e310ffa7fffeeG5JUHl4w0WCiE
+    title: Document explicit Umbriel kitty zoom and independent backend feature selection
   - resource: opencode://ses_e32c4da49ffekNe2490gCdHuLp
     title: Deliver ordinary stock Feedback application composition, explicit conditional routing, configuration and scripted acceptance
   - resource: opencode://ses_e9a70a796ffelZmIZrb9Zxlb4f
@@ -46,7 +48,15 @@ zk zoomer --zoom-absolute 18
 
 # Multiplicative with stepped transitions
 zk zoomer --zoom-multiplicative 1.5 --zoom-step-size 2
+
+# Umbriel: +3pt on focus, independent of a separate Longcat process
+zk zoomer --backend umbriel --zoom-additive 3 --zoom-step-size 3
 ```
+
+Backend selection defaults to niri. Use Ctrl-C/SIGINT for orderly restoration
+of this run's acknowledged font adjustments; source loss is not synthetic blur.
+See the [terminal contract](terminal/README.md#run-alongside-longcat-on-umbriel)
+for discovery, bounded delivery, shutdown deadlines and limitations.
 
 ### Longcat
 
@@ -153,10 +163,12 @@ the backends needed for an installation:
 cargo build -p zooming-kittens --no-default-features --features umbriel
 cargo build -p zooming-kittens --no-default-features --features niri
 cargo build -p zooming-kittens --no-default-features --features niri,kitty
+cargo build -p zooming-kittens --no-default-features --features umbriel,kitty
 ```
 
 `kitty` enables terminal font commands; automatic font zoom additionally requires
-`niri`. `niri` enables native export. `export-facet` enables niri/export as well as
+either `niri` or `umbriel`, selected with `zoomer --backend`. `niri` enables
+native export. `export-facet` enables niri/export as well as
 its optional serialization scaffold. Disabled commands explain the required
 features before opening sockets. Umbriel-only builds support Longcat control on
 compatible compositors; see the [Longcat return effort](design/longcat/README.md)

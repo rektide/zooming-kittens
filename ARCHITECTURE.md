@@ -6,6 +6,8 @@ resource: ARCHITECTURE.md
 status: maintained
 generated: { at: 2026-10-15, by: 'model:openai/gpt-6-astra#high' }
 sources:
+  - resource: opencode://ses_e310ffa7fffeeG5JUHl4w0WCiE
+    title: Integrate Umbriel into the existing focus-to-kitty composition with explicit shutdown restoration
   - resource: opencode://ses_e32a69b8cffeuqz3k5ZZz9V1oM
     title: Complete ordinary-executable isolated native acceptance and correct quiet retirement and native residual-tail classification
   - resource: design/longcat/implementation-e0.gpt61s.md
@@ -55,8 +57,8 @@ crate's existing optional scaffold.
 
 Application features `niri`, `umbriel`, and `kitty` independently select their
 optional backend dependencies; all are enabled by default. `export-facet` also
-enables `niri`. Font zoom composes niri observation with Kitty control; direct
-font commands require only Kitty. The runner owns its execution request/receipt
+enables `niri`. Font zoom composes selected niri or Umbriel observation with
+Kitty control; direct font commands require only Kitty. The runner owns its execution request/receipt
 types and converts them at the native boundary, so Umbriel-only builds do not
 depend on the niri adapter. Feature selection applies to the application graph;
 `--workspace` checks still select the individual backend library packages.
@@ -88,8 +90,11 @@ native event / family snapshot
 ```
 
 The application now composes these domains through the
-[Longcat runner](app/zk/src/runner/README.md). Default font zoom and `zoomer` use
-the new native niri observation source; the legacy focus registry and the old
+[Longcat runner](app/zk/src/runner/README.md). Default font zoom uses
+native niri observation; `zoomer --backend umbriel` selects Umbriel independently
+of Longcat, through the same [terminal focus bridge](terminal/README.md).
+Explicit SIGINT shutdown reverses acknowledged font effects; source loss does
+not invent blur. The legacy focus registry and the old
 Longcat implementation have been removed. Ordinary Umbriel now uses the working
 line's stock families and qualified internal-edge actions, independent of bespoke
 extension presence. Explicit `--umbriel-control conditional` preserves that route.
