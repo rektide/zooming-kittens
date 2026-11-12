@@ -745,6 +745,54 @@ async fn cumulative_late_commits_keep_budget_and_latest_motion_key_without_learn
 }
 
 #[tokio::test]
+async fn clamped_recipient_tail_compensation_is_limited_without_teaching_siblings() {
+    for reply_first in [false, true] {
+        let (result, rows, _, _) = scripted(
+            capture(1, false, &[400., 300., 200.]),
+            config(),
+            &[],
+            0,
+            move |peer, mut calls, stop, _| async move {
+                let first = call(&mut calls).await;
+                let mut reply = Some(first.reply);
+                if reply_first {
+                    reply.take().unwrap().send(Transmission::Handled).unwrap();
+                }
+                // Real native recipient maximum: its boundary does not move,
+                // but the requested donor loses the 16px and the residual last
+                // row gets it. This must not teach a fresh sibling ratio and
+                // acquire another 16px attempt against the same native clamp.
+                peer.vector(&[400., 284., 216.]);
+                if let Some(reply) = reply {
+                    reply.send(Transmission::Handled).unwrap();
+                }
+                quiet(&mut calls, 120).await;
+                stop.send(()).unwrap();
+                while let Some(call) = calls.recv().await {
+                    handled(&peer, call, true);
+                }
+            },
+        )
+        .await;
+        result.unwrap();
+        assert_eq!(rows.last().unwrap()["counters"]["guidance"], 0);
+        assert_eq!(rows.last().unwrap()["counters"]["submissions"], 1);
+        let end = &completed(&rows)[0]["result"]["end"];
+        assert!(end["Limited"]["Executor"].is_object(), "{end}");
+        for (p, expected) in rows.last().unwrap()["preferences"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .zip([400., 300., 200.])
+        {
+            assert_eq!(p["neutral_weight"], expected);
+            assert!(p["active_share"].is_null());
+            assert!(p["manual_floor"].is_null());
+        }
+    }
+}
+
+#[tokio::test]
 async fn coupled_native_response_is_limited_not_guidance_or_reacquisition_loop() {
     let (result, rows, _, _) = scripted(
         capture(1, false, &[400., 300., 200.]),

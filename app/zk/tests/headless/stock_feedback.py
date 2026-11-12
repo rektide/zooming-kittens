@@ -114,7 +114,7 @@ def invariants(ids, axis="vertical"):
 
 
 class Run:
-    def __init__(self, name, timeout=4000):
+    def __init__(self, name, timeout=4000, debounce=500):
         self.rows = []
         self.lock = threading.Lock()
         self.name = name
@@ -125,6 +125,7 @@ class Run:
         self.process = subprocess.Popen([
             os.environ["ZK_TEST_BIN"], "longcat", "--backend", "umbriel",
             "--socket", str(SOCKET), "--minimum-height", "60", "--minimum-width", "60",
+            "--resize-debounce-ms", str(debounce),
             "--convergence-timeout-ms", str(timeout), "--shutdown-timeout-ms", "5000",
         ], env=env, stdout=subprocess.PIPE, stderr=self.error, text=True)
         self.reader = threading.Thread(target=self.read, daemon=True)
@@ -165,7 +166,7 @@ class Run:
     def completed(self, active, after=0, limited=False):
         row = self.await_row(lambda r: r.get("type") == "longcat-feedback-completed"
                              and r["attempt"]["goal"]["inputs"]["active"] == active
-                             and (isinstance(r["attempt"]["result"]["end"], dict) if limited
+                             and ("Limited" in r["attempt"]["result"]["end"] if limited
                                   else r["attempt"]["result"]["end"] == "Settled"), after)
         attempt = row["attempt"]
         assert len(attempt["commands"]) <= attempt["goal"]["submission_limit"], attempt
@@ -204,6 +205,14 @@ def preferences(run):
 
 def intentions(run):
     return [r for r in run.snapshot() if r.get("type") == "longcat-edge-intent"]
+
+
+def stable(run, after=0, ids=None):
+    return run.await_row(lambda r: r.get("type") == "longcat-feedback"
+                         and r["decision"].get("Wait", {}).get("reason") == "Stable"
+                         and (ids is None or any(
+                             [m["id"].removeprefix("text:") for m in g["observed"]["members"]]
+                             == [w["id"] for w in group(ids)] for g in r["groups"])), after)
 
 
 def stable_for(run, seconds):
@@ -326,6 +335,60 @@ def basic():
     assert active_id() == ids[0]
     assert anchor_box(anchor) == anchor_geometry
     print("continuous native resize / focus during yield / trailing guidance", drag, flush=True)
+
+    # Reorder and cross-group moves keep identity-owned weights/share, not the
+    # emphasized pixels or ordinal column keys. All edits are native actions.
+    retained = preferences(run)
+    mark = run.mark()
+    action("window-move-down")
+    settle()
+    stable(run, mark, ids)
+    assert [w["id"] for w in group(ids)] == [ids[1], ids[0], ids[2]]
+    assert preferences(run) == retained
+    mark = run.mark()
+    action("window-consume-or-expel-right")
+    settle()
+    remaining = [ids[1], ids[2]]
+    stable(run, mark, remaining)
+    assert preferences(run) == retained
+    assert len({w["column"] for w in group(ids)}) == 2
+    mark = run.mark()
+    action("window-consume-left")
+    settle()
+    stable(run, mark, ids)
+    assert preferences(run) == retained
+
+    mark = run.mark()
+    incoming = spawn("zk-stock-incoming")
+    action("window-consume-left")
+    settle()
+    expanded = ids + [incoming]
+    stable(run, mark, expanded)
+    assert all(preferences(run)[id] == p for id, p in retained.items())
+    assert incoming in preferences(run)
+    mark = run.mark()
+    action("window-kill", incoming)
+    settle()
+    stable(run, mark, ids)
+    assert preferences(run) == retained
+    mark = run.mark()
+    focus(anchor)
+    stable(run, mark, ids)
+    anchor_geometry = anchor_box(anchor)
+    # The same structured qualified action used by the executable must reject a
+    # genuinely stale ID, never fall back to the unrelated seat-focused anchor.
+    with socket.socket(socket.AF_UNIX) as stream:
+        stream.connect(str(SOCKET))
+        stream.sendall((json.dumps({"cmd": "action", "action": "window-modify-height-down",
+                                   "delta": .1, "window": incoming}) + "\n").encode())
+        rejected = json.loads(stream.makefile("rb").readline())
+    assert rejected == {"err": "unknown window: " + incoming}, rejected
+    assert active_id() == anchor and anchor_box(anchor) == anchor_geometry
+    print("native reorder / expel-rejoin / open-close / stale qualified target", flush=True)
+
+    mark = run.mark()
+    focus(ids[0])
+    stable(run, mark, ids)
     run.stop()
     # SIGINT restores the latest neutral preferences via the same real executor.
     stopped = next(r for r in reversed(run.snapshot())
@@ -335,4 +398,112 @@ def basic():
     clear()
 
 
-basic()
+def churn():
+    configure()
+    anchor = spawn("zk-stock-anchor")
+    ids = [spawn("zk-stock-0"), spawn("zk-stock-1")]
+    action("window-consume-left")
+    settle()
+    focus(anchor)
+    run = Run("churn", debounce=40)
+    run.await_row(lambda r: r.get("type") == "longcat-feedback" and len(r["preferences"]) == 2)
+    acquired = preferences(run)
+    mark = run.mark()
+    focus(ids[0])
+    run.await_row(lambda r: r.get("type") == "longcat-feedback"
+                  and r["decision"].get("Wait", {}).get("reason") == "Quiet"
+                  and r["current"] is not None, mark)
+    mark = run.mark()
+    focus(ids[1])
+    stable(run, mark, ids)
+    assert preferences(run) == acquired
+    for i in range(70):
+        mark = run.mark()
+        focus(ids[i % 2])
+        attempt = run.completed("text:" + ids[i % 2], mark)
+        check_vector(attempt, ids)
+        assert preferences(run) == acquired
+        assert active_id() == ids[i % 2]
+    assert run.feedback()["counters"]["settled"] >= 70
+    assert run.feedback()["counters"]["guidance"] == 0
+    print("70 real focus changes: neutral preferences unchanged, no lifetime veto", flush=True)
+    run.stop()
+    clear()
+
+
+def matrix():
+    cases = [
+        ("negative-vertical", "vertical", -80, 4, "none", 0),
+        ("positive-horizontal", "horizontal", 20, 4, "none", 0),
+        ("negative-horizontal", "horizontal", -80, 3, "none", 0),
+        ("slow", "vertical", 0, 3, "none", 120),
+        ("fixed-middle", "vertical", 0, 3, "fixed", 0),
+        ("recipient-maximum", "vertical", 0, 3, "maximum", 0),
+        ("donor-minimum", "vertical", 0, 3, "minimum", 0),
+    ]
+    for name, axis, strut, count, constraint, delay in cases:
+        configure(axis, strut)
+        anchor = spawn("zk-stock-anchor")
+        ids = []
+        for i in range(count):
+            extra = {"COMMIT_DELAY_MS": delay}
+            if constraint == "fixed" and i == 1:
+                extra.update(MIN_H=100, MAX_H=100)
+            if constraint == "maximum" and i == 0:
+                extra.update(MAX_H=180)
+            if constraint == "minimum" and i == 1:
+                extra.update(MIN_H=230)
+            ids.append(spawn(f"zk-stock-{i}", **extra))
+            if i:
+                action("window-consume-left")
+                settle()
+        focus(anchor)
+        run = Run(name)
+        run.await_row(lambda r: r.get("type") == "longcat-feedback"
+                      and len(r["preferences"]) == count)
+        before = preferences(run)
+        generation = run.feedback()["preference_generation"]
+        envelope = invariants(ids, axis)
+        anchor_geometry = anchor_box(anchor)
+        mark = run.mark()
+        focus(ids[0])
+        result = run.await_row(lambda r: r.get("type") == "longcat-feedback-completed"
+                               and r["attempt"]["goal"]["inputs"]["active"] == "text:"+ids[0]
+                               and (r["attempt"]["result"]["end"] == "Settled"
+                                    or "Limited" in r["attempt"]["result"]["end"]), mark)
+        attempt = result["attempt"]
+        end = attempt["result"]["end"]
+        assert len(attempt["commands"]) <= attempt["goal"]["submission_limit"], attempt
+        assert attempt["commands"], "native scenario must exercise actual stock edges"
+        assert all(c["outcome"] == "Handled" for c in attempt["commands"]), attempt
+        assert all(r["axis"] == axis.capitalize() for r in intentions(run))
+        if constraint == "none":
+            assert end == "Settled", (name, end)
+            check_vector(attempt, ids, axis)
+            actual = invariants(ids, axis)
+            assert actual["primary"] == envelope["primary"], (name, actual, envelope)
+            assert actual["strips"] == envelope["strips"], (name, actual, envelope)
+            assert abs(actual["start"]-envelope["start"]) <= 2
+            assert abs(actual["end"]-envelope["end"]) <= 2
+        else:
+            assert "Limited" in end, (name, end)
+            assert attempt["result"]["achieved"] is not None
+            assert extents(ids, axis) != [t["extent"] for t in attempt["goal"]["targets"]]
+        run.await_row(lambda r: r.get("type") == "longcat-feedback" and r["current"] is None, mark)
+        stable_for(run, 1.1)
+        assert preferences(run) == before, (name, preferences(run), before)
+        assert run.feedback()["preference_generation"] == generation
+        assert run.feedback()["counters"]["guidance"] == 0
+        assert active_id() == ids[0] and anchor_box(anchor) == anchor_geometry
+        print(name, end, "committed", extents(ids, axis), "edges", len(attempt["commands"]), flush=True)
+        run.stop()
+        clear()
+
+
+selected = os.environ.get("ZK_STOCK_CASE", "all")
+if selected in ("all", "basic"):
+    basic()
+if selected in ("all", "churn"):
+    churn()
+if selected in ("all", "matrix"):
+    matrix()
