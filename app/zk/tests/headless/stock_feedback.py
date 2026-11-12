@@ -3,6 +3,7 @@
 import json
 import os
 from pathlib import Path
+import select
 import signal
 import socket
 import subprocess
@@ -114,7 +115,7 @@ def invariants(ids, axis="vertical"):
 
 
 class Run:
-    def __init__(self, name, timeout=4000, debounce=500):
+    def __init__(self, name, timeout=4000, debounce=500, endpoint=SOCKET):
         self.rows = []
         self.lock = threading.Lock()
         self.name = name
@@ -124,7 +125,7 @@ class Run:
         env["XDG_CONFIG_HOME"] = str(RUNTIME / "zk-config")
         self.process = subprocess.Popen([
             os.environ["ZK_TEST_BIN"], "longcat", "--backend", "umbriel",
-            "--socket", str(SOCKET), "--minimum-height", "60", "--minimum-width", "60",
+            "--socket", str(endpoint), "--minimum-height", "60", "--minimum-width", "60",
             "--resize-debounce-ms", str(debounce),
             "--convergence-timeout-ms", str(timeout), "--shutdown-timeout-ms", "5000",
         ], env=env, stdout=subprocess.PIPE, stderr=self.error, text=True)
@@ -181,6 +182,10 @@ class Run:
         self.reader.join(timeout=2)
         assert self.process.returncode == 0, self.failure()
         assert self.snapshot()[-1]["type"] == "longcat-feedback-stopped", self.failure()
+        assert self.snapshot()[-1]["pending"] is None, "shutdown left an owned future"
+        intents = [r["key"] for r in intentions(self)]
+        receipts = [r["key"] for r in self.snapshot() if r.get("type") == "longcat-edge-command"]
+        assert receipts == intents, ("missing, duplicated or reordered owned receipt", receipts, intents)
         self.output.close()
         self.error.close()
 
@@ -234,6 +239,49 @@ def anchor_box(anchor):
     return [w[k] for k in ("x", "y", "w", "h")]
 
 
+def pointer_drag(run, ids):
+    guidance = run.feedback()["counters"]["guidance"]
+    upper = group(ids)[0]
+    x, y = upper["x"] + upper["w"] // 2, upper["y"] + upper["h"] - 2
+    sequence = ["move", x, y, "mod", "logo", "press", 273]
+    for i in range(13):
+        sequence += ["move", x, y-4*(i+1), "mark", f"step-{i}", "hold"]
+    sequence += ["release", 273, "mod", "none"]
+    log_path = RUNTIME / "pointer-drag.log"
+    with log_path.open("w") as log:
+        pointer = subprocess.Popen([os.environ["UMBRIEL_POINTER_CLIENT"], "1280", "720",
+                                    *map(str, sequence)], stdin=subprocess.PIPE,
+                                   stdout=log, stderr=subprocess.STDOUT, text=True)
+        def marker(i):
+            wait(lambda: f"step-{i}\n" in log_path.read_text(), "native pointer hold")
+            assert pointer.poll() is None, log_path.read_text()
+        mark = run.mark()
+        marker(0)
+        run.await_row(lambda r: r.get("type") == "longcat-feedback"
+                      and r["decision"].get("Wait", {}).get("phase") == "Yielding", mark)
+        count = len(intentions(run))
+        started = time.monotonic()
+        for i in range(1, 13):
+            pointer.stdin.write("\n")
+            pointer.stdin.flush()
+            marker(i)
+            settle()
+            stable_for(run, .06)
+            assert len(intentions(run)) == count
+        assert time.monotonic()-started > .5
+        pointer.stdin.write("\n")
+        pointer.stdin.flush()
+        pointer.stdin.close()
+        pointer.wait(timeout=3)
+        assert pointer.returncode == 0, log_path.read_text()
+    settle()
+    dragged = extents(ids)
+    run.await_row(lambda r: r.get("type") == "longcat-feedback"
+                  and r["decision"].get("Wait", {}).get("reason") == "Stable"
+                  and r["counters"]["guidance"] == guidance + 1, mark)
+    return dragged
+
+
 def clear():
     for w in windows():
         action("window-kill", w["id"])
@@ -251,6 +299,7 @@ def basic():
             action("window-consume-left")
             settle()
     # Native fixture setup only: heterogeneous rows, nonzero outer gaps.
+    full_envelope = invariants(ids)
     action("window-modify-height-up", "-0.04", "--window", ids[0])
     action("window-modify-height-down", "-0.06", "--window", ids[-1])
     action("window-set-secondary-extent", "0.40", "--window", ids[0])
@@ -258,6 +307,10 @@ def basic():
     focus(anchor)
     baseline = extents(ids)
     envelope = invariants(ids)
+    assert envelope["start"] > full_envelope["start"]
+    assert envelope["end"] < full_envelope["end"]
+    assert [w["title_bar"] for w in group(ids)] == [True, False, True]
+    assert min(envelope["strips"]) > 0 and len(set(envelope["strips"])) == 2
     run = Run("ordinary")
     run.await_row(lambda r: r.get("type") == "longcat-feedback" and len(r["preferences"]) == 3)
     mark = run.mark()
@@ -335,6 +388,12 @@ def basic():
     assert active_id() == ids[0]
     assert anchor_box(anchor) == anchor_geometry
     print("continuous native resize / focus during yield / trailing guidance", drag, flush=True)
+    drag = pointer_drag(run, ids)
+    assert abs(preferences(run)[ids[0]]["active_share"]-drag[0]/sum(drag)) < 1e-9
+    assert run.feedback()["counters"]["guidance"] == 3
+    assert active_id() == ids[0] and anchor_box(anchor) == anchor_geometry
+    assert invariants(ids) == envelope
+    print("held virtual-pointer native resize grab / zero corrective writes", drag, flush=True)
 
     # Reorder and cross-group moves keep identity-owned weights/share, not the
     # emphasized pixels or ordinal column keys. All edits are native actions.
@@ -378,6 +437,7 @@ def basic():
     # The same structured qualified action used by the executable must reject a
     # genuinely stale ID, never fall back to the unrelated seat-focused anchor.
     with socket.socket(socket.AF_UNIX) as stream:
+        stream.settimeout(5)
         stream.connect(str(SOCKET))
         stream.sendall((json.dumps({"cmd": "action", "action": "window-modify-height-down",
                                    "delta": .1, "window": incoming}) + "\n").encode())
@@ -427,6 +487,20 @@ def churn():
     assert run.feedback()["counters"]["settled"] >= 70
     assert run.feedback()["counters"]["guidance"] == 0
     print("70 real focus changes: neutral preferences unchanged, no lifetime veto", flush=True)
+    for i in range(34):
+        mark = run.mark()
+        incoming = spawn(f"zk-stock-churn-{i}")
+        action("window-consume-left")
+        settle()
+        stable(run, mark, ids + [incoming])
+        assert all(preferences(run)[id] == p for id, p in acquired.items())
+        mark = run.mark()
+        action("window-kill", incoming)
+        settle()
+        stable(run, mark, ids)
+        assert preferences(run) == acquired
+    assert run.feedback()["counters"]["acquisitions"] > 64
+    print("34 native open/join/close cycles: scoped preferences survive >64 reacquisitions", flush=True)
     run.stop()
     clear()
 
@@ -500,10 +574,115 @@ def matrix():
         clear()
 
 
+class Proxy:
+    """Transparent real-server relay, used only to drop the subscription socket.
+
+    Native bytes/replies are unmodified; no fake family, epoch or capability is
+    injected. Both ends live under this contained harness runtime.
+    """
+    def __init__(self):
+        self.path = RUNTIME / "zk-reconnect.sock"
+        self.listener = socket.socket(socket.AF_UNIX)
+        self.listener.bind(str(self.path))
+        self.listener.listen()
+        self.listener.settimeout(.1)
+        self.closed = threading.Event()
+        self.lock = threading.Lock()
+        self.requests = []
+        self.subscription = None
+        self.thread = threading.Thread(target=self.accept, daemon=True)
+        self.thread.start()
+
+    def accept(self):
+        while not self.closed.is_set():
+            try:
+                client, _ = self.listener.accept()
+            except socket.timeout:
+                continue
+            except OSError:
+                return
+            threading.Thread(target=self.relay, args=(client,), daemon=True).start()
+
+    def relay(self, client):
+        with client, socket.socket(socket.AF_UNIX) as server:
+            server.connect(str(SOCKET))
+            pending = b""
+            while not self.closed.is_set():
+                try:
+                    readable, _, _ = select.select([client, server], [], [], .1)
+                    for source in readable:
+                        chunk = source.recv(65536)
+                        if not chunk:
+                            return
+                        if source is client:
+                            pending += chunk
+                            while b"\n" in pending:
+                                line, pending = pending.split(b"\n", 1)
+                                request = json.loads(line)
+                                with self.lock:
+                                    self.requests.append(request)
+                                    if request.get("cmd") == "subscribe":
+                                        self.subscription = (client, server)
+                        (server if source is client else client).sendall(chunk)
+                except (OSError, ValueError):
+                    return
+
+    def drop_subscription(self):
+        with self.lock:
+            assert self.subscription is not None
+            for stream in self.subscription:
+                stream.shutdown(socket.SHUT_RDWR)
+            self.subscription = None
+
+    def stop(self):
+        self.closed.set()
+        self.thread.join(timeout=2)
+        self.listener.close()
+        (RUNTIME / "reconnect-requests.jsonl").write_text(
+            "".join(json.dumps(r) + "\n" for r in self.requests))
+
+
+def reconnect():
+    configure()
+    anchor = spawn("zk-stock-anchor")
+    ids = [spawn("zk-stock-0"), spawn("zk-stock-1")]
+    action("window-consume-left")
+    settle()
+    focus(anchor)
+    proxy = Proxy()
+    run = Run("reconnect", endpoint=proxy.path)
+    run.await_row(lambda r: r.get("type") == "longcat-edge-capability" and r.get("verified"))
+    run.await_row(lambda r: r.get("type") == "longcat-feedback" and len(r["preferences"]) == 2)
+    mark = run.mark()
+    proxy.drop_subscription()
+    run.await_row(lambda r: r.get("type") == "longcat-feedback" and not r["ready"], mark)
+    run.await_row(lambda r: r.get("type") == "longcat-edge-capability" and r.get("verified")
+                  and "Epoch(2)" in r["source"], mark)
+    ready = run.await_row(lambda r: r.get("type") == "longcat-feedback" and r["ready"]
+                          and r["preference_generation"] > 0 and "Epoch(2)" in r["source"], mark)
+    assert ready["counters"]["continuity_losses"] >= 1
+    mark = run.mark()
+    focus(ids[0])
+    check_vector(run.completed("text:"+ids[0], mark), ids)
+    run.stop()
+    proxy.stop()
+    subscriptions = [r for r in proxy.requests if r.get("cmd") == "subscribe"]
+    probes = [r for r in proxy.requests if r.get("cmd") == "action" and "\0" in r.get("window", "")]
+    assert len(subscriptions) == 2 and len(probes) == 4, (subscriptions, probes)
+    assert all(r == {"cmd": "subscribe", "events": ["windows", "workspaces", "outputs"]}
+               for r in subscriptions)
+    assert not any(r.get("cmd") in ("layout-state", "layout-allocate", "msg") for r in proxy.requests)
+    print("real source EOF / fresh three-family epoch / four qualified probes / continued execution", flush=True)
+    clear()
+
+
 selected = os.environ.get("ZK_STOCK_CASE", "all")
+assert selected in ("all", "basic", "churn", "matrix", "reconnect"), selected
 if selected in ("all", "basic"):
     basic()
 if selected in ("all", "churn"):
     churn()
 if selected in ("all", "matrix"):
     matrix()
+if selected in ("all", "reconnect"):
+    reconnect()
