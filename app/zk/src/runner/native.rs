@@ -1,3 +1,5 @@
+#[cfg(feature = "umbriel")]
+use crate::commands::longcat::UmbrielControl;
 use crate::commands::longcat::{Backend, LongcatCommand};
 #[cfg(any(feature = "niri", feature = "umbriel"))]
 use futures::FutureExt;
@@ -21,17 +23,14 @@ pub enum Request {
     Height(HeightRequest),
     #[cfg_attr(not(feature = "umbriel"), allow(dead_code))]
     Group(zk_desktop::GroupAllocationRequest),
-    /// Stock feedback's one frozen, qualified internal-edge intent. The ordinary
-    /// startup route is deliberately not changed by the geometry slice.
+    /// Stock feedback's one frozen, qualified internal-edge intent.
     #[cfg(feature = "umbriel")]
-    #[allow(dead_code)]
     Edge(Box<zk_umbriel::geometry::CompiledEdge>),
 }
 
-/// D's stock composition can install this only after explicit epoch-bound native
+/// Stock composition installs this only after explicit epoch-bound native
 /// grammar verification. No endpoint shortcut, focus fallback or implicit probe.
 #[cfg(feature = "umbriel")]
-#[allow(dead_code)]
 pub fn stock_executor(actuator: zk_umbriel::edge::EdgeActuator) -> super::Executor {
     std::sync::Arc::new(move |request| {
         let actuator = actuator.clone();
@@ -135,13 +134,28 @@ pub async fn subscribe(
                     .resolve()
                     .map_err(io::Error::other)?,
             };
+            if command.umbriel_control == UmbrielControl::Stock {
+                let mut options = zk_umbriel::Options::default();
+                options.native.reconnect = zk_umbriel::Reconnect::Retry {
+                    delay: std::time::Duration::from_millis(250),
+                    max_attempts: 8,
+                };
+                let (owner, observer) = zk_umbriel::subscribe(
+                    endpoint,
+                    SourceId::new(zk_desktop::Backend::Umbriel, "longcat"),
+                    options,
+                )
+                .await
+                .map_err(io::Error::other)?;
+                return Ok((Owner::Umbriel(owner), observer, None));
+            }
             let available = zk_umbriel::layout::available(&endpoint)
                 .await
                 .map_err(io::Error::other)?;
-            if !available && !command.dry_run {
+            if !available {
                 return Err(io::Error::new(
                     io::ErrorKind::Unsupported,
-                    "Umbriel server lacks layout-state/layout-allocate conditional control; use --dry-run for read-only observation or deploy the compatible native extension; no focus workaround",
+                    "explicit conditional control requires layout-state/layout-allocate; use ordinary stock control on the working line; no focus workaround",
                 ));
             }
             let (owner, observer) = if available {

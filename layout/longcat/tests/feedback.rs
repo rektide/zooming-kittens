@@ -107,6 +107,23 @@ fn acquired() -> (Feedback, FeedbackInput, FeedbackGoal, u64) {
 }
 
 #[test]
+fn no_command_replacement_retains_previous_cumulative_motion_identity() {
+    let (mut feedback, mut input, goal, mut now) = acquired();
+    let key = settle(&mut feedback, &mut input, &goal, &mut now);
+    let generation = feedback.preference_generation();
+    input.version += 1;
+    input.focus = focus("b");
+    let replacement = drive(feedback.observe(input.clone(), now + 1).unwrap());
+    feedback.limit_current(replacement.id, LimitReason::Executor { reason: "no native intent admitted".into() }).unwrap();
+    feedback.reconsider(now + 2).unwrap();
+    assert!(feedback.take_completed().unwrap().commands.is_empty());
+    input.version += 1;
+    input.groups[0].motion = Motion::Owned(key);
+    feedback.observe(input, now + 3).unwrap();
+    assert_eq!(feedback.preference_generation(), generation);
+}
+
+#[test]
 fn native_rounding_below_policy_floor_still_allows_sub_tolerance_correction() {
     let mut feedback = controller();
     let mut input = input();

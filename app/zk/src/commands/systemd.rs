@@ -105,6 +105,9 @@ fn render_service(
         "--backend".to_owned(),
         backend.to_owned(),
     ];
+    if longcat.umbriel_control == super::longcat::UmbrielControl::Conditional {
+        args.extend(["--umbriel-control".to_owned(), "conditional".to_owned()]);
+    }
     if let Some(socket) = &longcat.socket {
         args.extend(["--socket".to_owned(), path_text(socket)?.to_owned()]);
     }
@@ -125,6 +128,10 @@ fn render_service(
         (
             "--minimum-height",
             longcat.minimum_height.map(|value| value.to_string()),
+        ),
+        (
+            "--minimum-width",
+            longcat.minimum_width.map(|value| value.to_string()),
         ),
         (
             "--resize-debounce-ms",

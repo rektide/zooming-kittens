@@ -9,4 +9,4 @@ mod source;
 pub mod stock;
 pub use reducer::{ReduceError, Reducer};
 pub use source::{Options, Source, WindowsRefresh, subscribe, subscribe_layout};
-pub use umbriel_client::{Discovery, Endpoint, SubscriptionOptions};
+pub use umbriel_client::{Discovery, Endpoint, Reconnect, SubscriptionOptions};

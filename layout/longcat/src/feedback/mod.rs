@@ -768,12 +768,14 @@ impl Feedback {
             return;
         };
         let state = &self.groups[index];
-        let reason = if !eligible(&state.observed) || state.observed.target_extents.is_none() {
+        let reason = if !eligible(&state.observed) {
             Some(RetirementReason::Unavailable)
         } else if !same_members(&state.observed, &attempt.goal.inputs) {
             Some(RetirementReason::TopologyChanged)
-        } else if !state.acquired || state.observed.context != attempt.goal.inputs.context {
+        } else if state.observed.context != attempt.goal.inputs.context {
             Some(RetirementReason::ContextChanged)
+        } else if !state.acquired || state.observed.target_extents.is_none() {
+            Some(RetirementReason::Unavailable)
         } else if state.yielding.is_some() {
             Some(RetirementReason::Yielded)
         } else if self.input.as_ref().is_some_and(|input| {
@@ -882,7 +884,12 @@ impl Feedback {
         });
         let achieved = state.as_ref().map(|g| g.observed.clone());
         if let Some(state) = state {
-            state.owned = attempt.commands.last().map(|e| e.key);
+            // A no-command supersession/limitation does not revoke the earlier
+            // cumulative prediction's late-client-commit identity in this same
+            // topology/context. Only a newer actual intent replaces that key.
+            if let Some(edge) = attempt.commands.last() {
+                state.owned = Some(edge.key);
+            }
             if state.yielding.is_none() {
                 let affected = matches!(end, AttemptEnd::Settled)
                     || attempt.commands.iter().any(|e| {

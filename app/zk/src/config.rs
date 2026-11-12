@@ -99,6 +99,9 @@ pub struct LongcatConfig {
     #[serde(default = "default_minimum_height")]
     pub minimum_height: i32,
 
+    /// Minimum width for horizontal secondary sizing (default: 60).
+    pub minimum_width: i32,
+
     /// Debounce time in ms before detecting manual resize (default: 500)
     #[serde(default = "default_resize_debounce_ms")]
     pub resize_debounce_ms: u64,
@@ -110,6 +113,7 @@ impl Default for LongcatConfig {
             active_height_proportion: default_active_height_proportion(),
             other_height_proportion: default_other_height_proportion(),
             minimum_height: default_minimum_height(),
+            minimum_width: default_minimum_height(),
             resize_debounce_ms: default_resize_debounce_ms(),
         }
     }

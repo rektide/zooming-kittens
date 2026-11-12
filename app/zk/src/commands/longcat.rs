@@ -8,10 +8,21 @@ pub enum Backend {
     Umbriel,
 }
 
+#[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq, Default)]
+pub enum UmbrielControl {
+    /// Stock snapshots and verified, qualified internal-edge feedback.
+    #[default]
+    Stock,
+    /// Explicit bespoke layout-state/layout-allocate conditional control.
+    Conditional,
+}
+
 #[derive(Debug, Clone, Args)]
 pub struct LongcatCommand {
     #[arg(long, value_enum, default_value = "niri")]
     pub backend: Backend,
+    #[arg(long, value_enum, default_value = "stock")]
+    pub umbriel_control: UmbrielControl,
     /// Observe and preview decisions without sending native commands.
     #[arg(long)]
     pub dry_run: bool,
@@ -28,7 +39,9 @@ pub struct LongcatCommand {
     pub other_height_proportion: Option<f64>,
     #[arg(long)]
     pub minimum_height: Option<i32>,
-    /// Retained config value; manual resize learning is not enabled.
+    #[arg(long)]
+    pub minimum_width: Option<i32>,
+    /// Quiet interval before stock acquisition or resize guidance.
     #[arg(long)]
     pub resize_debounce_ms: Option<u64>,
     /// Deadline for execution and observed convergence, independent of resize debounce.
@@ -55,6 +68,9 @@ impl LongcatCommand {
         if let Some(value) = self.minimum_height {
             config.minimum_height = value;
         }
+        if let Some(value) = self.minimum_width {
+            config.minimum_width = value;
+        }
         if let Some(value) = self.resize_debounce_ms {
             config.resize_debounce_ms = value;
         }
@@ -66,10 +82,11 @@ impl LongcatCommand {
             || b <= 0.0
             || !(a + b).is_finite()
             || config.minimum_height <= 0
+            || config.minimum_width <= 0
         {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                "Longcat weights must be positive finite values with a finite sum, and minimum-height must be positive",
+                "Longcat weights must be positive finite values with a finite sum; minimum-height must be positive; minimum-width must be positive",
             ));
         }
         let share = a / (a + b);

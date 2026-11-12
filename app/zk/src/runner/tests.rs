@@ -24,6 +24,7 @@ fn cli_defaults_are_optional_overrides_and_weights_normalize() {
         active_height_proportion: 3.0,
         other_height_proportion: 2.0,
         minimum_height: 91,
+        minimum_width: 81,
         resize_debounce_ms: 777,
     };
     let config = command.compose(configured).unwrap();
@@ -686,18 +687,6 @@ async fn enabled_backends_acquire_read_only_through_real_native_subscriptions() 
                     tokio::time::sleep(Duration::from_millis(5)).await;
                 }
             } else {
-                assert!(line.contains("layout-state"));
-                socket
-                    .write_all(b"{\"err\":\"unknown command: layout-state\"}\n")
-                    .await
-                    .unwrap();
-                drop(socket);
-                socket = listener.accept().await.unwrap().0;
-                line.clear();
-                BufReader::new(&mut socket)
-                    .read_line(&mut line)
-                    .await
-                    .unwrap();
                 assert!(line.contains("subscribe"));
                 assert!(line.contains("outputs"));
                 socket
@@ -742,27 +731,28 @@ async fn enabled_backends_acquire_read_only_through_real_native_subscriptions() 
             records.push(value);
             Ok(())
         };
-        tokio::time::timeout(
-            Duration::from_secs(2),
+        let config=LongcatConfig::default();
+        let stop=async move { receiver.await.map_err(io::Error::other) }.boxed();
+        tokio::time::timeout(Duration::from_secs(2),async {
+            #[cfg(feature="umbriel")]
+            if let native::Owner::Umbriel(source)=&owner {
+                return stock::drive(observer,stock::Services::native(source),&cmd,&config,&mut sink,stop).await;
+            }
             drive(
                 observer,
                 None,
                 &cmd,
-                &LongcatConfig::default(),
+                &config,
                 &mut sink,
-                async move { receiver.await.map_err(io::Error::other) }.boxed(),
-            ),
-        )
+                stop,
+            ).await
+        })
         .await
         .unwrap()
         .unwrap();
         assert!(records.iter().any(|r| r["ready"] == true));
         if backend == "umbriel" {
-            assert!(records.iter().any(|r| {
-                r["unsupported"]
-                    .as_str()
-                    .is_some_and(|s| s.contains("grouping"))
-            }));
+            assert!(records.iter().any(|r|r["type"]=="longcat-feedback"));
         }
         owner.shutdown().await.unwrap();
         release.send(()).unwrap();

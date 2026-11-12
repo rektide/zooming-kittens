@@ -48,7 +48,7 @@ for i in range(3):
 def start():
     env = {k:v for k,v in os.environ.items() if not k.startswith('ZK_')}
     env['XDG_CONFIG_HOME'] = os.path.join(os.environ['UMBRIEL_RUNTIME_DIR'],'zk-config')
-    process = subprocess.Popen([os.environ['ZK_TEST_BIN'],'longcat','--backend','umbriel','--socket',socket_path,
+    process = subprocess.Popen([os.environ['ZK_TEST_BIN'],'longcat','--backend','umbriel','--umbriel-control','conditional','--socket',socket_path,
                                '--minimum-height','50','--active-height-proportion','0.7','--other-height-proportion','0.3',
                                '--convergence-timeout-ms','3000','--shutdown-timeout-ms','4000'],
                               env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)

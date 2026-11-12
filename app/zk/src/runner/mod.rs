@@ -1,8 +1,14 @@
 //! Bounded application composition, not a reusable controller host.
 mod bridge;
 mod control;
+#[cfg(feature = "umbriel")]
+mod feedback;
 mod native;
 mod output;
+#[cfg(feature = "umbriel")]
+mod stock;
+#[cfg(all(test, feature = "umbriel"))]
+mod stock_tests;
 
 #[cfg(all(test, feature = "niri"))]
 mod tests;
@@ -44,15 +50,38 @@ pub async fn run(command: LongcatCommand, config: LongcatConfig) -> io::Result<(
             io::Error::other(format!("diagnostic delivery failed (bounded queue): {e}"))
         })
     };
-    let result = drive(
-        observer,
-        executor,
-        &command,
-        &config,
-        &mut sink,
-        async { tokio::signal::ctrl_c().await }.boxed(),
-    )
-    .await;
+    #[cfg(feature = "umbriel")]
+    let stock = command.backend == crate::commands::longcat::Backend::Umbriel
+        && command.umbriel_control == crate::commands::longcat::UmbrielControl::Stock;
+    #[cfg(not(feature = "umbriel"))]
+    let stock = false;
+    let stop = async { tokio::signal::ctrl_c().await }.boxed();
+    let result = if stock {
+        #[cfg(feature = "umbriel")]
+        {
+            match &owner {
+                native::Owner::Umbriel(source) => {
+                    stock::drive(
+                        observer,
+                        stock::Services::native(source),
+                        &command,
+                        &config,
+                        &mut sink,
+                        stop,
+                    )
+                    .await
+                }
+                #[cfg(feature = "niri")]
+                _ => unreachable!("stock owner"),
+            }
+        }
+        #[cfg(not(feature = "umbriel"))]
+        {
+            unreachable!("stock requires umbriel feature")
+        }
+    } else {
+        drive(observer, executor, &command, &config, &mut sink, stop).await
+    };
     let shutdown = tokio::time::timeout(Duration::from_secs(3), owner.shutdown())
         .await
         .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "native source shutdown deadline"))
