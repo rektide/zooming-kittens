@@ -233,7 +233,7 @@ impl<E: FontPort> ZoomResizer<E> {
                 }
                 Ok(other) => {
                     eprintln!(
-                        "Kitty PID {}: command {} ({}) not applied: {:?}",
+                        "Kitty PID {}: command {} ({}) not acknowledged: {:?}",
                         pid,
                         index + 1,
                         adjustment_summary(*adjustment),

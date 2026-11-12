@@ -1,14 +1,24 @@
 ---
 type: Reference
 title: Terminal remote control and focus zoom policy
-description: Kitty transport ownership, niri and Umbriel focus zoom, bounded acquisition and explicit shutdown restoration.
+description: Target-bound kitty authentication, niri and Umbriel focus zoom, acknowledged-effect reversal and bounded shutdown.
 resource: terminal/README.md
 status: implemented
 generated: { at: 2026-10-15, by: 'model:zai-coding-plan/glm-5.3#high' }
 updated: { at: 2026-11-12, by: 'model:openai/gpt-6.1-sol#high' }
 sources:
   - resource: opencode://ses_e310ffa7fffeeG5JUHl4w0WCiE
-    title: Implement Umbriel focus zoom, initial epoch admission, targeted PID discovery, SIGINT restoration and feature-matrix regressions
+    title: Implement Umbriel focus zoom, correct failed-focus blur, replace external-helper auth with target-bound key discovery and verify feature isolation
+  - resource: file:///home/rektide/archive/kovidgoyal/kitty/kitty/child.py
+    title: Native Child.get_final_env sets the owning KITTY_PID and instance KITTY_PUBLIC_KEY together
+  - resource: file:///home/rektide/archive/kovidgoyal/kitty/docs/rc_protocol.rst
+    title: Native password encryption and versioned Base85 public-key protocol
+  - resource: file:///home/rektide/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/kitty-rc-0.5.0/src/client.rs
+    title: Explicit public_key bypasses the external helper before Encryptor creation
+  - resource: file:///home/rektide/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/kitty-rc-0.5.0/src/bin/kitty-pubkey-db.rs
+    title: Helper TSV stores PID and timestamp but lacks native process-instance association
+  - resource: file:///home/rektide/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/base85-2.0.0/src/lib.rs
+    title: RFC-1924 alphabet and unchecked decoder arithmetic motivating checked key-word validation
   - resource: opencode://ses_ec3316eefffejmDBXbZ28spBd7
     title: Complete native focus-feed integration and replace the retired legacy bridge reference
   - resource: opencode://ses_ec310f020ffe5d6kIV42ehdO2z
@@ -71,6 +81,48 @@ the password is read from `$XDG_CONFIG_HOME/kitty/rc.password` (normally
 `~/.config/kitty/rc.password`). Password contents and raw remote error replies
 are not logged.
 
+### Target-bound password authentication
+
+[`kitty::public_key`](kitty/src/public_key.rs) discovers the public key without
+installing or executing `kitty-pubkey-db`. Native kitty launches each terminal
+child with **both** `KITTY_PID` and `KITTY_PUBLIC_KEY`; the master's own inherited
+environment may instead describe another kitty. Discovery therefore ignores
+the caller's and master's environment, follows only the selected master's
+bounded direct-child census, and accepts keys only from stable, same-UID direct
+children whose `KITTY_PID` equals that master. It never scans all processes,
+descends into grandchildren, reads command lines or queries a live terminal.
+
+All matching candidate keys must agree. Missing, malformed, conflicting,
+unreadable or raced credentials stop that command rather than falling back to
+another terminal. Validation requires protocol `1`, exactly 32 Base85-decoded
+bytes and checked Base85 word arithmetic. Discovery limits are 64 target
+threads, 128 unique direct children, 256 KiB per child environment and 1 MiB
+total environment bytes. It streams only the two named fields into retained
+values; unrelated environment entries are discarded without logging.
+
+The resulting `TargetPublicKey` retains an open process-directory guard plus
+UID/start-time/directory identity. The registry verifies that binding before
+and after connection setup and before every send, and supplies an explicit
+`.public_key(...)` to kitty-rc. Guards survive connection reaping; a reused PID
+cannot silently obtain new credentials and inherit this run's font-restoration
+debt. Such a target is refused until a new registry/run is deliberately started.
+The helper's PID-only TSV and `~/.config/kitty/key.pub` are not fallback stores.
+
+Diagnostics identify the failure class (missing target key, malformed/ambiguous
+key, process change, permission denied, timeout, encryption, protocol or remote
+authorization refusal), never the key, password, encrypted payload or arbitrary
+remote error text. A readable direct-child environment is required; restrictive
+procfs permissions or a master without suitable children fail closed. No shell
+startup hook, key database, helper installation or configuration change is needed.
+
+The parent's first live trial established that the target Unix socket was
+connectable, but library setup failed because the helper executable was absent;
+no font send succeeded. The replacement is verified with synthetic proc fixtures
+and a fake Unix socket, including an empty `PATH` and invalid inherited key.
+Live retesting of this correction remains the parent's responsibility.
+
+### Focus acquisition
+
 Acquisition binds the first current windows census, not Umbriel's unseen epoch-0
 placeholder. Exactly the pristine initial Umbriel `EpochChanged` marker is
 permitted; later discontinuities, stale captures, epoch changes, lag and source
@@ -118,8 +170,11 @@ that decides those commands; the resizer executes them and commits state.
   collapse. Every plan is finite by construction.
 - **Failed commands do not advance state falsely.** Commands are applied in
   order; the first result that is not `Success` stops the plan. The tracked
-  size advances only by the acknowledged portion, so a later event replans
-  from what kitty actually did. The inherited code ignored results entirely.
+  size and owned linear offset advance only by the acknowledged portion.
+  Additive focus completes the remaining offset; blur removes only the remaining
+  acknowledged offset. A failed first focus or unsolicited blur sends no inverse,
+  and partial/refused focus or blur cannot consume the user's own font size.
+  Lost replies remain uncertain, not proof that a command was never applied.
 - **Amounts are validated before commands.** `ZoomConfig::validate` rejects
   nonfinite values, non-positive `step_size`, non-positive `absolute` targets
   and non-positive `multiplicative` factors; the planner independently
@@ -129,12 +184,15 @@ that decides those commands; the resizer executes them and commits state.
   replanned from the baseline rather than poisoning later transitions.
 - **Focus/blur intent is preserved.** Focus applies the configured zoom;
   blur reverses it: absolute returns to the kitty.conf baseline, additive
-  subtracts the same amount, multiplicative returns to factor 1.0. An
+  removes its acknowledged offset, multiplicative returns to factor 1.0. An
   untracked size starts from the configured baseline with the historical
   `12.0` fallback.
 
 Verification on 2026-11-12: `cargo nextest run -p zooming-kittens -p zk-kitty
--p zk-zoomer --all-features` passed 119 tests. Fixtures cover opaque Umbriel
+-p zk-zoomer --all-features` passed 136 tests (58 terminal, 78 application).
+Fixtures cover helper-free explicit-key connection, target-vs-inherited keys,
+missing/malformed/ambiguous credentials, process races/PID reuse, bounded
+discovery and failed/partial-focus blur safety, as well as opaque Umbriel
 IDs/PIDs, initial acquisition before/after feed startup, queued loss/reconnect,
 bounded delivery, process/socket targeting, partial/refused commands, shutdown
 inverse effects and SIGINT-style stopping during/between commands without
@@ -149,7 +207,8 @@ niri+kitty has no `zk-umbriel`, and kitty-only/empty builds omit desktop adapter
 
 ## Remaining limitations
 
-State is tracked by PID, not kitty OS-window identity: multiple OS windows in one
+Policy state is tracked by PID, with registry instance guards refusing PID reuse,
+not kitty OS-window identity: multiple OS windows in one
 kitty master are not independently addressed by this bridge. The resizer holds
 a per-window state map while awaiting commands; multiple PIDs are handled
 sequentially. Absolute zoom retains its existing kitty.conf-baseline semantics,
